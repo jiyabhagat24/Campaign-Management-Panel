@@ -1,0 +1,472 @@
+// Campaign Management Panel — data model
+//
+// Postgres (Supabase), reached through the connection poolers — DATABASE_URL
+// for app queries (transaction mode, port 6543), DIRECT_URL for migrations
+// (session mode, port 5432). Status/role/stage fields are plain strings
+// validated in src/lib/constants.ts on purpose.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ---------- Identity ----------
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         String // see constants.ts ROLES
+  createdAt    DateTime @default(now())
+
+  // onDelete for every relation below is set explicitly rather than left to
+  // Prisma's implicit default, per-table, based on what actually deleting a
+  // User should do to that table:
+  //  - Restrict: never silently blow away real business records or audit
+  //    history just because the person who created/logged them got deleted
+  //    (createdCampaigns, activity, remarks — matches the ActivityLog
+  //    comment "every action, timestamped — non-negotiable #4").
+  //  - SetNull: an optional "who's responsible" pointer — losing the person
+  //    shouldn't delete the record itself, just clear the assignment
+  //    (pocForCreators, negotiationMoves' proposedByUser).
+  //  - Cascade: rows that only exist as *this user's own data*, meaningless
+  //    without them (teamMemberships, campaignAccess, notifications).
+  createdCampaigns Campaign[]            @relation("CampaignCreator")
+  campaignAccess   CampaignClientAccess[]
+  teamMemberships  CampaignTeamMember[]
+  negotiationMoves NegotiationRound[]
+  remarks          Remark[]
+  activity         ActivityLog[]
+  notifications    Notification[]
+  pocForCreators   Creator[]             @relation("CreatorPOC")
+  uploadedFiles    FileAsset[]
+}
+
+// Who's responsible for a campaign — Brand Solutions, Campaign Manager, IR
+// Manager/Executive, etc. Multiple people can hold the same role on a
+// campaign (e.g. two IR executives), so this is a join table rather than
+// fixed columns on Campaign.
+model CampaignTeamMember {
+  id            String   @id @default(cuid())
+  campaignId    String
+  campaign      Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roleOnCampaign String  // one of constants.ts ROLES — the role this person plays ON this campaign
+  createdAt     DateTime @default(now())
+
+  @@unique([campaignId, userId, roleOnCampaign])
+}
+
+// Links a CLIENT user to the campaign(s) they're allowed to see. Every action
+// they take on the panel is stamped against this user, not a shared login
+// (brief slide 05 — client attribution).
+model CampaignClientAccess {
+  id         String   @id @default(cuid())
+  campaignId String
+  userId     String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([campaignId, userId])
+}
+
+// ---------- Campaign (the central record) ----------
+
+model Campaign {
+  id      String  @id @default(cuid())
+  name    String
+  brand   String
+  brandLogoUrl String? // optional; UI falls back to a colored initial circle if unset
+  brief   String // objective, mandatories, platform mix — free text v1
+  status  String @default("ACTIVE") // ACTIVE | COMPLETED | ARCHIVED
+  stage   String @default("BRIEF") // legacy 11-stage field, still used by /pipeline
+
+  budgetQuoted   Float? // client-facing total budget
+  platformMix    String? // csv summary e.g. "YouTube, Instagram"
+  startDate      DateTime?
+  endDate        DateTime?
+  goLiveDeadline DateTime? // computed default: onboard date + slaOnboardToGoLiveDays
+
+  // ---------- Finance (manual entry, phase 1) ----------
+  // No invoicing/payment system exists yet, so these four numbers — pulled
+  // straight from the ops team's Portfolio Dashboard sheet ("Yet to be
+  // invoiced", "Yet to be Received", "Value of cleared due", "Creator
+  // Payable pending") — are entered by hand via FinanceRow on the campaign
+  // page, same manual-for-now pattern as Instagram creator stats. Once real
+  // invoicing exists, these get computed instead of typed in.
+  financeYetToBeInvoiced      Float?
+  financeYetToBeReceived      Float?
+  financeValueOfClearedDue    Float?
+  financeCreatorPayablePending Float?
+  financeAgencyFee            Float? // the Campaign Table's "Agency Fee" column
+  financeAgencyFeePercent     Float? // the Finance Table's "Agency Fee %" column (distinct from the ₹ value above)
+  financeClientInvoiceStatus  String? // see constants.ts INVOICE_STATUSES — the Finance Table's "Client Invoice status" column
+
+  // Finance & Invoicing — Client side (section B of the sheet's separate
+  // spec). Deliberately a plain boolean, distinct from the 3-state
+  // financeClientInvoiceStatus above — that field drives the richer Finance
+  // Table; this one is the sheet's own "Yes or No only, that is all the
+  // client side needs here" column, used in the simpler Finance &
+  // Invoicing panel. budgetQuoted above doubles as that panel's "Final
+  // Closed Cost" — no separate field needed, same number.
+  financeInvoiced Boolean @default(false)
+
+  // SLA config (brief slide 15), overridable per campaign
+  slaClientFeedbackHours    Int @default(48)
+  slaScriptFromCreatorDays  Int @default(5)
+  slaContentFromCreatorDays Int @default(7)
+  slaOnboardToGoLiveDays    Int @default(15)
+
+  createdById String
+  createdBy   User   @relation("CampaignCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  creators      Creator[]
+  remarks       Remark[]
+  files         FileAsset[]
+  activity      ActivityLog[]
+  clientAccess  CampaignClientAccess[]
+  teamMembers   CampaignTeamMember[]
+
+  // status/brand/createdAt all get filtered on directly (dashboard filter
+  // bar, campaign directory) without going through a relation, so unlike
+  // campaignId-style foreign keys (which Prisma indexes automatically) these
+  // need their own explicit indexes to not silently degrade into full table
+  // scans as the campaign list grows.
+  @@index([status])
+  @@index([brand])
+  @@index([createdAt])
+}
+
+// ---------- Creator (cost lives here — brief slide 06 & 07) ----------
+
+model Creator {
+  id         String   @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  name            String
+  channelHandle   String
+  profileUrl      String? // link to the actual profile/channel (Instagram)
+  youtubeUrl      String? // channel link, used for Socials hyperlink on YouTube-type shortlist rows
+  platformPrimary String // see constants.ts PLATFORMS
+  followers       Int? // Instagram — auto-filled by the paste-URL lookup
+  avgViews        Int? // Instagram median views
+  engagementRate  Float? // Instagram median ER%, percent
+  // Separate YouTube numbers so a creator pitched on multiple formats can
+  // show all relevant sets in the same shortlist row (no auto-fill source
+  // for these yet — IR enters them manually). Subscriber count is shared
+  // across long-form and Shorts (same channel audience); median views/ER
+  // differ by format, so those are tracked separately.
+  youtubeSubscribers          Int?
+  youtubeLongMedianViews      Int? // YT Dedicated/Integrated/Conceptual
+  youtubeLongMedianERPercent  Float?
+  youtubeShortsMedianViews    Int?
+  youtubeShortsMedianERPercent Float?
+  category        String?
+
+  // The margin guardrail: two fields, separated by design. internalCost must
+  // NEVER be sent to a client-facing route/email — enforced in
+  // src/lib/rbac.ts + serializeCreatorForClient().
+  internalCost Float?
+  quotedCost   Float?
+
+  status           String  @default("SHORTLISTED") // see constants.ts CREATOR_STATUSES
+  rejectionReason  String?
+  onboardedAt      DateTime?
+  commercialsLocked Boolean @default(false)
+
+  // ---------- Onboarding-stage ownership + go-live tracking ----------
+  // POC: the IR Executive who owns every reminder/flag on this creator once
+  // onboarded. goLiveDeadline is a per-creator override — when null, the UI
+  // defaults to onboardedAt + 15 days; editing it always requires a reason,
+  // logged via ActivityLog rather than a dedicated column.
+  pocUserId      String?
+  poc            User?     @relation("CreatorPOC", fields: [pocUserId], references: [id], onDelete: SetNull)
+  goLiveDeadline DateTime?
+
+  // ---------- Shortlist-stage pitch/negotiation (brief: shortlist sheet) ----------
+  // One shared set of numbers per creator (not per deliverable) — which
+  // deliverable types they're being pitched for lives separately in
+  // shortlistDeliverables below, just as tags.
+  insightsLinks String? // JSON-encoded array of up to 4 screenshot links (IR-pasted, e.g. Google Drive)
+
+  clientIntent      String? // see constants.ts CLIENT_INTENT_OPTIONS — client-set
+  clientCounterCost Float?
+  clientRemark      String?
+
+  finalQuotedCost   Float?
+  clientFinalIntent String? // client-set; ONBOARD here (or on clientIntent) promotes this creator
+
+  rightsOfUsage     Boolean @default(false)
+  usageDurationDays Int? // usage window in days, counted from the deliverable's live date
+
+  // ---------- Finance & Invoicing — Creator side payouts (TBM eyes only) ----------
+  // Money owed TO the creator. Payout Amount itself is internalCost above
+  // (never new — reused so there's one source of truth for what a creator
+  // costs). These five are the sheet's per-creator payout tracking columns;
+  // manually entered by finance/IR, same "manual entry for now" pattern as
+  // every other finance field in this schema.
+  payoutInvoiceRaised   Boolean @default(false) // has the creator raised their invoice
+  payoutInvoiceReceived Boolean @default(false) // has TBM received that invoice
+  payoutPaymentStatus   String  @default("NOT_STARTED") // see constants.ts PAYOUT_PAYMENT_STATUSES
+  payoutAdvance         String? // free text, e.g. "Rs 20,000 paid" — not strictly numeric in the sheet's own example
+  payoutRemark          String? // free text notes
+
+  negotiationRounds     NegotiationRound[]
+  deliverables          Deliverable[]
+  shortlistDeliverables ShortlistDeliverable[]
+  remarks               Remark[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+}
+
+// ---------- Shortlist deliverable tag (pre-onboarding pitch types) ----------
+// Just which deliverable types a creator is being pitched for (a creator
+// pitched for Reel + YT Shorts gets two of these) — the actual numbers/costs/
+// client decision live once on Creator above (one shared row, not per type).
+// Distinct from Deliverable (below), which is post-onboarding execution
+// tracking — promoting a creator creates one real Deliverable per tagged
+// type here, linked via executionDeliverableId.
+model ShortlistDeliverable {
+  id        String   @id @default(cuid())
+  creatorId String
+  creator   Creator  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  deliverableType String // REEL | COLLAB_REEL | YT_DEDICATED | YT_INTEGRATED | YT_CONCEPTUAL | YT_SHORTS — see constants.ts
+
+  executionDeliverableId String? // set once promoted — soft link to the real Deliverable created for execution tracking
+
+  createdAt DateTime @default(now())
+}
+
+// Every negotiation round is logged, never overwritten (brief slide 10).
+model NegotiationRound {
+  id           String   @id @default(cuid())
+  creatorId    String
+  creator      Creator  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  roundNumber  Int
+  proposedCost Float
+  proposedBy   String // "CLIENT" or a User id
+  proposedByUserId String?
+  proposedByUser   User? @relation(fields: [proposedByUserId], references: [id], onDelete: SetNull)
+  note         String?
+  createdAt    DateTime @default(now())
+}
+
+// ---------- Deliverable (metrics live here — brief slide 06) ----------
+
+model Deliverable {
+  id        String  @id @default(cuid())
+  creatorId String
+  creator   Creator @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  platform String // see constants.ts PLATFORMS
+  title    String?
+  status   String @default("PLANNED") // see constants.ts DELIVERABLE_STATUSES
+
+  // Stage 5/6: product + script
+  productStatus String? // ORDERED | IN_TRANSIT | DELIVERED
+  productEta    DateTime?
+  scriptDocUrl  String?
+  scriptStatus  String? // SENT_FOR_APPROVAL | FEEDBACK | REVISED | APPROVED
+  scriptApprovedSnapshotUrl String? // frozen copy, written once on approval
+  scriptApprovedAt DateTime?
+
+  // Stage 7: content
+  contentStatus String? // IN_SHOOT | INTERNAL_APPROVAL | EXTERNAL_APPROVAL | CHANGES | APPROVED
+  contentApprovedSnapshotUrl String?
+  contentApprovedAt DateTime?
+
+  // Stage 8-10: go live + tracking
+  liveLink   String?
+  liveDate   DateTime?
+  views      Int?      @default(0)
+  likes      Int?      @default(0)
+  comments   Int?      @default(0)
+  shares     Int?      @default(0)
+  engagementRate Float?
+  lastTrackedAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+}
+
+// ---------- Communication (in-panel only — brief slide 03) ----------
+
+model Remark {
+  id         String @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  creatorId  String?
+  creator    Creator? @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  // Restrict, not Cascade/SetNull — a remark's author is part of the
+  // permanent conversation record; deleting that user shouldn't be able to
+  // silently erase or orphan what they said.
+  authorId   String
+  author     User   @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  authorRoleSnapshot String // role at time of posting, for display even if role changes later
+
+  body       String
+  visibility String @default("INTERNAL") // INTERNAL | CLIENT — client-visibility remarks render on client view
+
+  createdAt DateTime @default(now())
+}
+
+// ---------- Files ----------
+
+model FileAsset {
+  id           String   @id @default(cuid())
+  campaignId   String
+  campaign     Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  name         String
+  url          String
+  // Previously a bare String with no @relation — meant Prisma couldn't
+  // enforce that uploadedById actually points at a real User, and you
+  // couldn't ask Prisma for "who uploaded this file" without a manual
+  // lookup. Restrict for the same reason as Remark.author above.
+  uploadedById String
+  uploadedBy   User     @relation(fields: [uploadedById], references: [id], onDelete: Restrict)
+  createdAt    DateTime @default(now())
+}
+
+// ---------- Audit log (every action, timestamped — brief non-negotiable #4) ----------
+
+model ActivityLog {
+  id         String   @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  // Restrict — this is explicitly a non-negotiable audit trail (see comment
+  // above); a user being deleted must never take their logged actions with
+  // them.
+  actorId    String
+  actor      User     @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  actorName  String
+  action     String // e.g. "CREATOR_ADDED", "COST_NEGOTIATED", "SCRIPT_APPROVED"
+  entityType String // "Campaign" | "Creator" | "Deliverable" | "Remark"
+  entityId   String
+  meta       String? // JSON-encoded extra detail
+  createdAt  DateTime @default(now())
+
+  // Every list of activity in this app orders by createdAt desc and takes
+  // the first N (dashboard feed, campaign audit trail) — without this index
+  // that's a full-table sort as the log grows into the thousands of rows.
+  @@index([createdAt])
+}
+
+// ---------- Notifications (instant vs digest — brief slide 16) ----------
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channel   String // INSTANT | DIGEST
+  title     String
+  body      String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  // The one query this table exists for: "this user's unread notifications" —
+  // a composite index matches that access pattern directly instead of
+  // relying on the userId index alone plus a filter scan over read.
+  @@index([userId, read])
+}
+
+// ---------- Instagram profile cache (from browser extension capture) ----------
+// Populated when the user manually browses a profile with their data-capture
+// extension installed — a human viewing a page, not automated/scheduled
+// scraping. The "paste URL" auto-fill in the Add Influencer form checks here
+// first (richest available data, including avg views, which Instagram's own
+// API won't give for accounts you don't own), then falls back to the free
+// Instagram Graph API (Business Discovery) if nothing's cached yet.
+model InstagramProfileCache {
+  id             String   @id @default(cuid())
+  username       String   @unique
+  profileUrl     String?
+  contactEmail   String? // creator's contact/business email, if captured — useful for outreach
+  followers      Int?
+  postsCount     Int?
+  avgViews       Int?
+  engagementRate Float?
+  capturedAt     DateTime @default(now()) // when the extension actually captured it, not when we synced it
+  updatedAt         DateTime @updatedAt
+}
+
+// ---------- YouTube channel cache (official YouTube Data API v3) ----------
+// Cached results from the official YouTube Data API — free but quota-limited,
+// so results are cached here and reused for a while rather than re-fetched
+// on every lookup. Populated by lookupYoutubeChannelAction when someone
+// pastes a YouTube channel URL into the Add Influencer form. Requires
+// YOUTUBE_API_KEY in .env — until that's set, auto-fill just falls back to
+// manual entry (no scraping, official API only, same rule as Instagram).
+model YoutubeChannelCache {
+  id                    String   @id @default(cuid())
+  channelUrl            String   @unique
+  channelId             String?
+  subscribers           Int?
+  longMedianViews       Int? // median views across recent long-form uploads
+  longMedianERPercent   Float?
+  shortsMedianViews     Int? // median views across recent Shorts
+  shortsMedianERPercent Float?
+  capturedAt            DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+// ---------- Creator Intelligence / Scouting Engine ----------
+// Discovery + qualification queue, separate from the campaign shortlist until
+// a scout is promoted. Populated via manual import or an approved data
+// provider/official API — never scraped or automated against platform ToS.
+
+model ScoutedCreator {
+  id             String   @id @default(cuid())
+  name           String
+  handle         String
+  // Real duplicate prevention at the database level, replacing the old
+  // approach of loading every row into JS and doing a case-insensitive scan
+  // on every add (slow as the queue grows, and race-prone — two adds at the
+  // same instant could both pass the check before either insert commits).
+  // Every write sets this to handle.toLowerCase(); the @unique constraint
+  // is what actually stops "GlamNGo" and "glamngo" from both getting in,
+  // enforced atomically by Postgres rather than by application code.
+  // Nullable so existing rows (added before this column existed) don't
+  // violate the constraint — see the backfillScoutedHandleLower action for
+  // catching them up.
+  handleLower    String?  @unique
+  platform       String
+  followers      Int?
+  avgViews       Int?
+  engagementRate Float?
+  niche          String?
+  score          Float? // fit score against active criteria, 0-100
+  // Some YouTube creators list their Instagram handle in their channel's
+  // About/description text. When found, it's stored here (and best-effort
+  // written into the Instagram Google Sheet so the existing IG sync
+  // pipeline eventually picks up real stats for it too) so the scouting
+  // board can show both socials for one creator with working links.
+  instagramHandle String?
+  status         String  @default("NEW") // see constants.ts SCOUT_STATUSES
+  source         String? // "MANUAL_IMPORT" | "DATA_PROVIDER" | "OFFICIAL_API"
+  duplicateOfId  String? // set if matched to an existing Creator/ScoutedCreator
+  promotedToCreatorId String?
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([status])
+}
