@@ -28,7 +28,13 @@ type Props = {
   initial: FinanceValues;
 };
 
-const MONEY_FIELDS: { key: keyof FinanceValues; label: string }[] = [
+// Narrower than `keyof FinanceValues` on purpose: financeClientInvoiceStatus
+// is a string, not a number, and money() below only accepts number | null —
+// widening this to the full keyof union made values[f.key] infer as
+// string | number | null, which is what broke the production type-check.
+type MoneyFieldKey = Exclude<keyof FinanceValues, "financeClientInvoiceStatus">;
+
+const MONEY_FIELDS: { key: MoneyFieldKey; label: string }[] = [
   { key: "financeYetToBeInvoiced", label: "Yet to be Invoiced" },
   { key: "financeYetToBeReceived", label: "Yet to be Received" },
   { key: "financeValueOfClearedDue", label: "Value of Cleared Due" },

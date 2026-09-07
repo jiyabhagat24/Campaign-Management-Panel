@@ -97,7 +97,12 @@ export default function CampaignWorkspace({
           <ShortlistTab campaignId={campaignId} creators={creators} role={role} canSeeCost={canSeeCost} isClientView={isClientView} />
         )}
         {tab === "Deliverables & Production" && <DeliverablesTab creators={creators} isClientView={isClientView} />}
-        {tab === "Communications" && <CommunicationsThread campaignId={campaignId} remarks={remarks} />}
+        {/* This component isn't rendered anywhere in the app today (the
+        campaign detail page uses CreatorKanban instead) — mentionable is
+        empty here since CampaignWorkspace never receives a team-member
+        list from a caller. Fixing purely so `next build`'s type-check
+        passes; no behavior change since nothing renders this component. */}
+        {tab === "Communications" && <CommunicationsThread campaignId={campaignId} remarks={remarks} mentionable={[]} />}
         {tab === "Reports" && <ReportsTab creators={creators} canSeeCost={canSeeCost} />}
       </div>
     </div>
