@@ -36,6 +36,17 @@ export type DashboardCampaignRow = {
 
 const money = formatCompactINR;
 
+// Read-only mirror of CampaignStatusSelect's color map — used for the
+// client-view status badge (clients see the status, never the editable
+// dropdown; updateCampaignStatus also rejects client callers server-side,
+// this is just about not showing them a control that isn't theirs to use).
+const STATUS_BADGE_COLORS: Record<string, string> = {
+  ACTIVE: "bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950/50 dark:border-emerald-800 dark:text-emerald-300",
+  HOLD: "bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-950/50 dark:border-amber-800 dark:text-amber-300",
+  COMPLETED: "bg-sky-50 border-sky-200 text-sky-700 dark:bg-sky-950/50 dark:border-sky-800 dark:text-sky-300",
+  CANCELLED: "bg-slate-100 border-slate-200 text-slate-600 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300",
+};
+
 export type RecentActivityRow = {
   id: string;
   actorName: string;
@@ -51,6 +62,7 @@ export default function PortfolioDashboardClient({
   financeCampaigns,
   showFinance,
   revenueRows,
+  isClientView,
 }: {
   campaigns: DashboardCampaignRow[];
   recentActivity: RecentActivityRow[];
@@ -58,6 +70,14 @@ export default function PortfolioDashboardClient({
   financeCampaigns: FinanceCampaignRow[];
   showFinance: boolean;
   revenueRows: RevenueDataRow[];
+  // Client-role viewer: the campaign list handed in is already scoped to
+  // just their own campaigns (campaignVisibilityWhere on the server), same
+  // as every other non-CXO role only ever getting their assigned campaigns.
+  // This flag additionally strips the internal-only filters, stat cards,
+  // and table columns (POCs, internal cost, margin, agency fee, manually
+  // entered finance figures) that a client should never see, even for the
+  // campaigns they're allowed to see.
+  isClientView: boolean;
 }) {
   const [client, setClient] = useState("");
   const [campaignFilter, setCampaignFilter] = useState("");
@@ -161,21 +181,23 @@ export default function PortfolioDashboardClient({
       <div className="flex items-center gap-2 overflow-x-auto pb-1">
         <Filter className="h-3.5 w-3.5 flex-shrink-0 text-slate-400 dark:text-slate-500" />
 
-        <select
-          className={pill(!!client)}
-          value={client}
-          onChange={(e) => {
-            setClient(e.target.value);
-            setCampaignFilter("");
-          }}
-        >
-          <option value="">Client</option>
-          {clients.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
+        {!isClientView && (
+          <select
+            className={pill(!!client)}
+            value={client}
+            onChange={(e) => {
+              setClient(e.target.value);
+              setCampaignFilter("");
+            }}
+          >
+            <option value="">Client</option>
+            {clients.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        )}
 
         <select className={pill(!!campaignFilter)} value={campaignFilter} onChange={(e) => setCampaignFilter(e.target.value)}>
           <option value="">Campaign</option>
@@ -211,23 +233,27 @@ export default function PortfolioDashboardClient({
           onChange={(e) => setDateTo(e.target.value)}
         />
 
-        <select className={pill(!!brandSolutions)} value={brandSolutions} onChange={(e) => setBrandSolutions(e.target.value)}>
-          <option value="">Brand Solutions</option>
-          {bsTeam.map((n) => (
-            <option key={n} value={n}>
-              {n}
-            </option>
-          ))}
-        </select>
+        {!isClientView && (
+          <select className={pill(!!brandSolutions)} value={brandSolutions} onChange={(e) => setBrandSolutions(e.target.value)}>
+            <option value="">Brand Solutions</option>
+            {bsTeam.map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        )}
 
-        <select className={pill(!!campaignManager)} value={campaignManager} onChange={(e) => setCampaignManager(e.target.value)}>
-          <option value="">Campaign Manager</option>
-          {cmTeam.map((n) => (
-            <option key={n} value={n}>
-              {n}
-            </option>
-          ))}
-        </select>
+        {!isClientView && (
+          <select className={pill(!!campaignManager)} value={campaignManager} onChange={(e) => setCampaignManager(e.target.value)}>
+            <option value="">Campaign Manager</option>
+            {cmTeam.map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        )}
 
         {hasActiveFilters && (
           <button
@@ -290,49 +316,62 @@ export default function PortfolioDashboardClient({
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 font-medium">Quoted, active campaigns</p>
         </div>
 
-        <div className="stat-card group dark:bg-slate-900 dark:border-slate-800">
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
-          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Internal Value</p>
-          <p className="mt-3 text-3xl font-extrabold text-slate-900 dark:text-white">{money(totalInternalCampaignValue)}</p>
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 font-medium">Creator cost, active campaigns</p>
-        </div>
+        {!isClientView && (
+          <div className="stat-card group dark:bg-slate-900 dark:border-slate-800">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Internal Value</p>
+            <p className="mt-3 text-3xl font-extrabold text-slate-900 dark:text-white">{money(totalInternalCampaignValue)}</p>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 font-medium">Creator cost, active campaigns</p>
+          </div>
+        )}
 
-        <div className="stat-card group dark:bg-slate-900 dark:border-slate-800">
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
-          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Margin %</p>
-          <p className="mt-3 text-3xl font-extrabold text-slate-900 dark:text-white">{marginPercent.toFixed(1)}%</p>
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 font-medium">Active campaign blended margin</p>
-        </div>
+        {!isClientView && (
+          <div className="stat-card group dark:bg-slate-900 dark:border-slate-800">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Margin %</p>
+            <p className="mt-3 text-3xl font-extrabold text-slate-900 dark:text-white">{marginPercent.toFixed(1)}%</p>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 font-medium">Active campaign blended margin</p>
+          </div>
+        )}
 
         {/* Finance figures — manually entered per campaign via FinanceRow on
-            the campaign page (no invoicing system yet, see schema comment). */}
-        <div className="stat-card group dark:bg-slate-900 dark:border-slate-800">
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
-          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Yet to be Invoiced</p>
-          <p className="mt-3 text-3xl font-extrabold text-slate-900 dark:text-white">{money(yetToBeInvoiced)}</p>
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 font-medium">Manually entered</p>
-        </div>
+            the campaign page (no invoicing system yet, see schema comment).
+            TBM-internal money movement, never shown to a client. */}
+        {!isClientView && (
+          <div className="stat-card group dark:bg-slate-900 dark:border-slate-800">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Yet to be Invoiced</p>
+            <p className="mt-3 text-3xl font-extrabold text-slate-900 dark:text-white">{money(yetToBeInvoiced)}</p>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 font-medium">Manually entered</p>
+          </div>
+        )}
 
-        <div className="stat-card group dark:bg-slate-900 dark:border-slate-800">
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
-          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Yet to be Received</p>
-          <p className="mt-3 text-3xl font-extrabold text-slate-900 dark:text-white">{money(yetToBeReceived)}</p>
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 font-medium">Manually entered</p>
-        </div>
+        {!isClientView && (
+          <div className="stat-card group dark:bg-slate-900 dark:border-slate-800">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Yet to be Received</p>
+            <p className="mt-3 text-3xl font-extrabold text-slate-900 dark:text-white">{money(yetToBeReceived)}</p>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 font-medium">Manually entered</p>
+          </div>
+        )}
 
-        <div className="stat-card group dark:bg-slate-900 dark:border-slate-800">
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
-          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Value of Cleared Due</p>
-          <p className="mt-3 text-3xl font-extrabold text-slate-900 dark:text-white">{money(valueOfClearedDue)}</p>
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 font-medium">Manually entered</p>
-        </div>
+        {!isClientView && (
+          <div className="stat-card group dark:bg-slate-900 dark:border-slate-800">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Value of Cleared Due</p>
+            <p className="mt-3 text-3xl font-extrabold text-slate-900 dark:text-white">{money(valueOfClearedDue)}</p>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 font-medium">Manually entered</p>
+          </div>
+        )}
 
-        <div className="stat-card group dark:bg-slate-900 dark:border-slate-800">
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
-          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Creator Payable Pending</p>
-          <p className="mt-3 text-3xl font-extrabold text-slate-900 dark:text-white">{money(creatorPayablePending)}</p>
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 font-medium">Manually entered</p>
-        </div>
+        {!isClientView && (
+          <div className="stat-card group dark:bg-slate-900 dark:border-slate-800">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Creator Payable Pending</p>
+            <p className="mt-3 text-3xl font-extrabold text-slate-900 dark:text-white">{money(creatorPayablePending)}</p>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 font-medium">Manually entered</p>
+          </div>
+        )}
       </div>
 
       {/* Campaign Table */}
@@ -370,18 +409,30 @@ export default function PortfolioDashboardClient({
                 <th className="sticky left-[200px] top-0 z-40 w-[220px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left dark:border-slate-700 dark:bg-slate-800">
                   Campaign
                 </th>
-                <th className="sticky top-0 z-30 w-[190px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left dark:border-slate-700 dark:bg-slate-800">Brand Solutions POC</th>
-                <th className="sticky top-0 z-30 w-[190px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left dark:border-slate-700 dark:bg-slate-800">Campaign Manager POC</th>
+                {!isClientView && (
+                  <th className="sticky top-0 z-30 w-[190px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left dark:border-slate-700 dark:bg-slate-800">Brand Solutions POC</th>
+                )}
+                {!isClientView && (
+                  <th className="sticky top-0 z-30 w-[190px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left dark:border-slate-700 dark:bg-slate-800">Campaign Manager POC</th>
+                )}
                 <th className="sticky top-0 z-30 w-[140px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left dark:border-slate-700 dark:bg-slate-800">Status</th>
                 <th className="sticky top-0 z-30 w-[160px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left dark:border-slate-700 dark:bg-slate-800">Creators Onboarded</th>
                 <th className="sticky top-0 z-30 w-[190px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left dark:border-slate-700 dark:bg-slate-800">Deliverables Live/Total</th>
                 <th className="sticky top-0 z-30 w-[140px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left dark:border-slate-700 dark:bg-slate-800">Deadline</th>
                 <th className="sticky top-0 z-30 w-[120px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left dark:border-slate-700 dark:bg-slate-800">Open Flags</th>
                 <th className="sticky top-0 z-30 w-[140px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left dark:border-slate-700 dark:bg-slate-800">Quoted Value</th>
-                <th className="sticky top-0 z-30 w-[140px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left dark:border-slate-700 dark:bg-slate-800">Internal Value</th>
-                <th className="sticky top-0 z-30 w-[110px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left dark:border-slate-700 dark:bg-slate-800">Margin %</th>
-                <th className="sticky top-0 z-30 w-[140px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left dark:border-slate-700 dark:bg-slate-800">Agency Fee</th>
-                <th className="sticky top-0 z-30 w-[190px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left dark:border-slate-700 dark:bg-slate-800">Creator Payable Pending</th>
+                {!isClientView && (
+                  <th className="sticky top-0 z-30 w-[140px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left dark:border-slate-700 dark:bg-slate-800">Internal Value</th>
+                )}
+                {!isClientView && (
+                  <th className="sticky top-0 z-30 w-[110px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left dark:border-slate-700 dark:bg-slate-800">Margin %</th>
+                )}
+                {!isClientView && (
+                  <th className="sticky top-0 z-30 w-[140px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left dark:border-slate-700 dark:bg-slate-800">Agency Fee</th>
+                )}
+                {!isClientView && (
+                  <th className="sticky top-0 z-30 w-[190px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left dark:border-slate-700 dark:bg-slate-800">Creator Payable Pending</th>
+                )}
               </tr>
             </thead>
             <tbody className="font-medium">
@@ -408,10 +459,22 @@ export default function PortfolioDashboardClient({
                         {c.name}
                       </Link>
                     </td>
-                    <td className="border-b border-slate-100 px-4 py-3 text-slate-600 dark:border-slate-800 dark:text-slate-300">{c.brandSolutionsPoc ?? "—"}</td>
-                    <td className="border-b border-slate-100 px-4 py-3 text-slate-600 dark:border-slate-800 dark:text-slate-300">{c.campaignManager ?? "—"}</td>
+                    {!isClientView && (
+                      <td className="border-b border-slate-100 px-4 py-3 text-slate-600 dark:border-slate-800 dark:text-slate-300">{c.brandSolutionsPoc ?? "—"}</td>
+                    )}
+                    {!isClientView && (
+                      <td className="border-b border-slate-100 px-4 py-3 text-slate-600 dark:border-slate-800 dark:text-slate-300">{c.campaignManager ?? "—"}</td>
+                    )}
                     <td className="border-b border-slate-100 px-4 py-3 dark:border-slate-800">
-                      <CampaignStatusSelect campaignId={c.id} status={c.status} />
+                      {isClientView ? (
+                        <span
+                          className={`rounded-lg border px-2 py-1 text-[11px] font-bold uppercase tracking-wide ${STATUS_BADGE_COLORS[c.status] ?? STATUS_BADGE_COLORS.ACTIVE}`}
+                        >
+                          {CAMPAIGN_STATUS_LABELS[c.status as CampaignStatus] ?? c.status}
+                        </span>
+                      ) : (
+                        <CampaignStatusSelect campaignId={c.id} status={c.status} />
+                      )}
                     </td>
                     <td className="border-b border-slate-100 px-4 py-3 text-left text-slate-700 dark:border-slate-800 dark:text-slate-200">{c.onboardedCount}</td>
                     <td className="border-b border-slate-100 px-4 py-3 text-left text-slate-700 dark:border-slate-800 dark:text-slate-200">
@@ -446,24 +509,32 @@ export default function PortfolioDashboardClient({
                     <td className="border-b border-slate-100 px-4 py-3 text-left text-slate-700 dark:border-slate-800 dark:text-slate-200">
                       {quotedValue ? `₹${quotedValue.toLocaleString("en-IN")}` : "—"}
                     </td>
-                    <td className="border-b border-slate-100 px-4 py-3 text-left text-slate-700 dark:border-slate-800 dark:text-slate-200">
-                      {c.internalValue ? `₹${c.internalValue.toLocaleString("en-IN")}` : "—"}
-                    </td>
-                    <td className="border-b border-slate-100 px-4 py-3 text-left font-semibold text-slate-900 dark:border-slate-800 dark:text-white">
-                      {margin !== null ? `${margin.toFixed(1)}%` : "—"}
-                    </td>
-                    <td className="border-b border-slate-100 px-4 py-3 text-left text-slate-700 dark:border-slate-800 dark:text-slate-200">
-                      {c.financeAgencyFee ? `₹${c.financeAgencyFee.toLocaleString("en-IN")}` : "—"}
-                    </td>
-                    <td className="border-b border-slate-100 px-4 py-3 text-left text-slate-700 dark:border-slate-800 dark:text-slate-200">
-                      {c.financeCreatorPayablePending ? `₹${c.financeCreatorPayablePending.toLocaleString("en-IN")}` : "—"}
-                    </td>
+                    {!isClientView && (
+                      <td className="border-b border-slate-100 px-4 py-3 text-left text-slate-700 dark:border-slate-800 dark:text-slate-200">
+                        {c.internalValue ? `₹${c.internalValue.toLocaleString("en-IN")}` : "—"}
+                      </td>
+                    )}
+                    {!isClientView && (
+                      <td className="border-b border-slate-100 px-4 py-3 text-left font-semibold text-slate-900 dark:border-slate-800 dark:text-white">
+                        {margin !== null ? `${margin.toFixed(1)}%` : "—"}
+                      </td>
+                    )}
+                    {!isClientView && (
+                      <td className="border-b border-slate-100 px-4 py-3 text-left text-slate-700 dark:border-slate-800 dark:text-slate-200">
+                        {c.financeAgencyFee ? `₹${c.financeAgencyFee.toLocaleString("en-IN")}` : "—"}
+                      </td>
+                    )}
+                    {!isClientView && (
+                      <td className="border-b border-slate-100 px-4 py-3 text-left text-slate-700 dark:border-slate-800 dark:text-slate-200">
+                        {c.financeCreatorPayablePending ? `₹${c.financeCreatorPayablePending.toLocaleString("en-IN")}` : "—"}
+                      </td>
+                    )}
                   </tr>
                 );
               })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={14} className="px-6 py-12 text-center text-slate-400 dark:text-slate-500">
+                  <td colSpan={isClientView ? 8 : 14} className="px-6 py-12 text-center text-slate-400 dark:text-slate-500">
                     <Megaphone className="mx-auto h-8 w-8 text-slate-300 dark:text-slate-600 mb-2" />
                     <p className="text-sm font-medium">No campaigns match these filters.</p>
                   </td>

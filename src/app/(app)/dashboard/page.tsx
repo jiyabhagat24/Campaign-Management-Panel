@@ -218,6 +218,7 @@ export default async function DashboardPage() {
         financeCampaigns={financeRows}
         showFinance={showFinance}
         revenueRows={revenueRows}
+        isClientView={isClient(user.role)}
       />
     </div>
   );
