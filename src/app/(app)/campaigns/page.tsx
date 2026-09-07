@@ -4,9 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { campaignVisibilityWhere, canCreateCampaign, isClient } from "@/lib/rbac";
 import { campaignColumnLabel } from "@/lib/kanban";
 import BrandAvatar from "@/components/campaign/BrandAvatar";
-import DeleteCampaignButton from "@/components/campaign/DeleteCampaignButton";
 import CampaignStatusSelect from "@/components/campaign/CampaignStatusSelect";
-import { COMMERCIAL_APPROVER_ROLES } from "@/lib/constants";
 import { isGoLiveAtRisk, isGoLiveBreached } from "@/lib/sla";
 import { FolderKanban, Plus, Users, ArrowUpRight } from "lucide-react";
 
@@ -61,7 +59,7 @@ export default async function CampaignsPage() {
                 <th className="px-6 py-4">Stage</th>
                 <th className="px-6 py-4">Creators</th>
                 <th className="px-6 py-4">Budget (Quoted)</th>
-                <th className="px-6 py-4 text-right">Action</th>
+                <th className="px-6 py-4 w-[260px] text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80 font-medium">
@@ -103,18 +101,15 @@ export default async function CampaignsPage() {
                       {c.budgetQuoted ? `₹${c.budgetQuoted.toLocaleString("en-IN")}` : "—"}
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex items-center justify-end gap-2">
+                      <div className="flex items-center justify-end gap-2 whitespace-nowrap">
                         {!isClient(user.role) && <CampaignStatusSelect campaignId={c.id} status={c.status} />}
                         <Link
                           href={`/campaigns/${c.id}`}
-                          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 shadow-xs transition-all hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-600 dark:hover:border-indigo-800 dark:hover:bg-indigo-950/50 dark:hover:text-indigo-300"
+                          className="inline-flex flex-shrink-0 items-center gap-1 rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 shadow-xs transition-all hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-600 dark:hover:border-indigo-800 dark:hover:bg-indigo-950/50 dark:hover:text-indigo-300"
                         >
                           <span>Manage</span>
                           <ArrowUpRight className="h-3.5 w-3.5" />
                         </Link>
-                        {COMMERCIAL_APPROVER_ROLES.includes(user.role) && (
-                          <DeleteCampaignButton campaignId={c.id} campaignName={c.name} />
-                        )}
                       </div>
                     </td>
                   </tr>

@@ -8,7 +8,6 @@ import { logActivity } from "@/lib/activity";
 import { notify } from "@/lib/notify";
 import { canApproveCommercialEdit, canSetCommercials, canSeeInternalCost, canManageTeam, canCreateCampaign, isClient } from "@/lib/rbac";
 import {
-  COMMERCIAL_APPROVER_ROLES,
   DEFAULT_SLA,
   type Stage,
   INTERNAL_ROLES,
@@ -103,10 +102,10 @@ export async function createCampaign(formData: FormData) {
 }
 
 // Sets Active/Hold/Closed on a campaign — used by the status dropdown in the
-// dashboard's Campaign Table (and anywhere else that needs it later). Not
-// restricted to COMMERCIAL_APPROVER_ROLES like deleteCampaign — any
+// dashboard's Campaign Table (and anywhere else that needs it later). Any
 // non-client internal user can pause/close a campaign, same as other
-// campaign-level edits in this file.
+// campaign-level edits in this file. Campaigns are never deleted — status
+// (e.g. Cancelled) is the only way a campaign leaves the active set.
 export async function updateCampaignStatus(campaignId: string, status: string) {
   const user = await requireUser();
   if (isClient(user.role)) throw new Error("Clients cannot change campaign status");
@@ -234,22 +233,6 @@ export async function updateCampaignInvoiced(campaignId: string, invoiced: boole
 
   revalidatePath("/finance");
   revalidatePath("/dashboard");
-}
-
-export async function deleteCampaign(campaignId: string) {
-  const user = await requireUser();
-  if (!COMMERCIAL_APPROVER_ROLES.includes(user.role)) {
-    throw new Error("Only Brand Solutions or Campaign Managers can delete a campaign");
-  }
-
-  const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { id: true, name: true } });
-  if (!campaign) throw new Error("Campaign not found");
-
-  // Cascades to creators, deliverables, remarks, files, activity log, team
-  // access etc. — all set up with onDelete: Cascade in the schema.
-  await prisma.campaign.delete({ where: { id: campaignId } });
-
-  revalidatePath("/campaigns");
 }
 
 export async function advanceCampaignStage(campaignId: string, stage: Stage) {
