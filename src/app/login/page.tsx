@@ -15,7 +15,7 @@ export default function LoginPage() {
           <img
             src="/brand-logo-login.png"
             alt="TheBoredMonkey — Creations & Connections"
-            className="mx-auto h-40 w-auto max-w-full object-contain drop-shadow-[0_8px_24px_rgba(0,0,0,0.45)]"
+            className="mx-auto h-36 w-auto max-w-full object-contain drop-shadow-[0_8px_24px_rgba(0,0,0,0.45)]"
           />
         </div>
 
