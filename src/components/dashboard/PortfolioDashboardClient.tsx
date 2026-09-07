@@ -259,7 +259,7 @@ export default function PortfolioDashboardClient({
               <Megaphone className="h-4 w-4" />
             </div>
           </div>
-          <p className="mt-3 text-3xl font-extrabold text-slate-900 dark:text-white">{activeFiltered.length}</p>
+          <p className="mt-3 text-3xl font-extrabold text-slate-900 dark:text-white">{activeOnly.length}</p>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 font-medium">Of {filtered.length} shown</p>
         </div>
 
