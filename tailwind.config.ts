@@ -22,9 +22,9 @@ const config: Config = {
           // a pale lavender tint, swapped for a warm off-white/beige (same
           // hue held constant across the ramp the way the old lavender was,
           // just a different hue) so the page reads as beige, not purple.
-          50: "#FAF8F3", // Very light warm off-white — page background
-          100: "#F5F0E7", // Soft beige tint — subtle card/badge bg
-          200: "#E9E1D2", // Beige border — card borders
+          50: "#FDFCFA", // Near-white warm off-white — page background, lightened further
+          100: "#FAF7F0", // Soft beige tint — subtle card/badge bg, lightened further
+          200: "#EFE8D9", // Beige border — card borders, lightened further
           300: "#D6C9B0",
           400: "#B3A488", // Warm taupe — secondary/meta text
           500: "#93876C",
@@ -79,7 +79,7 @@ const config: Config = {
         // primary-text color (always paired with dark:text-white), and used
         // to carry the same purple tint.
         ink: "#141414",
-        panel: "#FAF8F3", // matches the new slate-50 light-mode page background
+        panel: "#FDFCFA", // matches the new slate-50 light-mode page background
         // Mirrors the indigo scale above — same gold accent, referenced
         // directly as bg-brand/text-brand in a handful of components.
         brand: {
