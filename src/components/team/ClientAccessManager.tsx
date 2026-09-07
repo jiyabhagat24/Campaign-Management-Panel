@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { setClientCampaignAccess } from "@/lib/actions";
-import { Search, UserCheck } from "lucide-react";
+import { Search, UserCheck, X, Plus } from "lucide-react";
 
 export type ClientRow = {
   id: string;
@@ -22,10 +22,13 @@ export type CampaignOption = {
   status: string;
 };
 
-// Every client's campaign checkboxes are shown right away, no expand/click
-// needed — checking/unchecking calls setClientCampaignAccess immediately
+// Each client's granted campaigns render as small removable chips, with a
+// type-to-filter "Add campaign" combobox next to them for granting more —
+// scales far better than rendering every campaign as a checkbox for every
+// client (that grid gets enormous once there are more than a handful of
+// campaigns). Checking/unchecking calls setClientCampaignAccess immediately
 // (no separate "Save" step, same instant-toggle pattern as
-// CampaignStatusSelect elsewhere in the app). Local state is updated
+// CampaignStatusSelect elsewhere in the app); local state is updated
 // optimistically and reverted if the server call fails.
 export default function ClientAccessManager({ clients, campaigns }: { clients: ClientRow[]; campaigns: CampaignOption[] }) {
   const [rows, setRows] = useState(clients);
@@ -44,6 +47,8 @@ export default function ClientAccessManager({ clients, campaigns }: { clients: C
         (c.brandName ?? "").toLowerCase().includes(q)
     );
   }, [rows, search]);
+
+  const campaignById = useMemo(() => new Map(campaigns.map((c) => [c.id, c])), [campaigns]);
 
   function toggle(clientId: string, campaignId: string, next: boolean) {
     const key = `${clientId}:${campaignId}`;
@@ -124,33 +129,42 @@ export default function ClientAccessManager({ clients, campaigns }: { clients: C
               {c.phone ? ` · ${c.phone}` : ""}
             </p>
 
-            <div className="mt-3 flex flex-wrap gap-2">
-              {campaigns.map((camp) => {
-                const checked = c.campaignIds.includes(camp.id);
-                const key = `${c.id}:${camp.id}`;
-                const isPending = pendingKey === key;
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              {c.campaignIds.map((campId) => {
+                const camp = campaignById.get(campId);
+                if (!camp) return null;
+                const isPending = pendingKey === `${c.id}:${campId}`;
                 return (
-                  <label
-                    key={camp.id}
-                    className={`flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
-                      checked
-                        ? "border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-300"
-                        : "border-slate-200 text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:text-slate-300 dark:hover:border-slate-600"
-                    } ${isPending ? "opacity-60" : ""}`}
+                  <span
+                    key={campId}
+                    className={`flex items-center gap-1.5 rounded-full border border-indigo-200 bg-indigo-50 py-1.5 pl-3 pr-1.5 text-xs font-semibold text-indigo-700 dark:border-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-300 ${
+                      isPending ? "opacity-60" : ""
+                    }`}
                   >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      disabled={isPending}
-                      onChange={(e) => toggle(c.id, camp.id, e.target.checked)}
-                      className="h-3.5 w-3.5 flex-shrink-0 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                    />
                     {camp.name}
-                    <span className="font-normal text-slate-400 dark:text-slate-500">· {camp.brand}</span>
-                  </label>
+                    <span className="font-normal text-indigo-400 dark:text-indigo-500">· {camp.brand}</span>
+                    <button
+                      type="button"
+                      onClick={() => toggle(c.id, campId, false)}
+                      disabled={isPending}
+                      title="Remove access"
+                      className="rounded-full p-0.5 text-indigo-400 hover:bg-indigo-100 hover:text-indigo-700 disabled:opacity-50 dark:text-indigo-500 dark:hover:bg-indigo-900/60 dark:hover:text-indigo-200"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
                 );
               })}
-              {campaigns.length === 0 && <p className="text-xs text-slate-400 dark:text-slate-500">No campaigns yet.</p>}
+
+              <AddCampaignCombobox
+                campaigns={campaigns}
+                excludeIds={c.campaignIds}
+                onAdd={(campaignId) => toggle(c.id, campaignId, true)}
+              />
+
+              {c.campaignIds.length === 0 && campaigns.length === 0 && (
+                <p className="text-xs text-slate-400 dark:text-slate-500">No campaigns yet.</p>
+              )}
             </div>
           </div>
         ))}
@@ -164,6 +178,100 @@ export default function ClientAccessManager({ clients, campaigns }: { clients: C
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// Small type-to-filter "Add campaign" control: click the pill to open a
+// short dropdown, type to narrow it down (by name or brand), click a result
+// to grant access. Only ever lists campaigns this client doesn't already
+// have (excludeIds) — the list shrinks as campaigns get added, so it stays
+// usable even with hundreds of campaigns on the books.
+function AddCampaignCombobox({
+  campaigns,
+  excludeIds,
+  onAdd,
+}: {
+  campaigns: CampaignOption[];
+  excludeIds: string[];
+  onAdd: (campaignId: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const available = useMemo(() => {
+    const excluded = new Set(excludeIds);
+    const q = query.trim().toLowerCase();
+    return campaigns
+      .filter((c) => !excluded.has(c.id))
+      .filter((c) => !q || c.name.toLowerCase().includes(q) || c.brand.toLowerCase().includes(q))
+      .slice(0, 8);
+  }, [campaigns, excludeIds, query]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onClickOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+        setQuery("");
+      }
+    }
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, [open]);
+
+  useEffect(() => {
+    if (open) inputRef.current?.focus();
+  }, [open]);
+
+  return (
+    <div ref={containerRef} className="relative">
+      {!open ? (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="flex items-center gap-1 rounded-full border border-dashed border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-500 transition-colors hover:border-indigo-400 hover:text-indigo-600 dark:border-slate-700 dark:text-slate-400 dark:hover:border-indigo-600 dark:hover:text-indigo-400"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Add campaign
+        </button>
+      ) : (
+        <div className="w-64 rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900">
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search campaigns..."
+            className="w-full rounded-t-xl border-b border-slate-100 px-3 py-2 text-xs text-slate-700 placeholder-slate-400 focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200"
+          />
+          <div className="max-h-56 overflow-y-auto py-1">
+            {available.map((camp) => (
+              <button
+                key={camp.id}
+                type="button"
+                onClick={() => {
+                  onAdd(camp.id);
+                  setQuery("");
+                  setOpen(false);
+                }}
+                className="flex w-full flex-col items-start px-3 py-1.5 text-left text-xs hover:bg-slate-50 dark:hover:bg-slate-800"
+              >
+                <span className="font-semibold text-slate-800 dark:text-slate-100">{camp.name}</span>
+                <span className="text-[11px] text-slate-400 dark:text-slate-500">
+                  {camp.brand} · {camp.status}
+                </span>
+              </button>
+            ))}
+            {available.length === 0 && (
+              <p className="px-3 py-3 text-center text-[11px] text-slate-400 dark:text-slate-500">
+                {campaigns.length === 0 ? "No campaigns yet." : "No matching campaigns."}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
