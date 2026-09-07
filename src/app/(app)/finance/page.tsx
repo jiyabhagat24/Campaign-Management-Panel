@@ -82,10 +82,7 @@ export default async function FinancePage() {
   return (
     <div className="p-8 space-y-10 max-w-7xl mx-auto">
       <div className="border-b border-slate-200/60 dark:border-slate-800 pb-6">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-rose-600 bg-rose-50 border border-rose-100 rounded-full px-2.5 py-0.5 dark:bg-rose-950/80 dark:border-rose-800/80 dark:text-rose-300">
-          TheBoredMonkey eyes only
-        </span>
-        <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Finance and Invoicing</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Finance and Invoicing</h1>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
           Two sides tracked separately: money out to creators, and money in from the client.
         </p>
@@ -93,7 +90,7 @@ export default async function FinancePage() {
 
       <div className="space-y-6">
         <div>
-          <h3 className="mb-3 text-sm font-bold text-slate-900 dark:text-white">A. Creator side, payouts (TBM eyes only)</h3>
+          <h3 className="mb-3 text-sm font-bold text-slate-900 dark:text-white">A. Creator side, payouts</h3>
           <CreatorPayoutsTable rows={payoutRows} />
         </div>
 
