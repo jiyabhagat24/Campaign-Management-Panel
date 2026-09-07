@@ -32,6 +32,7 @@ import {
   YoutubeLookupError,
 } from "@/lib/youtube";
 import { appendInstagramHandleToSheet } from "@/lib/googleSheets";
+import { isValidEmail, isValidName, isValidBrandName, isValidPhone, normalizePhone } from "@/lib/validation";
 
 // Prisma's unique-constraint-violation error code — checked structurally
 // (not via `instanceof Prisma.PrismaClientKnownRequestError`) to avoid
@@ -1725,14 +1726,27 @@ export async function signUpClient(input: {
 }) {
   const name = input.name.trim();
   const email = input.email.trim().toLowerCase();
-  const phone = input.phone?.trim() || null;
-  const brandName = input.brandName?.trim() || null;
+  const brandName = input.brandName?.trim() ?? "";
+  const rawPhone = input.phone?.trim() ?? "";
 
-  if (!name) throw new Error("Name is required.");
-  if (!email) throw new Error("Email is required.");
+  // Same rules the sign-up form checks client-side (src/lib/validation.ts)
+  // — re-checked here so a request that bypasses the form can't skip them.
+  if (!name || !isValidName(name)) {
+    throw new Error("Enter a valid name (letters only, at least 2 characters).");
+  }
+  if (!email || !isValidEmail(email)) {
+    throw new Error("Enter a valid email address.");
+  }
+  if (!brandName || !isValidBrandName(brandName)) {
+    throw new Error("Enter a valid brand/company name (at least 2 characters).");
+  }
+  if (rawPhone && !isValidPhone(rawPhone)) {
+    throw new Error("Phone number must be a valid 10-digit number.");
+  }
   if (!input.password || input.password.length < 8) {
     throw new Error("Password needs to be at least 8 characters.");
   }
+  const phone = rawPhone ? normalizePhone(rawPhone) : null;
 
   const existing = await prisma.client.findUnique({ where: { email } });
   if (existing) throw new Error("An account with that email already exists — sign in instead.");

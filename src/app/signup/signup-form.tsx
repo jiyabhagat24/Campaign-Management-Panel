@@ -5,6 +5,7 @@ import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { User, Mail, Lock, Building2, Phone, ArrowRight } from "lucide-react";
 import { signUpClient } from "@/lib/actions";
+import { isValidEmail, isValidName, isValidBrandName, isValidPhone } from "@/lib/validation";
 
 // Self-serve client sign-up — instant account creation (no CXO approval
 // step): submitting this form creates the real Client login row right away
@@ -22,12 +23,36 @@ export default function SignupForm() {
   const [brandName, setBrandName] = useState("");
   const [phone, setPhone] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
+
+  function validate(): boolean {
+    const errors: Record<string, string> = {};
+    if (!isValidName(name)) {
+      errors.name = "Enter a valid name (letters only, at least 2 characters).";
+    }
+    if (!isValidBrandName(brandName)) {
+      errors.brandName = "Enter a valid brand/company name (at least 2 characters).";
+    }
+    if (!isValidEmail(email)) {
+      errors.email = "Enter a valid email address.";
+    }
+    // Phone is optional — only validated if the user actually typed one.
+    if (phone.trim() && !isValidPhone(phone)) {
+      errors.phone = "Enter a valid 10-digit phone number.";
+    }
+    if (password.length < 8) {
+      errors.password = "Password needs to be at least 8 characters.";
+    }
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setLoading(true);
     setError(null);
+    if (!validate()) return;
+    setLoading(true);
     try {
       await signUpClient({ name, email, password, brandName, phone });
       const res = await signIn("credentials", { email, password, redirect: false });
@@ -59,10 +84,13 @@ export default function SignupForm() {
             required
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="w-full rounded-xl border border-slate-700/80 bg-slate-800/80 pl-10 pr-3 py-2.5 text-sm text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
+            className={`w-full rounded-xl border bg-slate-800/80 pl-10 pr-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none ${
+              fieldErrors.name ? "border-rose-500/70 focus:border-rose-500" : "border-slate-700/80 focus:border-indigo-500"
+            }`}
             placeholder="Your name"
           />
         </div>
+        {fieldErrors.name && <p className="mt-1 text-[11px] font-medium text-rose-400">{fieldErrors.name}</p>}
       </div>
 
       <div>
@@ -71,12 +99,16 @@ export default function SignupForm() {
           <Building2 className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
           <input
             type="text"
+            required
             value={brandName}
             onChange={(e) => setBrandName(e.target.value)}
-            className="w-full rounded-xl border border-slate-700/80 bg-slate-800/80 pl-10 pr-3 py-2.5 text-sm text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
+            className={`w-full rounded-xl border bg-slate-800/80 pl-10 pr-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none ${
+              fieldErrors.brandName ? "border-rose-500/70 focus:border-rose-500" : "border-slate-700/80 focus:border-indigo-500"
+            }`}
             placeholder="Your brand"
           />
         </div>
+        {fieldErrors.brandName && <p className="mt-1 text-[11px] font-medium text-rose-400">{fieldErrors.brandName}</p>}
       </div>
 
       <div>
@@ -88,10 +120,13 @@ export default function SignupForm() {
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-xl border border-slate-700/80 bg-slate-800/80 pl-10 pr-3 py-2.5 text-sm text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
+            className={`w-full rounded-xl border bg-slate-800/80 pl-10 pr-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none ${
+              fieldErrors.email ? "border-rose-500/70 focus:border-rose-500" : "border-slate-700/80 focus:border-indigo-500"
+            }`}
             placeholder="you@brand.com"
           />
         </div>
+        {fieldErrors.email && <p className="mt-1 text-[11px] font-medium text-rose-400">{fieldErrors.email}</p>}
       </div>
 
       <div>
@@ -100,12 +135,16 @@ export default function SignupForm() {
           <Phone className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
           <input
             type="tel"
+            inputMode="numeric"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
-            className="w-full rounded-xl border border-slate-700/80 bg-slate-800/80 pl-10 pr-3 py-2.5 text-sm text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
-            placeholder="Optional"
+            className={`w-full rounded-xl border bg-slate-800/80 pl-10 pr-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none ${
+              fieldErrors.phone ? "border-rose-500/70 focus:border-rose-500" : "border-slate-700/80 focus:border-indigo-500"
+            }`}
+            placeholder="Optional — 10-digit number"
           />
         </div>
+        {fieldErrors.phone && <p className="mt-1 text-[11px] font-medium text-rose-400">{fieldErrors.phone}</p>}
       </div>
 
       <div>
@@ -118,10 +157,13 @@ export default function SignupForm() {
             minLength={8}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-xl border border-slate-700/80 bg-slate-800/80 pl-10 pr-3 py-2.5 text-sm text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
+            className={`w-full rounded-xl border bg-slate-800/80 pl-10 pr-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none ${
+              fieldErrors.password ? "border-rose-500/70 focus:border-rose-500" : "border-slate-700/80 focus:border-indigo-500"
+            }`}
             placeholder="At least 8 characters"
           />
         </div>
+        {fieldErrors.password && <p className="mt-1 text-[11px] font-medium text-rose-400">{fieldErrors.password}</p>}
       </div>
 
       {error && (
