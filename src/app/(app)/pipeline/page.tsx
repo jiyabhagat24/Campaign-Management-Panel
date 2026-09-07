@@ -6,6 +6,7 @@ import { isClient } from "@/lib/rbac";
 import { KANBAN_COLUMNS, KANBAN_COLUMN_LABELS, type KanbanColumn } from "@/lib/constants";
 import { isGoLiveAtRisk, isGoLiveBreached } from "@/lib/sla";
 import { campaignColumn } from "@/lib/kanban";
+import { formatCompactINR } from "@/lib/format";
 import BrandAvatar from "@/components/campaign/BrandAvatar";
 import { GitMerge, AlertCircle, ArrowUpRight, CheckCircle2 } from "lucide-react";
 
@@ -117,7 +118,7 @@ export default async function PipelinePage() {
                               {onboarded} / {c.creators.length} creators
                             </span>
                             <span className="font-bold text-slate-900 dark:text-white">
-                              {c.budgetQuoted ? `₹${(c.budgetQuoted / 100000).toFixed(1)}L` : "—"}
+                              {c.budgetQuoted ? formatCompactINR(c.budgetQuoted) : "—"}
                             </span>
                           </div>
 

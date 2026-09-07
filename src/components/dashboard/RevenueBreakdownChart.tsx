@@ -15,8 +15,17 @@ export type RevenueDataRow = {
   revenue: number;
 };
 
+// Same Lakh/Crore breakpoints as formatCompactINR, plus a K tier below 1L —
+// chart axis labels and tooltips benefit from that extra granularity at
+// small scale, which the dashboard summary cards don't need.
 const money = (n: number) =>
-  Math.abs(n) >= 100000 ? `₹${(n / 100000).toFixed(1)}L` : Math.abs(n) >= 1000 ? `₹${(n / 1000).toFixed(1)}K` : `₹${Math.round(n)}`;
+  Math.abs(n) >= 10000000
+    ? `₹${(n / 10000000).toFixed(2)}Cr`
+    : Math.abs(n) >= 100000
+    ? `₹${(n / 100000).toFixed(1)}L`
+    : Math.abs(n) >= 1000
+    ? `₹${(n / 1000).toFixed(1)}K`
+    : `₹${Math.round(n)}`;
 const monthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 const monthLabel = (key: string) => {
   const [y, m] = key.split("-").map(Number);
@@ -165,8 +174,8 @@ function FinancialPerformanceChart({ months }: { months: MonthRow[] }) {
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-[300px]">
       <defs>
         <linearGradient id="revenueAreaGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#4f46e5" stopOpacity="0.16" />
-          <stop offset="100%" stopColor="#4f46e5" stopOpacity="0" />
+          <stop offset="0%" stopColor="#C68E00" stopOpacity="0.16" />
+          <stop offset="100%" stopColor="#C68E00" stopOpacity="0" />
         </linearGradient>
         <linearGradient id="marginAreaGrad" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="#10b981" stopOpacity="0.16" />
@@ -175,7 +184,7 @@ function FinancialPerformanceChart({ months }: { months: MonthRow[] }) {
       </defs>
       <Legend
         items={[
-          { label: "Revenue", color: "#4f46e5" },
+          { label: "Revenue", color: "#C68E00" },
           { label: "Margin Value", color: "#10b981" },
         ]}
       />
@@ -184,7 +193,7 @@ function FinancialPerformanceChart({ months }: { months: MonthRow[] }) {
         return (
           <g key={t}>
             <line x1={PAD_L} y1={y} x2={W - PAD_R} y2={y} stroke="currentColor" className="text-slate-100 dark:text-slate-800" strokeWidth="1" />
-            <text x={PAD_L - 8} y={y + 3} fontSize="10" textAnchor="end" fill="#4f46e5">
+            <text x={PAD_L - 8} y={y + 3} fontSize="10" textAnchor="end" fill="#C68E00">
               {money(t)}
             </text>
           </g>
@@ -196,18 +205,18 @@ function FinancialPerformanceChart({ months }: { months: MonthRow[] }) {
         </text>
       ))}
       <XAxisTitle label="Month" />
-      <YAxisTitle label="Financial Value (₹)" color="#4f46e5" />
+      <YAxisTitle label="Financial Value (₹)" color="#C68E00" />
       {hasNegative && (
         <line x1={PAD_L} y1={yFor(0)} x2={W - PAD_R} y2={yFor(0)} stroke="currentColor" className="text-slate-300 dark:text-slate-600" strokeWidth="1.5" />
       )}
       <path d={areaPath("revenue")} fill="url(#revenueAreaGrad)" stroke="none" />
       <path d={areaPath("marginValue")} fill="url(#marginAreaGrad)" stroke="none" />
-      <path d={linePath("revenue")} fill="none" stroke="#4f46e5" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d={linePath("revenue")} fill="none" stroke="#C68E00" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
       <path d={linePath("marginValue")} fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
       {months.map((m, i) => (
         <g key={m.key}>
-          <circle cx={xFor(i, months.length)} cy={yFor(m.revenue)} r="5" fill="#fff" stroke="#4f46e5" strokeWidth="2.5" />
-          <circle cx={xFor(i, months.length)} cy={yFor(m.revenue)} r="2" fill="#4f46e5">
+          <circle cx={xFor(i, months.length)} cy={yFor(m.revenue)} r="5" fill="#fff" stroke="#C68E00" strokeWidth="2.5" />
+          <circle cx={xFor(i, months.length)} cy={yFor(m.revenue)} r="2" fill="#C68E00">
             <title>{`${m.label} Revenue: ${money(m.revenue)}`}</title>
           </circle>
           <circle cx={xFor(i, months.length)} cy={yFor(m.marginValue)} r="5" fill="#fff" stroke="#10b981" strokeWidth="2.5" />
@@ -365,7 +374,7 @@ function ClientRevenueStackChart({ rows }: { rows: RevenueDataRow[] }) {
           return (
             <g key={t}>
               <line x1={PAD_L3} y1={y} x2={W - PAD_R3} y2={y} stroke="currentColor" className="text-slate-100 dark:text-slate-800" strokeWidth="1" />
-              <text x={PAD_L3 - 8} y={y + 3} fontSize="10" textAnchor="end" fill="#4f46e5">
+              <text x={PAD_L3 - 8} y={y + 3} fontSize="10" textAnchor="end" fill="#C68E00">
                 {money(t)}
               </text>
             </g>
@@ -429,7 +438,7 @@ function ClientRevenueStackChart({ rows }: { rows: RevenueDataRow[] }) {
           );
         })}
         <XAxisTitle label="Client" width={W} padB={PAD_B3} height={H3} />
-        <YAxisTitle label="Revenue (₹)" padT={PAD_T3} plotHeight={plotH3} color="#4f46e5" />
+        <YAxisTitle label="Revenue (₹)" padT={PAD_T3} plotHeight={plotH3} color="#C68E00" />
       </svg>
       <div className="flex flex-wrap gap-x-4 gap-y-1.5 px-2">
         {monthKeys.map((mk, i) => (

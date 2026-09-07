@@ -25,23 +25,36 @@ const config: Config = {
           400: "#9C93B8", // Lavender-grey — secondary/meta text
           500: "#8478A3",
           600: "#5B4E93", // Muted violet — stage/status label text
-          700: "#453A72",
-          800: "#2E2557",
-          900: "#211A3E", // Deep Indigo — header bar, primary text
-          950: "#150F29",
+          // 700-950 are dark mode's actual surface/border/text colors (cards,
+          // the sidebar shell, borders, and — via text-slate-900 — light-mode
+          // heading text too). These used to carry the same "Deep Indigo"
+          // purple tint as the 50-600 lavender tones above; switched to a
+          // true black/near-black neutral ramp so dark mode reads as black,
+          // not purple. The violet accent (indigo scale below) is untouched.
+          700: "#333333",
+          800: "#1F1F1F",
+          900: "#141414", // dark mode card/sidebar bg; also light-mode heading text
+          950: "#050505", // deepest dark-mode background
         },
+        // Was the violet accent ("Deep Indigo" brand). Recolored to gold/
+        // yellow, same hue held constant top to bottom the way the old
+        // violet ramp did — just swap the hue, not the structure. Every
+        // dark-purple-for-text/highlight/CTA spot in the app (sidebar active
+        // nav highlight, "Add Campaign" button, links, badges, the logo
+        // mark) reads off this scale, so recoloring it here recolors all of
+        // them without touching each component.
         indigo: {
-          50: "#F3F0FC",
-          100: "#EEEAF8", // Soft lavender tint
-          200: "#DDD3F2",
-          300: "#C4B4EA",
-          400: "#AD9AE4",
-          500: "#9A8AE2",
-          600: "#8A7CE0", // Violet accent — logo mark, primary CTAs/links
-          700: "#6F62B8",
-          800: "#564C8F",
-          900: "#3D3665",
-          950: "#211A3E",
+          50: "#FDF6E3",
+          100: "#FBEEC6", // Soft gold tint
+          200: "#F5DD93",
+          300: "#EEC85C",
+          400: "#E5B233",
+          500: "#D9A015",
+          600: "#C68E00", // Gold accent — logo mark, primary CTAs/links
+          700: "#A6760A",
+          800: "#7E5B0C",
+          900: "#5C430D",
+          950: "#3A2A08",
         },
         // The one warning accent (dusty rose) — replaces amber wherever
         // the app shows a "negotiating"/"at risk" state.
@@ -58,15 +71,20 @@ const config: Config = {
           900: "#4A2530",
           950: "#2E1620",
         },
-        ink: "#211A3E",
+        // Same near-black as slate-900 above — ink is the light-mode heading/
+        // primary-text color (always paired with dark:text-white), and used
+        // to carry the same purple tint.
+        ink: "#141414",
         panel: "#F3F1FA",
+        // Mirrors the indigo scale above — same gold accent, referenced
+        // directly as bg-brand/text-brand in a handful of components.
         brand: {
-          DEFAULT: "#8A7CE0",
-          50: "#F3F0FC",
-          100: "#EEEAF8",
-          500: "#9A8AE2",
-          600: "#8A7CE0",
-          700: "#6F62B8",
+          DEFAULT: "#C68E00",
+          50: "#FDF6E3",
+          100: "#FBEEC6",
+          500: "#D9A015",
+          600: "#C68E00",
+          700: "#A6760A",
         },
         platform: {
           youtube: "#ff0000",

@@ -8,6 +8,7 @@ import { CAMPAIGN_STATUSES, CAMPAIGN_STATUS_LABELS, type CampaignStatus } from "
 import { updateCampaignStatus } from "@/lib/actions";
 import FinanceTableClient, { type FinanceCampaignRow } from "@/components/finance/FinanceTableClient";
 import RevenueBreakdownChart, { type RevenueDataRow } from "@/components/dashboard/RevenueBreakdownChart";
+import { formatCompactINR } from "@/lib/format";
 import {
   Megaphone,
   IndianRupee,
@@ -42,7 +43,7 @@ export type DashboardCampaignRow = {
   financeAgencyFee: number | null;
 };
 
-const money = (n: number) => (n >= 100000 ? `₹${(n / 100000).toFixed(1)}L` : `₹${n.toLocaleString("en-IN")}`);
+const money = formatCompactINR;
 
 // One IR-team-editable <select> per Campaign Table row — swapping status
 // calls updateCampaignStatus (a "use server" action, safe to import
@@ -278,7 +279,7 @@ export default function PortfolioDashboardClient({
       {/* Summary row */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <div className="stat-card group dark:bg-slate-900 dark:border-slate-800">
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-500 to-violet-500" />
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
           <div className="flex items-center justify-between">
             <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Active Campaigns</p>
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-950/80 dark:text-indigo-400 group-hover:scale-110 transition-transform">
@@ -290,7 +291,7 @@ export default function PortfolioDashboardClient({
         </div>
 
         <div className="stat-card group dark:bg-slate-900 dark:border-slate-800">
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-cyan-500 to-blue-500" />
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
           <div className="flex items-center justify-between">
             <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Creators Onboarded</p>
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-cyan-50 text-cyan-600 dark:bg-cyan-950/80 dark:text-cyan-400 group-hover:scale-110 transition-transform">
@@ -302,7 +303,7 @@ export default function PortfolioDashboardClient({
         </div>
 
         <div className="stat-card group dark:bg-slate-900 dark:border-slate-800">
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 to-teal-500" />
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
           <div className="flex items-center justify-between">
             <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Deliverables Live/Total</p>
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950/80 dark:text-emerald-400 group-hover:scale-110 transition-transform">
@@ -316,7 +317,7 @@ export default function PortfolioDashboardClient({
         </div>
 
         <div className="stat-card group dark:bg-slate-900 dark:border-slate-800">
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 to-green-500" />
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
           <div className="flex items-center justify-between">
             <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">On Time</p>
           </div>
@@ -325,7 +326,7 @@ export default function PortfolioDashboardClient({
         </div>
 
         <div className="stat-card group dark:bg-slate-900 dark:border-slate-800">
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-rose-500 to-red-500" />
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
           <div className="flex items-center justify-between">
             <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Delayed</p>
           </div>
@@ -334,7 +335,7 @@ export default function PortfolioDashboardClient({
         </div>
 
         <div className="stat-card group dark:bg-slate-900 dark:border-slate-800">
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-500 to-orange-500" />
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
           <div className="flex items-center justify-between">
             <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Active Value</p>
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-50 text-amber-600 dark:bg-amber-950/80 dark:text-amber-400 group-hover:scale-110 transition-transform">
@@ -346,7 +347,7 @@ export default function PortfolioDashboardClient({
         </div>
 
         <div className="stat-card group dark:bg-slate-900 dark:border-slate-800">
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-fuchsia-500 to-pink-500" />
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
           <div className="flex items-center justify-between">
             <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Internal Value</p>
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-fuchsia-50 text-fuchsia-600 dark:bg-fuchsia-950/80 dark:text-fuchsia-400 group-hover:scale-110 transition-transform">
@@ -358,7 +359,7 @@ export default function PortfolioDashboardClient({
         </div>
 
         <div className="stat-card group dark:bg-slate-900 dark:border-slate-800">
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-rose-500 to-amber-500" />
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
           <div className="flex items-center justify-between">
             <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Margin %</p>
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-50 text-rose-600 dark:bg-rose-950/80 dark:text-rose-400 group-hover:scale-110 transition-transform">
@@ -372,21 +373,21 @@ export default function PortfolioDashboardClient({
         {/* Finance figures — manually entered per campaign via FinanceRow on
             the campaign page (no invoicing system yet, see schema comment). */}
         <div className="stat-card group dark:bg-slate-900 dark:border-slate-800">
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-sky-500 to-indigo-500" />
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
           <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Yet to be Invoiced</p>
           <p className="mt-3 text-3xl font-extrabold text-slate-900 dark:text-white">{money(yetToBeInvoiced)}</p>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 font-medium">Manually entered</p>
         </div>
 
         <div className="stat-card group dark:bg-slate-900 dark:border-slate-800">
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-sky-500 to-indigo-500" />
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
           <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Yet to be Received</p>
           <p className="mt-3 text-3xl font-extrabold text-slate-900 dark:text-white">{money(yetToBeReceived)}</p>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 font-medium">Manually entered</p>
         </div>
 
         <div className="stat-card group dark:bg-slate-900 dark:border-slate-800">
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-teal-500 to-emerald-500" />
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
           <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Value of Cleared Due</p>
           <p className="mt-3 text-3xl font-extrabold text-slate-900 dark:text-white">{money(valueOfClearedDue)}</p>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 font-medium">Manually entered</p>

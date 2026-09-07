@@ -72,5 +72,7 @@ body {
 
 .dark .scrollbar-x-hidden::-webkit-scrollbar-track,
 .dark .scrollbar-x-hidden::-webkit-scrollbar-thumb {
-  background: #211a3e !important;
+  /* Matches the new near-black slate-900 card background (tailwind.config.ts)
+     so this stays invisible against it — was the old purple-tinted #211a3e. */
+  background: #141414 !important;
 }
