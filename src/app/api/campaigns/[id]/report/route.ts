@@ -28,7 +28,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!campaign) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   if (isClient(user.role)) {
-    const hasAccess = campaign.clientAccess.some((a) => a.userId === user.id);
+    const hasAccess = campaign.clientAccess.some((a) => a.clientId === user.id);
     if (!hasAccess) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

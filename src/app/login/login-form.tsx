@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Mail, Lock, ArrowRight, ShieldCheck } from "lucide-react";
@@ -19,8 +19,15 @@ export default function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
 
-  const params = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
-  const deniedAccess = params?.get("error") === "AccessDenied";
+  // Read the ?error= query param only after mount. Reading window.location
+  // directly during render (the old code) made the very first client
+  // render disagree with the server-rendered HTML — the server has no
+  // concept of the browser's URL — which is exactly what threw React's
+  // hydration error #418 in production.
+  const [deniedAccess, setDeniedAccess] = useState(false);
+  useEffect(() => {
+    setDeniedAccess(new URLSearchParams(window.location.search).get("error") === "AccessDenied");
+  }, []);
 
   async function onGoogleSignIn() {
     setGoogleLoading(true);

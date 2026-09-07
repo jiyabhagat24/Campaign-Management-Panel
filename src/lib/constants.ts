@@ -19,6 +19,14 @@ export const ROLES = [
 ] as const;
 export type Role = (typeof ROLES)[number];
 
+// TBM staff only — this is the set actually stored in User.role and
+// validated when the Team page creates/re-roles a login. "CLIENT" stays in
+// ROLES/Role above only as a virtual session tag (see rbac.ts isClient) —
+// clients live in their own Client table now (no role column at all) and
+// are managed through the separate createClientAccount/updateClientAccount/
+// deleteClientAccount actions, not createTeamUser.
+export const INTERNAL_ROLES = ROLES.filter((r) => r !== "CLIENT") as Exclude<Role, "CLIENT">[];
+
 // Roles allowed to see internal cost / margin. Updated per the team's
 // explicit call: every internal role sees everything (cost, margin,
 // payouts) about the campaigns they're assigned to — CXO sees it org-wide

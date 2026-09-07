@@ -2,14 +2,17 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import bcrypt from "bcryptjs";
 import { requireUser } from "@/lib/auth";
 import { logActivity } from "@/lib/activity";
 import { notify } from "@/lib/notify";
-import { canApproveCommercialEdit, canSetCommercials, canSeeInternalCost, isClient } from "@/lib/rbac";
+import { canApproveCommercialEdit, canSetCommercials, canSeeInternalCost, canManageTeam, isClient } from "@/lib/rbac";
 import {
   COMMERCIAL_APPROVER_ROLES,
   DEFAULT_SLA,
   type Stage,
+  INTERNAL_ROLES,
+  type Role,
   SHORTLIST_DELIVERABLE_TYPES,
   SHORTLIST_DELIVERABLE_LABELS,
   SHORTLIST_TO_EXECUTION_PLATFORM,
@@ -39,6 +42,18 @@ import { appendInstagramHandleToSheet } from "@/lib/googleSheets";
 // friendly message.
 function isUniqueConstraintError(err: unknown): boolean {
   return typeof err === "object" && err !== null && "code" in err && (err as { code?: unknown }).code === "P2002";
+}
+
+// Clients and internal staff now live in separate tables (User vs Client),
+// but a lot of actions below (remarks, activity log, review decisions) can
+// be taken by either. These two helpers build the right FK object from the
+// current session user so each call site doesn't have to repeat the
+// isClient() branch — spread the result into the Prisma `data`.
+function actorFields(user: { id: string; role: Role }) {
+  return isClient(user.role) ? { actorClientId: user.id } : { actorId: user.id };
+}
+function authorFields(user: { id: string; role: Role }) {
+  return isClient(user.role) ? { authorClientId: user.id } : { authorId: user.id };
 }
 
 // ---------- Campaign ----------
@@ -261,14 +276,14 @@ export async function advanceCampaignStage(campaignId: string, stage: Stage) {
 export async function grantClientAccess(campaignId: string, clientEmail: string) {
   await requireUser();
 
-  const clientUser = await prisma.user.findUnique({ where: { email: clientEmail } });
-  if (!clientUser || clientUser.role !== "CLIENT") {
-    throw new Error("No client user found with that email. Create the client login first (see README).");
+  const client = await prisma.client.findUnique({ where: { email: clientEmail.toLowerCase() } });
+  if (!client) {
+    throw new Error("No client login found with that email. Create it first on the Team page.");
   }
   await prisma.campaignClientAccess.upsert({
-    where: { campaignId_userId: { campaignId, userId: clientUser.id } },
+    where: { campaignId_clientId: { campaignId, clientId: client.id } },
     update: {},
-    create: { campaignId, userId: clientUser.id },
+    create: { campaignId, clientId: client.id },
   });
   revalidatePath(`/campaigns/${campaignId}`);
 }
@@ -509,7 +524,7 @@ export async function setCreatorClientDecision(
 
   await logActivity({
     campaignId: creator.campaignId,
-    actorId: user.id,
+    ...actorFields(user),
     actorName: user.name,
     action: "CLIENT_SHORTLIST_DECISION",
     entityType: "Creator",
@@ -766,7 +781,7 @@ export async function clientReviewCreator(
       data: {
         campaignId: creator.campaignId,
         creatorId: creator.id,
-        authorId: user.id,
+        ...authorFields(user),
         authorRoleSnapshot: user.role,
         body: remark,
         visibility: "CLIENT",
@@ -776,7 +791,7 @@ export async function clientReviewCreator(
 
   await logActivity({
     campaignId: creator.campaignId,
-    actorId: user.id,
+    ...actorFields(user),
     actorName: user.name,
     action: `CLIENT_${decision}`,
     entityType: "Creator",
@@ -828,7 +843,7 @@ export async function proposeNegotiationRound(creatorId: string, proposedCost: n
 
   await logActivity({
     campaignId: creator.campaignId,
-    actorId: user.id,
+    ...actorFields(user),
     actorName: user.name,
     action: "NEGOTIATION_ROUND",
     entityType: "Creator",
@@ -1090,7 +1105,7 @@ export async function updateContentStatus(deliverableId: string, contentStatus: 
     const clientAccess = await prisma.campaignClientAccess.findFirst({ where: { campaignId: deliverable.creator.campaignId } });
     if (clientAccess) {
       await notify({
-        userId: clientAccess.userId,
+        clientId: clientAccess.clientId,
         channel: "INSTANT",
         title: `Content ready for your review`,
         body: `${deliverable.creator.name}'s content on ${deliverable.creator.campaign.name} is ready for your approval.`,
@@ -1172,7 +1187,7 @@ export async function addRemark(
     data: {
       campaignId,
       creatorId: opts?.creatorId,
-      authorId: user.id,
+      ...authorFields(user),
       authorRoleSnapshot: user.role,
       body,
       visibility,
@@ -1181,19 +1196,28 @@ export async function addRemark(
 
   // @-mentions — instant "you were tagged" notification for whoever was
   // picked from the tag-picker while writing the remark (never yourself).
+  // The picker's options can include both TBM staff and client contacts
+  // (see the mentionable list built in communications/[id]/page.tsx), so
+  // each tagged id has to be checked against both tables to notify the
+  // right one.
   const mentionIds = Array.from(new Set(opts?.mentionUserIds ?? [])).filter((id) => id !== user.id);
-  for (const userId of mentionIds) {
-    await notify({
-      userId,
-      channel: "INSTANT",
-      title: `${user.name} tagged you in ${campaign?.name ?? "a campaign"}`,
-      body: body.length > 140 ? `${body.slice(0, 140)}…` : body,
-    });
+  for (const mentionedId of mentionIds) {
+    const notifyTitle = `${user.name} tagged you in ${campaign?.name ?? "a campaign"}`;
+    const notifyBody = body.length > 140 ? `${body.slice(0, 140)}…` : body;
+    const mentionedUser = await prisma.user.findUnique({ where: { id: mentionedId }, select: { id: true } });
+    if (mentionedUser) {
+      await notify({ userId: mentionedUser.id, channel: "INSTANT", title: notifyTitle, body: notifyBody });
+    } else {
+      const mentionedClient = await prisma.client.findUnique({ where: { id: mentionedId }, select: { id: true } });
+      if (mentionedClient) {
+        await notify({ clientId: mentionedClient.id, channel: "INSTANT", title: notifyTitle, body: notifyBody });
+      }
+    }
   }
 
   await logActivity({
     campaignId,
-    actorId: user.id,
+    ...actorFields(user),
     actorName: user.name,
     action: "REMARK_ADDED",
     entityType: "Remark",
@@ -1209,7 +1233,7 @@ export async function addRemark(
 export async function getMyNotifications() {
   const user = await requireUser();
   return prisma.notification.findMany({
-    where: { userId: user.id },
+    where: isClient(user.role) ? { clientId: user.id } : { userId: user.id },
     orderBy: { createdAt: "desc" },
     take: 20,
   });
@@ -1217,13 +1241,19 @@ export async function getMyNotifications() {
 
 export async function markNotificationRead(notificationId: string) {
   const user = await requireUser();
-  await prisma.notification.updateMany({ where: { id: notificationId, userId: user.id }, data: { read: true } });
+  await prisma.notification.updateMany({
+    where: { id: notificationId, ...(isClient(user.role) ? { clientId: user.id } : { userId: user.id }) },
+    data: { read: true },
+  });
   revalidatePath("/");
 }
 
 export async function markAllNotificationsRead() {
   const user = await requireUser();
-  await prisma.notification.updateMany({ where: { userId: user.id, read: false }, data: { read: true } });
+  await prisma.notification.updateMany({
+    where: { read: false, ...(isClient(user.role) ? { clientId: user.id } : { userId: user.id }) },
+    data: { read: true },
+  });
   revalidatePath("/");
 }
 
@@ -1604,4 +1634,157 @@ export async function promoteScoutedCreatorToCampaign(scoutedId: string, campaig
 
   revalidatePath("/creators");
   revalidatePath(`/campaigns/${campaignId}`);
+}
+
+// ---------- Team management (CXO only) ----------
+// The only place a real login gets created outside prisma/seed.ts. Internal
+// roles sign in via Google (restricted to @theboredmonkey.com in
+// src/lib/auth.ts) so they never need a usable password — one is still
+// generated and hashed to satisfy the schema's required passwordHash
+// column, it's just never checked for internal accounts. Clients are a
+// separate table entirely (see the Client model) — they don't have a
+// company Google account, so their password is real and chosen here, and
+// they're managed via the createClientAccount/updateClientAccount/
+// deleteClientAccount actions below instead of these.
+
+const INTERNAL_EMAIL_DOMAIN = "theboredmonkey.com";
+
+export async function createTeamUser(input: { name: string; email: string; role: string }) {
+  const actor = await requireUser();
+  if (!canManageTeam(actor.role)) throw new Error("Only a CXO can add team members.");
+
+  const name = input.name.trim();
+  const email = input.email.trim().toLowerCase();
+  const role = input.role as Role;
+
+  if (!name) throw new Error("Name is required.");
+  if (!email) throw new Error("Email is required.");
+  if (!INTERNAL_ROLES.includes(role as Exclude<Role, "CLIENT">)) throw new Error("Invalid role.");
+
+  if (!email.endsWith(`@${INTERNAL_EMAIL_DOMAIN}`)) {
+    // Matches the domain check in src/lib/auth.ts's Google signIn callback
+    // — an internal account with a non-company email could never actually
+    // sign in, so refuse to create one rather than create a dead account.
+    throw new Error(`Internal accounts need a @${INTERNAL_EMAIL_DOMAIN} email — that's what Google sign-in checks against.`);
+  }
+
+  const existing = await prisma.user.findUnique({ where: { email } });
+  if (existing) throw new Error("A user with that email already exists.");
+
+  const passwordHash = await bcrypt.hash(crypto.randomUUID(), 10);
+
+  try {
+    await prisma.user.create({ data: { name, email, role, passwordHash } });
+  } catch (err) {
+    if (isUniqueConstraintError(err)) throw new Error("A user with that email already exists.");
+    throw err;
+  }
+
+  revalidatePath("/team");
+}
+
+export async function updateTeamUserRole(userId: string, role: string) {
+  const actor = await requireUser();
+  if (!canManageTeam(actor.role)) throw new Error("Only a CXO can change a team member's role.");
+  if (!INTERNAL_ROLES.includes(role as Exclude<Role, "CLIENT">)) throw new Error("Invalid role.");
+  if (userId === actor.id && role !== "CXO") {
+    throw new Error("You can't demote your own account — have another CXO do it.");
+  }
+
+  await prisma.user.findUniqueOrThrow({ where: { id: userId } });
+  await prisma.user.update({ where: { id: userId }, data: { role } });
+  revalidatePath("/team");
+}
+
+export async function deleteTeamUser(userId: string) {
+  const actor = await requireUser();
+  if (!canManageTeam(actor.role)) throw new Error("Only a CXO can remove a team member.");
+  if (userId === actor.id) throw new Error("You can't remove your own account.");
+
+  try {
+    await prisma.user.delete({ where: { id: userId } });
+  } catch (err) {
+    // Restrict onDelete on createdCampaigns/remarks/activity (schema.prisma)
+    // — deliberately blocks deleting someone who created real business
+    // records or audit history, rather than silently orphaning them.
+    if (typeof err === "object" && err !== null && "code" in err && (err as { code?: unknown }).code === "P2003") {
+      throw new Error(
+        "This person has created campaigns, remarks, or activity history — they can't be deleted. Change their role instead, or remove them from campaign teams first."
+      );
+    }
+    throw err;
+  }
+  revalidatePath("/team");
+}
+
+// ---------- Client accounts (CXO only) ----------
+// Clients live in their own table (Client), not User — see schema.prisma's
+// comment on that model. Same admin gate (canManageTeam, CXO-only) as
+// internal team management above, just a different table and no role field
+// (there's only one kind of client account).
+
+export async function createClientAccount(input: { name: string; email: string; password: string }) {
+  const actor = await requireUser();
+  if (!canManageTeam(actor.role)) throw new Error("Only a CXO can add clients.");
+
+  const name = input.name.trim();
+  const email = input.email.trim().toLowerCase();
+
+  if (!name) throw new Error("Name is required.");
+  if (!email) throw new Error("Email is required.");
+  if (!input.password || input.password.length < 8) {
+    throw new Error("Clients need a password of at least 8 characters — they log in with it directly.");
+  }
+
+  const existing = await prisma.client.findUnique({ where: { email } });
+  if (existing) throw new Error("A client with that email already exists.");
+
+  const passwordHash = await bcrypt.hash(input.password, 10);
+
+  try {
+    await prisma.client.create({ data: { name, email, passwordHash } });
+  } catch (err) {
+    if (isUniqueConstraintError(err)) throw new Error("A client with that email already exists.");
+    throw err;
+  }
+
+  revalidatePath("/team");
+}
+
+export async function updateClientAccount(clientId: string, input: { name?: string; password?: string }) {
+  const actor = await requireUser();
+  if (!canManageTeam(actor.role)) throw new Error("Only a CXO can edit a client.");
+
+  const data: { name?: string; passwordHash?: string } = {};
+  if (input.name !== undefined) {
+    const name = input.name.trim();
+    if (!name) throw new Error("Name is required.");
+    data.name = name;
+  }
+  if (input.password) {
+    if (input.password.length < 8) throw new Error("Password needs to be at least 8 characters.");
+    data.passwordHash = await bcrypt.hash(input.password, 10);
+  }
+
+  await prisma.client.update({ where: { id: clientId }, data });
+  revalidatePath("/team");
+}
+
+export async function deleteClientAccount(clientId: string) {
+  const actor = await requireUser();
+  if (!canManageTeam(actor.role)) throw new Error("Only a CXO can remove a client.");
+
+  try {
+    await prisma.client.delete({ where: { id: clientId } });
+  } catch (err) {
+    // Same Restrict-onDelete reasoning as deleteTeamUser above — a client
+    // who's posted remarks or logged activity can't be silently deleted.
+    if (typeof err === "object" && err !== null && "code" in err && (err as { code?: unknown }).code === "P2003") {
+      throw new Error(
+        "This client has posted remarks or has activity history — they can't be deleted. Remove them from campaign access instead."
+      );
+    }
+    throw err;
+  }
+  revalidatePath("/team");
 }

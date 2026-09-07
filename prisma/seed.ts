@@ -36,10 +36,10 @@ async function main() {
     update: {},
     create: { name: "Kabir Anand", email: "kabir@theboredmonkey.com", passwordHash: pw, role: "IR_INTERN" },
   });
-  const client = await prisma.user.upsert({
+  const client = await prisma.client.upsert({
     where: { email: "aman@brand.com" },
     update: {},
-    create: { name: "Aman (Client)", email: "aman@brand.com", passwordHash: pw, role: "CLIENT" },
+    create: { name: "Aman (Client)", email: "aman@brand.com", passwordHash: pw },
   });
 
   const campaign = await prisma.campaign.create({
@@ -54,7 +54,7 @@ async function main() {
       startDate: new Date("2026-07-01"),
       goLiveDeadline: new Date("2026-08-20"),
       createdById: brandSolutions.id,
-      clientAccess: { create: { userId: client.id } },
+      clientAccess: { create: { clientId: client.id } },
       teamMembers: {
         create: [
           { userId: brandSolutions.id, roleOnCampaign: "BRAND_SOLUTIONS" },
@@ -167,7 +167,7 @@ async function main() {
       {
         campaignId: campaign.id,
         creatorId: skinTalks.id,
-        authorId: client.id,
+        authorClientId: client.id,
         authorRoleSnapshot: "CLIENT",
         body: "Please include more creators from tier 2 cities.",
         visibility: "CLIENT",
@@ -189,7 +189,7 @@ async function main() {
     data: [
       { campaignId: campaign.id, actorId: brandSolutions.id, actorName: brandSolutions.name, action: "CAMPAIGN_CREATED", entityType: "Campaign", entityId: campaign.id },
       { campaignId: campaign.id, actorId: irExecutive.id, actorName: irExecutive.name, action: "CREATOR_ADDED", entityType: "Creator", entityId: glowWithRiya.id },
-      { campaignId: campaign.id, actorId: client.id, actorName: client.name, action: "CREATOR_APPROVED_ONBOARD", entityType: "Creator", entityId: glowWithRiya.id },
+      { campaignId: campaign.id, actorClientId: client.id, actorName: client.name, action: "CREATOR_APPROVED_ONBOARD", entityType: "Creator", entityId: glowWithRiya.id },
     ],
   });
 

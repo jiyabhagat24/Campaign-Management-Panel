@@ -9,7 +9,7 @@ export default async function ReportsPage() {
   if (!user) redirect("/login");
 
   const campaigns = isClient(user.role)
-    ? await prisma.campaign.findMany({ where: { clientAccess: { some: { userId: user.id } } }, include: { creators: { include: { deliverables: true } } } })
+    ? await prisma.campaign.findMany({ where: { clientAccess: { some: { clientId: user.id } } }, include: { creators: { include: { deliverables: true } } } })
     : await prisma.campaign.findMany({ include: { creators: { include: { deliverables: true } } } });
 
   return (

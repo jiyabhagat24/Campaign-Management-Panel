@@ -49,7 +49,7 @@ export function isOrgWide(role: Role) {
 // scoped to campaigns they're a team member on. Spread this into any
 // Campaign.findMany/findFirst where clause.
 export function campaignVisibilityWhere(user: { id: string; role: Role }) {
-  if (isClient(user.role)) return { clientAccess: { some: { userId: user.id } } };
+  if (isClient(user.role)) return { clientAccess: { some: { clientId: user.id } } };
   if (isOrgWide(user.role)) return {};
   return { teamMembers: { some: { userId: user.id } } };
 }
@@ -59,11 +59,18 @@ export function campaignVisibilityWhere(user: { id: string; role: Role }) {
 // by id and we need a not-found-style access check rather than a query filter.
 export function canViewCampaign(
   user: { id: string; role: Role },
-  campaign: { teamMembers: { userId: string }[]; clientAccess: { userId: string }[] }
+  campaign: { teamMembers: { userId: string }[]; clientAccess: { clientId: string }[] }
 ) {
-  if (isClient(user.role)) return campaign.clientAccess.some((a) => a.userId === user.id);
+  if (isClient(user.role)) return campaign.clientAccess.some((a) => a.clientId === user.id);
   if (isOrgWide(user.role)) return true;
   return campaign.teamMembers.some((t) => t.userId === user.id);
+}
+
+// Who can add/edit/remove User accounts (the Team admin page). CXO only —
+// this is the one place a real login gets created, so it's kept to the
+// single org-wide role rather than opened up to every internal role.
+export function canManageTeam(role: Role) {
+  return role === "CXO";
 }
 
 // The margin guardrail (brief slide 07): strip internal cost + rejection

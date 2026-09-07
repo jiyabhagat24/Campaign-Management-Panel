@@ -41,13 +41,14 @@ export const authOptions: NextAuthOptions = {
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
-        const user = await prisma.user.findUnique({ where: { email: credentials.email.toLowerCase() } });
-        if (!user) return null;
-        // Client-only door. Internal roles must use Google.
-        if (user.role !== "CLIENT") return null;
-        const valid = await bcrypt.compare(credentials.password, user.passwordHash);
+        // Clients live in their own table now (see the Client model) — this
+        // door only ever checks that table, so an internal account's
+        // password (even if it somehow had one) can never log in here.
+        const client = await prisma.client.findUnique({ where: { email: credentials.email.toLowerCase() } });
+        if (!client) return null;
+        const valid = await bcrypt.compare(credentials.password, client.passwordHash);
         if (!valid) return null;
-        return { id: user.id, name: user.name, email: user.email, role: user.role };
+        return { id: client.id, name: client.name, email: client.email, role: "CLIENT" };
       },
     }),
   ],

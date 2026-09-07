@@ -9,7 +9,7 @@ export default async function FilesPage() {
   if (!user) redirect("/login");
 
   const files = isClient(user.role)
-    ? await prisma.fileAsset.findMany({ where: { campaign: { clientAccess: { some: { userId: user.id } } } }, include: { campaign: true }, orderBy: { createdAt: "desc" } })
+    ? await prisma.fileAsset.findMany({ where: { campaign: { clientAccess: { some: { clientId: user.id } } } }, include: { campaign: true }, orderBy: { createdAt: "desc" } })
     : await prisma.fileAsset.findMany({ include: { campaign: true }, orderBy: { createdAt: "desc" } });
 
   return (

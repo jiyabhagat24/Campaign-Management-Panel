@@ -9,15 +9,18 @@ export default async function CommunicationsPage() {
   const user = await currentUser();
   if (!user) redirect("/login");
 
+  // A remark's author can be TBM staff (author) or a client (authorClient)
+  // now that they're separate tables — fetch both and fold into one name
+  // below rather than pushing that branching into the JSX.
   const campaigns = isClient(user.role)
     ? await prisma.campaign.findMany({
-        where: { clientAccess: { some: { userId: user.id } } },
+        where: { clientAccess: { some: { clientId: user.id } } },
         include: {
           remarks: {
             where: { visibility: "CLIENT" },
             orderBy: { createdAt: "desc" },
             take: 1,
-            include: { author: { select: { name: true } } },
+            include: { author: { select: { name: true } }, authorClient: { select: { name: true } } },
           },
           _count: { select: { remarks: { where: { visibility: "CLIENT" } } } },
         },
@@ -25,7 +28,11 @@ export default async function CommunicationsPage() {
       })
     : await prisma.campaign.findMany({
         include: {
-          remarks: { orderBy: { createdAt: "desc" }, take: 1, include: { author: { select: { name: true } } } },
+          remarks: {
+            orderBy: { createdAt: "desc" },
+            take: 1,
+            include: { author: { select: { name: true } }, authorClient: { select: { name: true } } },
+          },
           _count: { select: { remarks: true } },
         },
         orderBy: { updatedAt: "desc" },
@@ -47,7 +54,7 @@ export default async function CommunicationsPage() {
                 <p className="text-xs text-slate-400 dark:text-slate-500">{c.brand}</p>
                 {last ? (
                   <p className="mt-1 truncate text-sm text-slate-600 dark:text-slate-300">
-                    <span className="font-medium text-slate-500 dark:text-slate-400">{last.author.name}:</span> {last.body}
+                    <span className="font-medium text-slate-500 dark:text-slate-400">{last.author?.name ?? last.authorClient?.name ?? "Client"}:</span> {last.body}
                   </p>
                 ) : (
                   <p className="mt-1 text-sm text-slate-400 dark:text-slate-500">No remarks yet.</p>

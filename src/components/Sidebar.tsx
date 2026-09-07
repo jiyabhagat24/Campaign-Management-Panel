@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { Role } from "@/lib/constants";
-import { canSeeInternalCost, isClient } from "@/lib/rbac";
+import { canSeeInternalCost, canManageTeam, isClient } from "@/lib/rbac";
 import ThemeToggle from "@/components/ThemeToggle";
 import NotificationBell, { type NotificationItem } from "@/components/NotificationBell";
 import {
@@ -11,6 +11,7 @@ import {
   FolderKanban,
   GitMerge,
   Receipt,
+  Users,
   LogOut,
 } from "lucide-react";
 
@@ -23,6 +24,8 @@ const NAV = [
   // page itself. What each of them actually sees there is further scoped
   // per campaign assignment (campaignVisibilityWhere in rbac.ts).
   { href: "/finance", label: "Finance", icon: Receipt, financeOnly: true },
+  // CXO-only — the Team admin page (add/re-role/remove logins).
+  { href: "/team", label: "Team", icon: Users, teamOnly: true },
 ];
 
 export default function Sidebar({ role, name, notifications }: { role: Role; name: string; notifications: NotificationItem[] }) {
@@ -46,6 +49,7 @@ export default function Sidebar({ role, name, notifications }: { role: Role; nam
   const filteredNav = NAV.filter((item) => {
     if (role === "CLIENT" && item.href === "/pipeline") return false;
     if ("financeOnly" in item && item.financeOnly && (isClient(role) || !canSeeInternalCost(role))) return false;
+    if ("teamOnly" in item && item.teamOnly && !canManageTeam(role)) return false;
     return true;
   });
 

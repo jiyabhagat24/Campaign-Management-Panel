@@ -97,7 +97,14 @@ export default async function DashboardPage() {
       onboardedCount: c.creators.filter((cr) => cr.status === "ONBOARDED").length,
       deliverablesLive: deliverables.filter((d) => d.liveLink).length,
       deliverablesTotal: deliverables.length,
-      internalValue: c.creators.reduce((s, cr) => s + (cr.internalCost ?? 0), 0),
+      // Only ONBOARDED creators are actually committed spend — a creator
+      // still shortlisted, negotiating, or rejected has an internalCost
+      // entered but nothing's actually been spent on them yet. Summing
+      // every creator regardless of status (the old bug here) inflated
+      // this into a number way bigger than what's actually locked in,
+      // same mistake the Finance Table row below used to make. Matches
+      // the ONBOARDED-only filter the campaign report CSV already uses.
+      internalValue: c.creators.filter((cr) => cr.status === "ONBOARDED").reduce((s, cr) => s + (cr.internalCost ?? 0), 0),
       openFlags,
       financeYetToBeInvoiced: c.financeYetToBeInvoiced,
       financeYetToBeReceived: c.financeYetToBeReceived,
@@ -121,7 +128,8 @@ export default async function DashboardPage() {
       brandLogoUrl: c.brandLogoUrl,
       brandSolutionsPoc,
       budgetQuoted: c.budgetQuoted,
-      internalValue: c.creators.reduce((s, cr) => s + (cr.internalCost ?? 0), 0),
+      // Same ONBOARDED-only fix as the dashboard rows above.
+      internalValue: c.creators.filter((cr) => cr.status === "ONBOARDED").reduce((s, cr) => s + (cr.internalCost ?? 0), 0),
       financeAgencyFee: c.financeAgencyFee,
       financeAgencyFeePercent: c.financeAgencyFeePercent,
       financeClientInvoiceStatus: c.financeClientInvoiceStatus,

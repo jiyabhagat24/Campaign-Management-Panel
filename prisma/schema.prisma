@@ -44,7 +44,6 @@ model User {
   //  - Cascade: rows that only exist as *this user's own data*, meaningless
   //    without them (teamMemberships, campaignAccess, notifications).
   createdCampaigns Campaign[]            @relation("CampaignCreator")
-  campaignAccess   CampaignClientAccess[]
   teamMemberships  CampaignTeamMember[]
   negotiationMoves NegotiationRound[]
   remarks          Remark[]
@@ -52,6 +51,26 @@ model User {
   notifications    Notification[]
   pocForCreators   Creator[]             @relation("CreatorPOC")
   uploadedFiles    FileAsset[]
+}
+
+// External accounts — the brand-side contacts who log in to review shortlists,
+// negotiate, and approve content. Deliberately a separate table from User
+// (which is TBM's own internal staff): a client is never a "role" on the
+// same login, it's a different kind of account entirely — no theboredmonkey
+// Google login, no internal role, no access to cost/margin. Kept the same
+// id values as the old CLIENT-role User rows when this table was split out,
+// so every existing FK below still points at the right person.
+model Client {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+
+  campaignAccess CampaignClientAccess[]
+  remarks        Remark[]
+  activity       ActivityLog[]
+  notifications  Notification[]
 }
 
 // Who's responsible for a campaign — Brand Solutions, Campaign Manager, IR
@@ -70,18 +89,18 @@ model CampaignTeamMember {
   @@unique([campaignId, userId, roleOnCampaign])
 }
 
-// Links a CLIENT user to the campaign(s) they're allowed to see. Every action
-// they take on the panel is stamped against this user, not a shared login
-// (brief slide 05 — client attribution).
+// Links a Client account to the campaign(s) they're allowed to see. Every
+// action they take on the panel is stamped against this client, not a
+// shared login (brief slide 05 — client attribution).
 model CampaignClientAccess {
   id         String   @id @default(cuid())
   campaignId String
-  userId     String
+  clientId   String
   campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  client     Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
   createdAt  DateTime @default(now())
 
-  @@unique([campaignId, userId])
+  @@unique([campaignId, clientId])
 }
 
 // ---------- Campaign (the central record) ----------
@@ -324,9 +343,13 @@ model Remark {
 
   // Restrict, not Cascade/SetNull — a remark's author is part of the
   // permanent conversation record; deleting that user shouldn't be able to
-  // silently erase or orphan what they said.
-  authorId   String
-  author     User   @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  // silently erase or orphan what they said. Exactly one of authorId /
+  // authorClientId is set, depending on whether TBM staff or a client wrote
+  // it — see the actorFields()/authorFields() helpers in actions.ts.
+  authorId   String?
+  author     User?   @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  authorClientId String?
+  authorClient   Client? @relation(fields: [authorClientId], references: [id], onDelete: Restrict)
   authorRoleSnapshot String // role at time of posting, for display even if role changes later
 
   body       String
@@ -360,9 +383,12 @@ model ActivityLog {
   campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   // Restrict — this is explicitly a non-negotiable audit trail (see comment
   // above); a user being deleted must never take their logged actions with
-  // them.
-  actorId    String
-  actor      User     @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  // them. Exactly one of actorId / actorClientId is set (internal action vs
+  // client action) — see actorFields() in actions.ts.
+  actorId    String?
+  actor      User?    @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  actorClientId String?
+  actorClient   Client? @relation(fields: [actorClientId], references: [id], onDelete: Restrict)
   actorName  String
   action     String // e.g. "CREATOR_ADDED", "COST_NEGOTIATED", "SCRIPT_APPROVED"
   entityType String // "Campaign" | "Creator" | "Deliverable" | "Remark"
@@ -380,8 +406,11 @@ model ActivityLog {
 
 model Notification {
   id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Exactly one of userId / clientId is set, depending on the recipient.
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clientId  String?
+  client    Client?  @relation(fields: [clientId], references: [id], onDelete: Cascade)
   channel   String // INSTANT | DIGEST
   title     String
   body      String
@@ -392,6 +421,7 @@ model Notification {
   // a composite index matches that access pattern directly instead of
   // relying on the userId index alone plus a filter scan over read.
   @@index([userId, read])
+  @@index([clientId, read])
 }
 
 // ---------- Instagram profile cache (from browser extension capture) ----------

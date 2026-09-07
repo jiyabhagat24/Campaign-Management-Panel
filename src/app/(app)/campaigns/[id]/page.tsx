@@ -28,7 +28,7 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
         },
         orderBy: { createdAt: "desc" },
       },
-      clientAccess: { include: { user: { select: { id: true, name: true } } }, orderBy: { createdAt: "asc" } },
+      clientAccess: { include: { client: { select: { id: true, name: true } } }, orderBy: { createdAt: "asc" } },
       teamMembers: { include: { user: { select: { id: true, name: true } } }, orderBy: { createdAt: "asc" } },
     },
   });
@@ -41,10 +41,11 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
   // that hitting the URL directly should look like a broken link/error.
   if (!canViewCampaign(user, campaign)) redirect("/campaigns");
 
+  // The User table is internal-staff-only now (clients live in their own
+  // Client table), so no role filter is needed here anymore.
   const internalUsers = isClient(user.role)
     ? []
     : await prisma.user.findMany({
-        where: { role: { not: "CLIENT" } },
         select: { id: true, name: true, role: true },
         orderBy: { name: "asc" },
       });

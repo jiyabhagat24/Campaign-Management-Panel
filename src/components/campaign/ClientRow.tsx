@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { grantClientAccess, removeClientAccess } from "@/lib/actions";
 
-type ClientAccessEntry = { id: string; user: { id: string; name: string } };
+type ClientAccessEntry = { id: string; client: { id: string; name: string } };
 
 export default function ClientRow({
   campaignId,
@@ -25,7 +25,7 @@ export default function ClientRow({
       {clientAccess.map((a) => (
         <span key={a.id} className="group inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs dark:border-slate-700 dark:bg-slate-900">
           <span className="text-slate-400 dark:text-slate-500">Client:</span>
-          <span className="font-medium text-ink dark:text-white">{a.user.name}</span>
+          <span className="font-medium text-ink dark:text-white">{a.client.name}</span>
           {canRemove && (
             <button
               onClick={() => removeClientAccess(a.id, campaignId)}

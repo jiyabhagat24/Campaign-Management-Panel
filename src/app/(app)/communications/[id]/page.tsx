@@ -13,25 +13,30 @@ export default async function CampaignCommunicationsPage({ params }: { params: P
   const campaign = await prisma.campaign.findUnique({
     where: { id },
     include: {
-      remarks: { include: { author: { select: { name: true } } }, orderBy: { createdAt: "asc" } },
-      clientAccess: { include: { user: { select: { id: true, name: true } } } },
+      remarks: {
+        include: { author: { select: { name: true } }, authorClient: { select: { name: true } } },
+        orderBy: { createdAt: "asc" },
+      },
+      clientAccess: { include: { client: { select: { id: true, name: true } } } },
       teamMembers: { include: { user: { select: { id: true, name: true } } } },
     },
   });
   if (!campaign) notFound();
 
   if (isClient(user.role)) {
-    const hasAccess = campaign.clientAccess.some((a) => a.userId === user.id);
+    const hasAccess = campaign.clientAccess.some((a) => a.clientId === user.id);
     if (!hasAccess) notFound();
   }
 
-  const remarks = isClient(user.role) ? campaign.remarks.filter((r) => r.visibility === "CLIENT") : campaign.remarks;
+  const remarks = (isClient(user.role) ? campaign.remarks.filter((r) => r.visibility === "CLIENT") : campaign.remarks).map(
+    (r) => ({ ...r, author: { name: r.author?.name ?? r.authorClient?.name ?? "Client" } })
+  );
 
   // Anyone on this campaign — TBM team + client contacts — is taggable with
   // @, minus yourself.
   const mentionable = [
     ...campaign.teamMembers.map((m) => m.user),
-    ...campaign.clientAccess.map((a) => a.user),
+    ...campaign.clientAccess.map((a) => a.client),
   ]
     .filter((u, i, arr) => u.id !== user.id && arr.findIndex((x) => x.id === u.id) === i);
 
