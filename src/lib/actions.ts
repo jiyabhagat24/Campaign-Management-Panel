@@ -262,7 +262,7 @@ export async function grantClientAccess(campaignId: string, clientEmail: string)
 
   const client = await prisma.client.findUnique({ where: { email: clientEmail.toLowerCase() } });
   if (!client) {
-    throw new Error("No client login found with that email. Create it first on the Team page.");
+    throw new Error("No client login found with that email. They need to sign up first at /signup.");
   }
   await prisma.campaignClientAccess.upsert({
     where: { campaignId_clientId: { campaignId, clientId: client.id } },
@@ -278,6 +278,32 @@ export async function removeClientAccess(clientAccessId: string, campaignId: str
 
   await prisma.campaignClientAccess.delete({ where: { id: clientAccessId } });
   revalidatePath(`/campaigns/${campaignId}`);
+}
+
+// Backs the CXO-only /clients page — the single place to review every
+// Client login (self-signed-up or added by hand) and flip their access to
+// any campaign on/off, keyed by id since both sides are already on screen
+// together there. Distinct from grantClientAccess above, which is the
+// per-campaign, email-keyed "invite a client contact" flow reachable from a
+// campaign's own page and usable by an existing client, not just a CXO.
+export async function setClientCampaignAccess(clientId: string, campaignId: string, hasAccess: boolean) {
+  const user = await requireUser();
+  if (!canManageTeam(user.role)) throw new Error("Only a CXO can manage client campaign access.");
+
+  if (hasAccess) {
+    await prisma.campaignClientAccess.upsert({
+      where: { campaignId_clientId: { campaignId, clientId } },
+      update: {},
+      create: { campaignId, clientId },
+    });
+  } else {
+    await prisma.campaignClientAccess.deleteMany({ where: { campaignId, clientId } });
+  }
+
+  revalidatePath("/clients");
+  revalidatePath(`/campaigns/${campaignId}`);
+  revalidatePath("/dashboard");
+  revalidatePath("/campaigns");
 }
 
 // Assigns an internal user to a role on this campaign (Brand Solutions,
