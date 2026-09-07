@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { currentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { isClient } from "@/lib/rbac";
+import { isClient, isOrgWide } from "@/lib/rbac";
 import { KANBAN_COLUMNS, KANBAN_COLUMN_LABELS, type KanbanColumn } from "@/lib/constants";
 import { isGoLiveAtRisk, isGoLiveBreached } from "@/lib/sla";
 import { campaignColumn } from "@/lib/kanban";
@@ -33,11 +33,22 @@ export default async function PipelinePage() {
   if (!user) redirect("/login");
   if (isClient(user.role)) redirect("/dashboard");
 
+  // Every active campaign is shown to every internal user here regardless of
+  // team assignment (unlike the Campaigns Directory / dashboard, which are
+  // scoped via campaignVisibilityWhere) — the pipeline is meant to be a
+  // shared, org-wide view of where things stand. Campaigns the viewer isn't
+  // personally assigned to (teamMembers) are still shown, just greyed out
+  // and non-interactive: visible for context, not manageable.
   const campaigns = await prisma.campaign.findMany({
     where: { status: "ACTIVE" },
-    include: { creators: { include: { deliverables: { select: { liveLink: true } } } } },
+    include: {
+      creators: { include: { deliverables: { select: { liveLink: true } } } },
+      teamMembers: { select: { userId: true } },
+    },
     orderBy: { updatedAt: "desc" },
   });
+  const isMember = (c: { teamMembers: { userId: string }[] }) =>
+    isOrgWide(user.role) || c.teamMembers.some((t) => t.userId === user.id);
 
   const byColumn: Record<KanbanColumn, typeof campaigns> = { SHORTLIST: [], ONBOARDING: [], REPORT: [] };
   for (const c of campaigns) byColumn[campaignColumn(c.creators)].push(c);
@@ -94,6 +105,78 @@ export default async function PipelinePage() {
                   const atRisk = isGoLiveAtRisk(c.goLiveDeadline);
                   const breached = isGoLiveBreached(c.goLiveDeadline);
                   const onboarded = c.creators.filter((cr) => cr.status === "ONBOARDED").length;
+                  const member = isMember(c);
+
+                  const cardBody = (
+                    <div className="flex items-start gap-3">
+                      <BrandAvatar brand={c.brand} logoUrl={c.brandLogoUrl} size={36} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between">
+                          <p
+                            className={`truncate text-sm font-bold transition-colors ${
+                              member
+                                ? "text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400"
+                                : "text-slate-400 dark:text-slate-600"
+                            }`}
+                          >
+                            {c.name}
+                          </p>
+                          {member && (
+                            <ArrowUpRight className="h-4 w-4 text-slate-300 dark:text-slate-600 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 opacity-0 group-hover:opacity-100 transition-all flex-shrink-0" />
+                          )}
+                        </div>
+                        <p className={`text-xs font-medium ${member ? "text-slate-500 dark:text-slate-400" : "text-slate-400 dark:text-slate-600"}`}>
+                          {c.brand}
+                        </p>
+
+                        <div
+                          className={`mt-3 flex items-center justify-between text-xs border-t pt-2.5 font-medium ${
+                            member
+                              ? "text-slate-600 dark:text-slate-400 border-slate-100 dark:border-slate-800"
+                              : "text-slate-400 dark:text-slate-600 border-slate-100 dark:border-slate-800"
+                          }`}
+                        >
+                          <span className="flex items-center gap-1">
+                            <CheckCircle2 className={`h-3.5 w-3.5 ${member ? "text-emerald-500" : "text-slate-300 dark:text-slate-700"}`} />
+                            {onboarded} / {c.creators.length} creators
+                          </span>
+                          <span className={`font-bold ${member ? "text-slate-900 dark:text-white" : "text-slate-400 dark:text-slate-600"}`}>
+                            {c.budgetQuoted ? formatCompactINR(c.budgetQuoted) : "—"}
+                          </span>
+                        </div>
+
+                        {(atRisk || breached) && (
+                          <div
+                            className={`mt-2 flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-bold ${
+                              !member
+                                ? "bg-slate-100 border border-slate-200 text-slate-400 dark:bg-slate-800/60 dark:border-slate-700 dark:text-slate-600"
+                                : breached
+                                ? "bg-rose-50 border border-rose-200 text-rose-600 dark:bg-rose-950/60 dark:border-rose-800 dark:text-rose-400"
+                                : "bg-amber-50 border border-amber-200 text-amber-600 dark:bg-amber-950/60 dark:border-amber-800 dark:text-amber-400"
+                            }`}
+                          >
+                            <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
+                            <span>{breached ? "Go-live SLA Breached" : "Go-live At Risk"}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+
+                  if (!member) {
+                    // Visible for context only — not a member of this campaign's
+                    // team, so it's greyed out and neither clickable nor
+                    // manageable from here.
+                    return (
+                      <div
+                        key={c.id}
+                        aria-disabled="true"
+                        className="block cursor-default select-none rounded-xl border border-slate-200/60 dark:border-slate-800/60 bg-slate-50/60 dark:bg-slate-900/40 p-4 opacity-60"
+                      >
+                        {cardBody}
+                      </div>
+                    );
+                  }
 
                   return (
                     <Link
@@ -101,41 +184,7 @@ export default async function PipelinePage() {
                       href={`/campaigns/${c.id}`}
                       className="group block rounded-xl border border-slate-200/80 bg-white dark:bg-slate-900 dark:border-slate-800 p-4 shadow-card transition-all duration-200 hover:shadow-card-hover dark:hover:bg-slate-800/60 hover:-translate-y-0.5"
                     >
-                      <div className="flex items-start gap-3">
-                        <BrandAvatar brand={c.brand} logoUrl={c.brandLogoUrl} size={36} />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center justify-between">
-                            <p className="truncate text-sm font-bold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                              {c.name}
-                            </p>
-                            <ArrowUpRight className="h-4 w-4 text-slate-300 dark:text-slate-600 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 opacity-0 group-hover:opacity-100 transition-all flex-shrink-0" />
-                          </div>
-                          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">{c.brand}</p>
-
-                          <div className="mt-3 flex items-center justify-between text-xs text-slate-600 dark:text-slate-400 border-t border-slate-100 dark:border-slate-800 pt-2.5 font-medium">
-                            <span className="flex items-center gap-1 text-slate-600 dark:text-slate-400">
-                              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-                              {onboarded} / {c.creators.length} creators
-                            </span>
-                            <span className="font-bold text-slate-900 dark:text-white">
-                              {c.budgetQuoted ? formatCompactINR(c.budgetQuoted) : "—"}
-                            </span>
-                          </div>
-
-                          {(atRisk || breached) && (
-                            <div
-                              className={`mt-2 flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-bold ${
-                                breached
-                                  ? "bg-rose-50 border border-rose-200 text-rose-600 dark:bg-rose-950/60 dark:border-rose-800 dark:text-rose-400"
-                                  : "bg-amber-50 border border-amber-200 text-amber-600 dark:bg-amber-950/60 dark:border-amber-800 dark:text-amber-400"
-                              }`}
-                            >
-                              <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
-                              <span>{breached ? "Go-live SLA Breached" : "Go-live At Risk"}</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
+                      {cardBody}
                     </Link>
                   );
                 })}
