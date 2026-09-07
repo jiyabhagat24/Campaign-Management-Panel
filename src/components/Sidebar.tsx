@@ -118,13 +118,15 @@ export default function Sidebar({ role, name, notifications }: { role: Role; nam
             </div>
             <div className="min-w-0 flex-1">
               <p className="truncate text-xs font-semibold text-slate-50">{name}</p>
-              <span
-                className={`mt-0.5 inline-block rounded-md border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${getRoleBadgeColor(
-                  role
-                )}`}
-              >
-                {role.replace(/_/g, " ")}
-              </span>
+              {role !== "CXO" && (
+                <span
+                  className={`mt-0.5 inline-block rounded-md border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${getRoleBadgeColor(
+                    role
+                  )}`}
+                >
+                  {role.replace(/_/g, " ")}
+                </span>
+              )}
             </div>
           </div>
 
