@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Mail, Lock, ArrowRight, ShieldCheck } from "lucide-react";
 
 // Two separate doors. Internal staff (@theboredmonkey.com) sign in with
@@ -132,6 +133,13 @@ export default function LoginForm() {
           <span>{loading ? "Signing in..." : "Sign in"}</span>
           <ArrowRight className="h-4 w-4" />
         </button>
+
+        <p className="text-center text-xs text-slate-500">
+          Don&apos;t have an account?{" "}
+          <Link href="/signup" className="font-semibold text-indigo-400 hover:text-indigo-300">
+            Sign up
+          </Link>
+        </p>
       </form>
     </div>
   );

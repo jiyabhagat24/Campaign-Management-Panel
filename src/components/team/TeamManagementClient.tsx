@@ -33,7 +33,16 @@ const ROLE_BADGE: Record<Role, string> = {
 };
 
 type TeamUser = { id: string; name: string; email: string; role: string; createdAt: string };
-type ClientAccount = { id: string; name: string; email: string; createdAt: string };
+type ClientAccount = {
+  id: string;
+  name: string;
+  email: string;
+  createdAt: string;
+  // Only present for clients who came through the public self-serve sign-up
+  // form — null for accounts a CXO added by hand, which never captured a
+  // brand/phone.
+  signup: { brandName: string | null; phone: string | null } | null;
+};
 
 function RoleSelect({
   value,
@@ -447,6 +456,7 @@ export default function TeamManagementClient({
               <tr>
                 <th className="px-4 py-2.5">Name</th>
                 <th className="px-4 py-2.5">Email</th>
+                <th className="px-4 py-2.5">Brand / Phone</th>
                 <th className="px-4 py-2.5">Added</th>
                 <th className="px-4 py-2.5" />
               </tr>
@@ -454,8 +464,19 @@ export default function TeamManagementClient({
             <tbody>
               {clientRows.map((c) => (
                 <tr key={c.id} className="border-t border-slate-100 dark:border-slate-800">
-                  <td className="px-4 py-3 font-semibold text-slate-900 dark:text-white">{c.name}</td>
+                  <td className="px-4 py-3 font-semibold text-slate-900 dark:text-white">
+                    {c.name}
+                    {c.signup && (
+                      <span className="ml-2 rounded-full border border-indigo-200 bg-indigo-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-indigo-700 dark:border-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300">
+                        Self sign-up
+                      </span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-slate-500 dark:text-slate-400">{c.email}</td>
+                  <td className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">
+                    {c.signup?.brandName ?? "—"}
+                    {c.signup?.phone ? ` · ${c.signup.phone}` : ""}
+                  </td>
                   <td className="px-4 py-3 text-xs text-slate-400 dark:text-slate-500">
                     {new Date(c.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
                   </td>
@@ -483,7 +504,7 @@ export default function TeamManagementClient({
               ))}
               {clientRows.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="px-4 py-8 text-center text-sm text-slate-400 dark:text-slate-500">
+                  <td colSpan={5} className="px-4 py-8 text-center text-sm text-slate-400 dark:text-slate-500">
                     No clients yet.
                   </td>
                 </tr>

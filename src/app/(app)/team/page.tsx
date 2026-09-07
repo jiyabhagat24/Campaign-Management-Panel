@@ -20,7 +20,18 @@ export default async function TeamPage() {
     }),
     prisma.client.findMany({
       orderBy: { name: "asc" },
-      select: { id: true, name: true, email: true, createdAt: true },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        createdAt: true,
+        // Only set for clients who came through the public self-serve
+        // sign-up form (src/app/signup) — null for accounts a CXO added by
+        // hand here, which never had a brand/phone to capture. Surfaced so
+        // whoever's granting campaign access after a sign-up knows which
+        // brand this new login is actually for.
+        signup: { select: { brandName: true, phone: true } },
+      },
     }),
   ]);
 

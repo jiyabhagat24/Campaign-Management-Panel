@@ -1706,6 +1706,56 @@ export async function deleteTeamUser(userId: string) {
 // internal team management above, just a different table and no role field
 // (there's only one kind of client account).
 
+// Public self-serve sign-up from the login page's "Don't have an account?
+// Sign up" form — deliberately no requireUser()/canManageTeam gate, unlike
+// every other function in this section: there's no logged-in session yet,
+// that's the whole point. Creates the Client login row (id + hashed
+// password, same shape createClientAccount below produces) and, in the same
+// write, a ClientSignup row recording the raw sign-up details (brand name,
+// phone) for a CXO to review afterward when deciding which campaign(s) to
+// grant this client access to via CampaignClientAccess — sign-up itself
+// grants no campaign visibility, only a login. Account creation is instant:
+// no approval step blocks them from signing in right after submitting.
+export async function signUpClient(input: {
+  name: string;
+  email: string;
+  password: string;
+  phone?: string;
+  brandName?: string;
+}) {
+  const name = input.name.trim();
+  const email = input.email.trim().toLowerCase();
+  const phone = input.phone?.trim() || null;
+  const brandName = input.brandName?.trim() || null;
+
+  if (!name) throw new Error("Name is required.");
+  if (!email) throw new Error("Email is required.");
+  if (!input.password || input.password.length < 8) {
+    throw new Error("Password needs to be at least 8 characters.");
+  }
+
+  const existing = await prisma.client.findUnique({ where: { email } });
+  if (existing) throw new Error("An account with that email already exists — sign in instead.");
+
+  const passwordHash = await bcrypt.hash(input.password, 10);
+
+  try {
+    await prisma.client.create({
+      data: {
+        name,
+        email,
+        passwordHash,
+        signup: { create: { name, email, phone, brandName } },
+      },
+    });
+  } catch (err) {
+    if (isUniqueConstraintError(err)) throw new Error("An account with that email already exists — sign in instead.");
+    throw err;
+  }
+
+  revalidatePath("/team");
+}
+
 export async function createClientAccount(input: { name: string; email: string; password: string }) {
   const actor = await requireUser();
   if (!canManageTeam(actor.role)) throw new Error("Only a CXO can add clients.");

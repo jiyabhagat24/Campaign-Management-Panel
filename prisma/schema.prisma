@@ -71,6 +71,28 @@ model Client {
   remarks        Remark[]
   activity       ActivityLog[]
   notifications  Notification[]
+  signup         ClientSignup?
+}
+
+// Raw record of a self-serve sign-up submitted from the login page's "Don't
+// have an account? Sign up" form — kept as a separate table from the record
+// used to actually log people in (Client, above) on purpose. Sign-up is
+// instant (no approval queue): the same request that creates this row also
+// creates the matching Client row with the id + hashed password, so the
+// person can sign in immediately. This table exists so the raw details of
+// how someone signed up (brand name, phone, when) survive as their own
+// audit trail even if the Client row's own fields are later edited — and so
+// a CXO reviewing new sign-ups afterward (to grant campaign access via
+// CampaignClientAccess) has the brand/phone context in one place.
+model ClientSignup {
+  id        String   @id @default(cuid())
+  clientId  String   @unique
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  name      String
+  email     String
+  phone     String?
+  brandName String?
+  createdAt DateTime @default(now())
 }
 
 // Who's responsible for a campaign — Brand Solutions, Campaign Manager, IR
