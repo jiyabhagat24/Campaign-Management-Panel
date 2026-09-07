@@ -11,7 +11,7 @@ export default function LoginPage() {
         {/* Brand Header */}
         <div className="text-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/brand-logo-badge.png" alt="TheBoredMonkey" className="mx-auto h-16 w-auto object-contain" />
+          <img src="/brand-logo-badge.png" alt="TheBoredMonkey" className="mx-auto h-28 w-auto object-contain" />
         </div>
 
         {/* Login Form Container */}
