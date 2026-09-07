@@ -9,16 +9,7 @@ import CampaignStatusSelect from "@/components/campaign/CampaignStatusSelect";
 import FinanceTableClient, { type FinanceCampaignRow } from "@/components/finance/FinanceTableClient";
 import RevenueBreakdownChart, { type RevenueDataRow } from "@/components/dashboard/RevenueBreakdownChart";
 import { formatCompactINR } from "@/lib/format";
-import {
-  Megaphone,
-  IndianRupee,
-  Users,
-  ArrowRight,
-  Percent,
-  PlayCircle,
-  Filter,
-  X,
-} from "lucide-react";
+import { Megaphone, ArrowRight, Filter, X } from "lucide-react";
 
 export type DashboardCampaignRow = {
   id: string;
@@ -253,36 +244,21 @@ export default function PortfolioDashboardClient({
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <div className="stat-card group dark:bg-slate-900 dark:border-slate-800">
           <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Active Campaigns</p>
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-950/80 dark:text-indigo-400 group-hover:scale-110 transition-transform">
-              <Megaphone className="h-4 w-4" />
-            </div>
-          </div>
+          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Active Campaigns</p>
           <p className="mt-3 text-3xl font-extrabold text-slate-900 dark:text-white">{activeOnly.length}</p>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 font-medium">Of {filtered.length} shown</p>
         </div>
 
         <div className="stat-card group dark:bg-slate-900 dark:border-slate-800">
           <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Creators Onboarded</p>
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-cyan-50 text-cyan-600 dark:bg-cyan-950/80 dark:text-cyan-400 group-hover:scale-110 transition-transform">
-              <Users className="h-4 w-4" />
-            </div>
-          </div>
+          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Creators Onboarded</p>
           <p className="mt-3 text-3xl font-extrabold text-slate-900 dark:text-white">{creatorsOnboarded}</p>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 font-medium">Across shown campaigns</p>
         </div>
 
         <div className="stat-card group dark:bg-slate-900 dark:border-slate-800">
           <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Deliverables Live/Total</p>
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950/80 dark:text-emerald-400 group-hover:scale-110 transition-transform">
-              <PlayCircle className="h-4 w-4" />
-            </div>
-          </div>
+          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Deliverables Live/Total</p>
           <p className="mt-3 text-3xl font-extrabold text-slate-900 dark:text-white">
             {deliverablesLive}/{deliverablesTotal}
           </p>
@@ -309,36 +285,21 @@ export default function PortfolioDashboardClient({
 
         <div className="stat-card group dark:bg-slate-900 dark:border-slate-800">
           <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Active Value</p>
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-50 text-amber-600 dark:bg-amber-950/80 dark:text-amber-400 group-hover:scale-110 transition-transform">
-              <IndianRupee className="h-4 w-4" />
-            </div>
-          </div>
+          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Active Value</p>
           <p className="mt-3 text-3xl font-extrabold text-slate-900 dark:text-white">{money(totalActiveCampaignValue)}</p>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 font-medium">Quoted, active campaigns</p>
         </div>
 
         <div className="stat-card group dark:bg-slate-900 dark:border-slate-800">
           <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Internal Value</p>
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-fuchsia-50 text-fuchsia-600 dark:bg-fuchsia-950/80 dark:text-fuchsia-400 group-hover:scale-110 transition-transform">
-              <IndianRupee className="h-4 w-4" />
-            </div>
-          </div>
+          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Internal Value</p>
           <p className="mt-3 text-3xl font-extrabold text-slate-900 dark:text-white">{money(totalInternalCampaignValue)}</p>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 font-medium">Creator cost, active campaigns</p>
         </div>
 
         <div className="stat-card group dark:bg-slate-900 dark:border-slate-800">
           <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Margin %</p>
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-50 text-rose-600 dark:bg-rose-950/80 dark:text-rose-400 group-hover:scale-110 transition-transform">
-              <Percent className="h-4 w-4" />
-            </div>
-          </div>
+          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Margin %</p>
           <p className="mt-3 text-3xl font-extrabold text-slate-900 dark:text-white">{marginPercent.toFixed(1)}%</p>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 font-medium">Active campaign blended margin</p>
         </div>
