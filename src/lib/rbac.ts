@@ -73,6 +73,15 @@ export function canManageTeam(role: Role) {
   return role === "CXO";
 }
 
+// Who can create a new campaign — explicit product call: only the two
+// roles that actually bring in / own the client relationship (CXO,
+// Brand Solutions). Campaign Managers and the IR team work campaigns once
+// they exist, they don't originate them. Gates both the "New Campaign"
+// button/link and the createCampaign server action itself.
+export function canCreateCampaign(role: Role) {
+  return role === "CXO" || role === "BRAND_SOLUTIONS";
+}
+
 // The margin guardrail (brief slide 07): strip internal cost + rejection
 // reasons meant for internal eyes before anything reaches a client-facing
 // render, export, or email. Call this at the boundary, not ad hoc in the UI.

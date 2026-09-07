@@ -6,7 +6,7 @@ import bcrypt from "bcryptjs";
 import { requireUser } from "@/lib/auth";
 import { logActivity } from "@/lib/activity";
 import { notify } from "@/lib/notify";
-import { canApproveCommercialEdit, canSetCommercials, canSeeInternalCost, canManageTeam, isClient } from "@/lib/rbac";
+import { canApproveCommercialEdit, canSetCommercials, canSeeInternalCost, canManageTeam, canCreateCampaign, isClient } from "@/lib/rbac";
 import {
   COMMERCIAL_APPROVER_ROLES,
   DEFAULT_SLA,
@@ -60,7 +60,7 @@ function authorFields(user: { id: string; role: Role }) {
 
 export async function createCampaign(formData: FormData) {
   const user = await requireUser();
-  if (isClient(user.role)) throw new Error("Clients cannot create campaigns");
+  if (!canCreateCampaign(user.role)) throw new Error("Only a CXO or Brand Solutions can create a campaign.");
 
   const name = String(formData.get("name") ?? "").trim();
   const brand = String(formData.get("brand") ?? "").trim();

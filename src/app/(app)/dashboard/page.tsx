@@ -1,6 +1,6 @@
 import { currentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { canSeeInternalCost, campaignVisibilityWhere, isClient } from "@/lib/rbac";
+import { canSeeInternalCost, campaignVisibilityWhere, isClient, canCreateCampaign } from "@/lib/rbac";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import PortfolioDashboardClient, {
@@ -8,6 +8,7 @@ import PortfolioDashboardClient, {
   type RecentActivityRow,
 } from "@/components/dashboard/PortfolioDashboardClient";
 import type { FinanceCampaignRow } from "@/components/finance/FinanceTableClient";
+import { FINANCE_VISIBLE_STATUSES } from "@/lib/constants";
 import type { RevenueDataRow } from "@/components/dashboard/RevenueBreakdownChart";
 
 // Default onboard-to-go-live window, mirrors DEFAULT_GO_LIVE_DAYS in
@@ -118,8 +119,12 @@ export default async function DashboardPage() {
   // (per explicit instruction) rather than living only on the separate
   // /finance page, which now holds the same table for anyone who wants a
   // dedicated, less-crowded view of just this report. Built from the same
-  // `campaigns` fetch above, no second query.
-  const financeRows: FinanceCampaignRow[] = campaigns.map((c) => {
+  // `campaigns` fetch above, no second query. Only ACTIVE/COMPLETED
+  // campaigns show here — a paused or cancelled campaign's numbers
+  // shouldn't appear in the live finance picture (FINANCE_VISIBLE_STATUSES).
+  const financeRows: FinanceCampaignRow[] = campaigns
+    .filter((c) => (FINANCE_VISIBLE_STATUSES as string[]).includes(c.status))
+    .map((c) => {
     const brandSolutionsPoc = c.teamMembers.find((t) => t.roleOnCampaign === "BRAND_SOLUTIONS")?.user.name ?? null;
     return {
       id: c.id,
@@ -195,7 +200,7 @@ export default async function DashboardPage() {
           </p>
         </div>
 
-        {!isClient(user.role) && (
+        {canCreateCampaign(user.role) && (
           <Link
             href="/campaigns/new"
             className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/20 transition-all hover:from-indigo-700 hover:to-indigo-800 hover:shadow-indigo-600/30 hover:-translate-y-0.5 active:translate-y-0"

@@ -41,17 +41,27 @@ export const COMMERCIAL_APPROVER_ROLES: Role[] = [
 ];
 
 // Campaign.status vocabulary — a plain string column (see model comment),
-// so no migration was needed to add HOLD here. Matches the "Active, Hold or
-// Closed" status filter from the ops team's dashboard spec. Every campaign
-// still defaults to ACTIVE at creation; changing status is a deliberate
-// action via updateCampaignStatus in actions.ts.
-export const CAMPAIGN_STATUSES = ["ACTIVE", "HOLD", "CLOSED"] as const;
+// so no migration was needed to change this. Every campaign still defaults
+// to ACTIVE at creation; changing status is a deliberate action via
+// updateCampaignStatus in actions.ts, exposed as a dropdown on both the
+// dashboard's Campaign Table and the Campaigns Directory's Action column.
+export const CAMPAIGN_STATUSES = ["ACTIVE", "HOLD", "COMPLETED", "CANCELLED"] as const;
 export type CampaignStatus = (typeof CAMPAIGN_STATUSES)[number];
 export const CAMPAIGN_STATUS_LABELS: Record<CampaignStatus, string> = {
   ACTIVE: "Active",
-  HOLD: "Hold",
-  CLOSED: "Closed",
+  HOLD: "On Hold",
+  COMPLETED: "Completed",
+  CANCELLED: "Cancelled",
 };
+
+// Which campaign statuses count toward the money figures shown on the
+// dashboard summary cards, the Finance Table, and the /finance page
+// (creator payouts + client invoicing) — explicit product call: a campaign
+// that's actively running or wrapped up successfully still counts, one
+// that's paused or dead shouldn't inflate (or appear in) the live financial
+// picture. Does NOT affect the Campaign Table/Directory list itself, which
+// always shows every campaign regardless of status.
+export const FINANCE_VISIBLE_STATUSES: CampaignStatus[] = ["ACTIVE", "COMPLETED"];
 
 // "Client Invoice status" column on the Finance Table sheet tab — manual
 // entry (see Campaign.financeClientInvoiceStatus), same reasoning as the

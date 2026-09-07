@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { canSeeInternalCost, campaignVisibilityWhere, isClient } from "@/lib/rbac";
 import CreatorPayoutsTable, { type PayoutCreatorRow } from "@/components/finance/CreatorPayoutsTable";
 import ClientInvoicingTable, { type ClientInvoicingRow } from "@/components/finance/ClientInvoicingTable";
-import { PLATFORM_SHORT_LABELS, type Platform } from "@/lib/constants";
+import { PLATFORM_SHORT_LABELS, FINANCE_VISIBLE_STATUSES, type Platform } from "@/lib/constants";
 
 // The sheet's "Finance Table — Detailed Finance report" tab, marked
 // "Separate page" there — so it's its own route rather than a dashboard
@@ -18,9 +18,12 @@ export default async function FinancePage() {
   if (isClient(user.role) || !canSeeInternalCost(user.role)) redirect("/dashboard");
 
   // Same assignment scoping as everywhere else: CXO sees every campaign's
-  // finance data, everyone else only sees campaigns they're a team member on.
+  // finance data, everyone else only sees campaigns they're a team member
+  // on. Also restricted to ACTIVE/COMPLETED campaigns — a paused or
+  // cancelled campaign's payouts/invoicing shouldn't show up here
+  // (FINANCE_VISIBLE_STATUSES, same rule as the dashboard's Finance Table).
   const campaigns = await prisma.campaign.findMany({
-    where: campaignVisibilityWhere(user),
+    where: { ...campaignVisibilityWhere(user), status: { in: FINANCE_VISIBLE_STATUSES } },
     include: {
       creators: {
         select: {

@@ -1,4 +1,6 @@
 import { redirect } from "next/navigation";
+import { currentUser } from "@/lib/auth";
+import { canCreateCampaign } from "@/lib/rbac";
 import { createCampaign } from "@/lib/actions";
 import BackLink from "@/components/BackLink";
 
@@ -8,7 +10,14 @@ async function create(formData: FormData) {
   redirect(`/campaigns/${id}`);
 }
 
-export default function NewCampaignPage() {
+export default async function NewCampaignPage() {
+  const user = await currentUser();
+  if (!user) redirect("/login");
+  // Matches canCreateCampaign's gate on the createCampaign server action —
+  // this just stops a CM/IR-team user from reaching the form directly by
+  // URL instead of only hiding the button.
+  if (!canCreateCampaign(user.role)) redirect("/campaigns");
+
   return (
     <div className="p-8">
       <BackLink label="Back" fallbackHref="/campaigns" />

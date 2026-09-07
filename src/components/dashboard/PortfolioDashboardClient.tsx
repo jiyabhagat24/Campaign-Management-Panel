@@ -1,11 +1,11 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import BrandAvatar from "@/components/campaign/BrandAvatar";
 import { isGoLiveAtRisk, isGoLiveBreached } from "@/lib/sla";
-import { CAMPAIGN_STATUSES, CAMPAIGN_STATUS_LABELS, type CampaignStatus } from "@/lib/constants";
-import { updateCampaignStatus } from "@/lib/actions";
+import { CAMPAIGN_STATUSES, CAMPAIGN_STATUS_LABELS, FINANCE_VISIBLE_STATUSES, type CampaignStatus } from "@/lib/constants";
+import CampaignStatusSelect from "@/components/campaign/CampaignStatusSelect";
 import FinanceTableClient, { type FinanceCampaignRow } from "@/components/finance/FinanceTableClient";
 import RevenueBreakdownChart, { type RevenueDataRow } from "@/components/dashboard/RevenueBreakdownChart";
 import { formatCompactINR } from "@/lib/format";
@@ -44,43 +44,6 @@ export type DashboardCampaignRow = {
 };
 
 const money = formatCompactINR;
-
-// One IR-team-editable <select> per Campaign Table row — swapping status
-// calls updateCampaignStatus (a "use server" action, safe to import
-// directly into a client component) and relies on its revalidatePath calls
-// to refresh /dashboard on next navigation. useTransition keeps the select
-// interactive (not blocked) while the request is in flight.
-function StatusSelect({ campaignId, status }: { campaignId: string; status: string }) {
-  const [value, setValue] = useState(status);
-  const [pending, startTransition] = useTransition();
-
-  const colors: Record<string, string> = {
-    ACTIVE: "bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950/50 dark:border-emerald-800 dark:text-emerald-300",
-    HOLD: "bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-950/50 dark:border-amber-800 dark:text-amber-300",
-    CLOSED: "bg-slate-100 border-slate-200 text-slate-600 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300",
-  };
-
-  return (
-    <select
-      value={value}
-      disabled={pending}
-      onChange={(e) => {
-        const next = e.target.value;
-        setValue(next);
-        startTransition(() => {
-          updateCampaignStatus(campaignId, next).catch(() => setValue(status));
-        });
-      }}
-      className={`rounded-lg border px-2 py-1 text-[11px] font-bold uppercase tracking-wide outline-none disabled:opacity-50 ${colors[value] ?? colors.ACTIVE}`}
-    >
-      {CAMPAIGN_STATUSES.map((s) => (
-        <option key={s} value={s}>
-          {CAMPAIGN_STATUS_LABELS[s as CampaignStatus]}
-        </option>
-      ))}
-    </select>
-  );
-}
 
 export type RecentActivityRow = {
   id: string;
@@ -155,12 +118,22 @@ export default function PortfolioDashboardClient({
   };
 
   // ---------- Summary row, recomputed from the filtered set ----------
-  const activeFiltered = filtered.filter((c) => c.status === "ACTIVE");
+  // Two different slices of `filtered`, for two different purposes:
+  //  - activeOnly: strictly ACTIVE, used for the SLA "On Time"/"Delayed"
+  //    cards — a Hold/Completed/Cancelled campaign isn't "on time or late",
+  //    that question doesn't apply to it anymore.
+  //  - financeVisible: ACTIVE or COMPLETED (FINANCE_VISIBLE_STATUSES) — the
+  //    money figures below (Total Active/Internal Value, margin, and the
+  //    four manually-entered finance fields). A campaign that's on hold or
+  //    cancelled shouldn't inflate — or appear in — the live financial
+  //    picture; one that's wrapped up successfully still should.
+  const activeOnly = filtered.filter((c) => c.status === "ACTIVE");
+  const financeVisible = filtered.filter((c) => (FINANCE_VISIBLE_STATUSES as string[]).includes(c.status));
   const creatorsOnboarded = filtered.reduce((s, c) => s + c.onboardedCount, 0);
   const deliverablesLive = filtered.reduce((s, c) => s + c.deliverablesLive, 0);
   const deliverablesTotal = filtered.reduce((s, c) => s + c.deliverablesTotal, 0);
-  const totalActiveCampaignValue = activeFiltered.reduce((s, c) => s + (c.budgetQuoted ?? 0), 0);
-  const totalInternalCampaignValue = activeFiltered.reduce((s, c) => s + c.internalValue, 0);
+  const totalActiveCampaignValue = financeVisible.reduce((s, c) => s + (c.budgetQuoted ?? 0), 0);
+  const totalInternalCampaignValue = financeVisible.reduce((s, c) => s + c.internalValue, 0);
   const marginPercent =
     totalActiveCampaignValue > 0
       ? ((totalActiveCampaignValue - totalInternalCampaignValue) / totalActiveCampaignValue) * 100
@@ -169,15 +142,15 @@ export default function PortfolioDashboardClient({
   // deadline has been breached, same isGoLiveBreached check used everywhere
   // else in this file. A campaign with no deadline set yet counts as on
   // time (nothing to be late against).
-  const onTimeCount = activeFiltered.filter((c) => !isGoLiveBreached(c.goLiveDeadline ? new Date(c.goLiveDeadline) : null)).length;
-  const delayedCount = activeFiltered.length - onTimeCount;
+  const onTimeCount = activeOnly.filter((c) => !isGoLiveBreached(c.goLiveDeadline ? new Date(c.goLiveDeadline) : null)).length;
+  const delayedCount = activeOnly.length - onTimeCount;
 
   // Manually-entered finance figures (see FinanceRow on the campaign page) —
-  // summed across whatever's currently filtered, null treated as 0.
-  const yetToBeInvoiced = filtered.reduce((s, c) => s + (c.financeYetToBeInvoiced ?? 0), 0);
-  const yetToBeReceived = filtered.reduce((s, c) => s + (c.financeYetToBeReceived ?? 0), 0);
-  const valueOfClearedDue = filtered.reduce((s, c) => s + (c.financeValueOfClearedDue ?? 0), 0);
-  const creatorPayablePending = filtered.reduce((s, c) => s + (c.financeCreatorPayablePending ?? 0), 0);
+  // summed across the finance-visible set, null treated as 0.
+  const yetToBeInvoiced = financeVisible.reduce((s, c) => s + (c.financeYetToBeInvoiced ?? 0), 0);
+  const yetToBeReceived = financeVisible.reduce((s, c) => s + (c.financeYetToBeReceived ?? 0), 0);
+  const valueOfClearedDue = financeVisible.reduce((s, c) => s + (c.financeValueOfClearedDue ?? 0), 0);
+  const creatorPayablePending = financeVisible.reduce((s, c) => s + (c.financeCreatorPayablePending ?? 0), 0);
 
   // Zomato/Swiggy-style filter chip: a native <select> (or date input)
   // styled as a small rounded pill, sized to its content rather than
@@ -477,7 +450,7 @@ export default function PortfolioDashboardClient({
                     <td className="border-b border-slate-100 px-4 py-3 text-slate-600 dark:border-slate-800 dark:text-slate-300">{c.brandSolutionsPoc ?? "—"}</td>
                     <td className="border-b border-slate-100 px-4 py-3 text-slate-600 dark:border-slate-800 dark:text-slate-300">{c.campaignManager ?? "—"}</td>
                     <td className="border-b border-slate-100 px-4 py-3 dark:border-slate-800">
-                      <StatusSelect campaignId={c.id} status={c.status} />
+                      <CampaignStatusSelect campaignId={c.id} status={c.status} />
                     </td>
                     <td className="border-b border-slate-100 px-4 py-3 text-left text-slate-700 dark:border-slate-800 dark:text-slate-200">{c.onboardedCount}</td>
                     <td className="border-b border-slate-100 px-4 py-3 text-left text-slate-700 dark:border-slate-800 dark:text-slate-200">
