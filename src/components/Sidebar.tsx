@@ -27,10 +27,10 @@ const NAV = [
   { href: "/finance", label: "Finance", icon: Receipt, financeOnly: true },
   // CXO-only — the Team admin page (add/re-role/remove logins).
   { href: "/team", label: "Team", icon: Users, teamOnly: true },
-  // CXO-only — grant/revoke which campaigns a (self-signed-up or manually
-  // added) client login can see. Same gate as Team since it's the same
-  // "who gets what access" admin surface.
-  { href: "/clients", label: "Client Access", icon: UserCheck, teamOnly: true },
+  // CXO-only — client login management (reset password/remove) plus
+  // grant/revoke which campaigns each client can see. Same gate as Team
+  // since it's the same "who gets what access" admin surface.
+  { href: "/clients", label: "Clients", icon: UserCheck, teamOnly: true },
 ];
 
 export default function Sidebar({ role, name, notifications }: { role: Role; name: string; notifications: NotificationItem[] }) {

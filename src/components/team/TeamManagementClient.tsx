@@ -1,13 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import {
-  createTeamUser,
-  updateTeamUserRole,
-  deleteTeamUser,
-  updateClientAccount,
-  deleteClientAccount,
-} from "@/lib/actions";
+import { createTeamUser, updateTeamUserRole, deleteTeamUser } from "@/lib/actions";
 import { INTERNAL_ROLES, type Role } from "@/lib/constants";
 import { UserPlus, Trash2 } from "lucide-react";
 
@@ -32,16 +26,6 @@ const ROLE_BADGE: Record<Role, string> = {
 };
 
 type TeamUser = { id: string; name: string; email: string; role: string; createdAt: string };
-type ClientAccount = {
-  id: string;
-  name: string;
-  email: string;
-  createdAt: string;
-  // Only present for clients who came through the public self-serve sign-up
-  // form — null for accounts a CXO added by hand, which never captured a
-  // brand/phone.
-  signup: { brandName: string | null; phone: string | null } | null;
-};
 
 function RoleSelect({
   value,
@@ -185,15 +169,12 @@ function AddTeamMemberForm({ onAdded }: { onAdded: () => void }) {
 
 export default function TeamManagementClient({
   users,
-  clients,
   currentUserId,
 }: {
   users: TeamUser[];
-  clients: ClientAccount[];
   currentUserId: string;
 }) {
   const [rows, setRows] = useState(users);
-  const [clientRows, setClientRows] = useState(clients);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [rowError, setRowError] = useState<Record<string, string>>({});
   const [, startTransition] = useTransition();
@@ -227,44 +208,6 @@ export default function TeamManagementClient({
       } catch (err) {
         setRows(prev);
         setRowError((e) => ({ ...e, [id]: err instanceof Error ? err.message : "Failed to remove." }));
-      } finally {
-        setPendingId(null);
-      }
-    });
-  }
-
-  function handleDeleteClient(id: string, name: string) {
-    if (!confirm(`Remove ${name}'s client login? They will no longer be able to sign in.`)) return;
-    setPendingId(id);
-    setRowError((e) => ({ ...e, [id]: "" }));
-    const prev = clientRows;
-    setClientRows((r) => r.filter((c) => c.id !== id));
-    startTransition(async () => {
-      try {
-        await deleteClientAccount(id);
-      } catch (err) {
-        setClientRows(prev);
-        setRowError((e) => ({ ...e, [id]: err instanceof Error ? err.message : "Failed to remove." }));
-      } finally {
-        setPendingId(null);
-      }
-    });
-  }
-
-  function handleResetClientPassword(id: string, name: string) {
-    const password = prompt(`New password for ${name} (min 8 characters):`);
-    if (!password) return;
-    if (password.length < 8) {
-      setRowError((e) => ({ ...e, [id]: "Password needs to be at least 8 characters." }));
-      return;
-    }
-    setPendingId(id);
-    setRowError((e) => ({ ...e, [id]: "" }));
-    startTransition(async () => {
-      try {
-        await updateClientAccount(id, { password });
-      } catch (err) {
-        setRowError((e) => ({ ...e, [id]: err instanceof Error ? err.message : "Failed to update password." }));
       } finally {
         setPendingId(null);
       }
@@ -323,80 +266,6 @@ export default function TeamManagementClient({
                   </td>
                 </tr>
               ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      {/* ---------- Clients (separate Client table) ---------- */}
-      <section className="space-y-5">
-        <div>
-          <h2 className="text-sm font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Clients</h2>
-          <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-            Brand-side contacts — a separate login table from internal staff, no role, no cost visibility. Clients
-            create their own login at the sign-up page; assign them to a specific campaign from that campaign's page.
-          </p>
-        </div>
-
-        <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white dark:border-slate-800 dark:bg-slate-900">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-              <tr>
-                <th className="px-4 py-2.5">Name</th>
-                <th className="px-4 py-2.5">Email</th>
-                <th className="px-4 py-2.5">Brand / Phone</th>
-                <th className="px-4 py-2.5">Added</th>
-                <th className="px-4 py-2.5" />
-              </tr>
-            </thead>
-            <tbody>
-              {clientRows.map((c) => (
-                <tr key={c.id} className="border-t border-slate-100 dark:border-slate-800">
-                  <td className="px-4 py-3 font-semibold text-slate-900 dark:text-white">
-                    {c.name}
-                    {c.signup && (
-                      <span className="ml-2 rounded-full border border-indigo-200 bg-indigo-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-indigo-700 dark:border-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300">
-                        Self sign-up
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-slate-500 dark:text-slate-400">{c.email}</td>
-                  <td className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">
-                    {c.signup?.brandName ?? "—"}
-                    {c.signup?.phone ? ` · ${c.signup.phone}` : ""}
-                  </td>
-                  <td className="px-4 py-3 text-xs text-slate-400 dark:text-slate-500">
-                    {new Date(c.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <button
-                        onClick={() => handleResetClientPassword(c.id, c.name)}
-                        disabled={pendingId === c.id}
-                        className="rounded-lg px-2 py-1 text-[11px] font-semibold text-slate-500 hover:bg-slate-50 disabled:opacity-50 dark:text-slate-400 dark:hover:bg-slate-800"
-                      >
-                        Reset password
-                      </button>
-                      <button
-                        onClick={() => handleDeleteClient(c.id, c.name)}
-                        disabled={pendingId === c.id}
-                        className="rounded-lg p-1.5 text-slate-300 hover:bg-rose-50 hover:text-rose-500 disabled:opacity-50 dark:text-slate-600 dark:hover:bg-rose-950/40"
-                        title="Remove"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                    {rowError[c.id] && <p className="mt-1 max-w-[220px] text-right text-[10px] font-medium text-rose-600 dark:text-rose-400">{rowError[c.id]}</p>}
-                  </td>
-                </tr>
-              ))}
-              {clientRows.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-sm text-slate-400 dark:text-slate-500">
-                    No clients yet.
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
         </div>

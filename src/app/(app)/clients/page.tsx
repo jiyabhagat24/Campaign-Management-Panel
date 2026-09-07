@@ -3,6 +3,7 @@ import { currentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { canManageTeam } from "@/lib/rbac";
 import ClientAccessManager, { type ClientRow, type CampaignOption } from "@/components/team/ClientAccessManager";
+import ClientLoginsTable, { type ClientLoginRow } from "@/components/team/ClientLoginsTable";
 
 // CXO-only — where a signed-up (or manually added) client account gets
 // granted or revoked visibility into specific campaigns. Sign-up itself
@@ -50,17 +51,43 @@ export default async function ClientsAccessPage() {
     status: c.status,
   }));
 
+  const loginRows: ClientLoginRow[] = clientRows.map((c) => ({
+    id: c.id,
+    name: c.name,
+    email: c.email,
+    createdAt: c.createdAt,
+    brandName: c.brandName,
+    phone: c.phone,
+    isSelfSignup: c.isSelfSignup,
+  }));
+
   return (
-    <div className="mx-auto max-w-6xl space-y-6 p-8">
+    <div className="mx-auto max-w-6xl space-y-10 p-8">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Client Campaign Access</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Clients</h1>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          Grant or revoke which campaigns each client login can see. Signing up only creates a login — a client sees
-          nothing until you check a campaign for them here.
+          Brand-side contacts — a separate login table from internal staff, no role, no cost visibility. Clients
+          create their own login at the sign-up page; grant them access to a campaign below.
         </p>
       </div>
 
-      <ClientAccessManager clients={clientRows} campaigns={campaignOptions} />
+      <section className="space-y-4">
+        <h2 className="text-sm font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Client logins</h2>
+        <ClientLoginsTable clients={loginRows} />
+      </section>
+
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-sm font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+            Campaign access
+          </h2>
+          <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+            Grant or revoke which campaigns each client login can see. Signing up only creates a login — a client
+            sees nothing until you check a campaign for them here.
+          </p>
+        </div>
+        <ClientAccessManager clients={clientRows} campaigns={campaignOptions} />
+      </section>
     </div>
   );
 }
