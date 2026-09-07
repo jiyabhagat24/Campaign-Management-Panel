@@ -6,7 +6,13 @@
 // validated in src/lib/constants.ts on purpose.
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  // "native" covers local dev (Windows/Mac). "rhel-openssl-3.0.x" is added
+  // for Vercel: its build step and its serverless function runtime aren't
+  // always the exact same OS image, and without this the deployed app can
+  // fail at runtime with "could not locate the Query Engine" even though
+  // the build itself succeeded.
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
 datasource db {

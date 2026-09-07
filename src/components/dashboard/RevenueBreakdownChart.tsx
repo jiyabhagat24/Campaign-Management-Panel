@@ -35,11 +35,14 @@ type MonthRow = {
 // Shared chart geometry for charts 1 and 2 — same canvas so gridlines,
 // axes, and month spacing line up identically between the two.
 const W = 820;
-const H = 280;
-const PAD_L = 64;
-const PAD_R = 64;
+const H = 300;
+// Extra room on every side versus before: PAD_L/PAD_R now fit a rotated
+// axis-title alongside the tick labels, PAD_B fits an x-axis title below
+// the month labels.
+const PAD_L = 78;
+const PAD_R = 78;
 const PAD_T = 36;
-const PAD_B = 34;
+const PAD_B = 52;
 const plotW = W - PAD_L - PAD_R;
 const plotH = H - PAD_T - PAD_B;
 
@@ -53,6 +56,65 @@ function niceMax(n: number) {
 
 function xFor(i: number, n: number) {
   return n === 1 ? PAD_L + plotW / 2 : PAD_L + (i * plotW) / (n - 1);
+}
+
+// For a whole-number axis (a count, like creators onboarded) gridlines
+// have to land on real integers — dividing the axis max into even
+// fractions and rounding the label text for display (the old approach)
+// draws the gridline at one value while showing a different, rounded
+// number next to it, so a bar plotted at the true value sits off its own
+// mislabeled line. This returns both an axis max and its tick values
+// pre-snapped to whole numbers, so the label always matches its gridline.
+function integerAxis(maxVal: number) {
+  const safeMax = Math.max(1, Math.ceil(maxVal));
+  const step = Math.max(1, Math.round(safeMax / 4));
+  const top = Math.ceil(safeMax / step) * step;
+  const ticks: number[] = [];
+  for (let v = 0; v <= top; v += step) ticks.push(v);
+  return { max: top, ticks };
+}
+
+// X-axis title, centered under the tick labels.
+function XAxisTitle({ label, width = W, padB = PAD_B, height = H }: { label: string; width?: number; padB?: number; height?: number }) {
+  return (
+    <text x={width / 2} y={height - 8} fontSize="11" fontWeight="700" textAnchor="middle" className="fill-slate-500 dark:fill-slate-400" letterSpacing="0.02em">
+      {label.toUpperCase()}
+    </text>
+  );
+}
+
+// Y-axis title, rotated and centered along the plot's vertical span. Pass
+// `side: "right"` for a secondary/right-hand axis.
+function YAxisTitle({
+  label,
+  side = "left",
+  padT = PAD_T,
+  plotHeight = plotH,
+  color,
+}: {
+  label: string;
+  side?: "left" | "right";
+  padT?: number;
+  plotHeight?: number;
+  color?: string;
+}) {
+  const x = side === "left" ? 16 : W - 16;
+  const y = padT + plotHeight / 2;
+  return (
+    <text
+      x={x}
+      y={y}
+      fontSize="11"
+      fontWeight="700"
+      textAnchor="middle"
+      transform={`rotate(${side === "left" ? -90 : 90} ${x} ${y})`}
+      letterSpacing="0.02em"
+      fill={color}
+      className={color ? undefined : "fill-slate-500 dark:fill-slate-400"}
+    >
+      {label.toUpperCase()}
+    </text>
+  );
 }
 
 function EmptyState({ height = 280 }: { height?: number }) {
@@ -82,17 +144,25 @@ function Legend({ items, y = 14 }: { items: { label: string; color: string }[]; 
 function FinancialPerformanceChart({ months }: { months: MonthRow[] }) {
   if (months.length === 0) return <EmptyState />;
 
-  const maxVal = niceMax(Math.max(...months.map((m) => m.revenue), ...months.map((m) => m.marginValue), 1));
-  const yFor = (v: number) => PAD_T + plotH - (v / maxVal) * plotH;
-  const yTicks = [0, 0.25, 0.5, 0.75, 1].map((f) => f * maxVal);
+  // Margin can go negative (a month's internal cost exceeding its revenue)
+  // — the axis has to extend below zero for that, not just clip it, or a
+  // loss month would silently render off the bottom of the plot area.
+  const values = months.flatMap((m) => [m.revenue, m.marginValue]);
+  const maxVal = niceMax(Math.max(...values, 1));
+  const minRaw = Math.min(0, ...values);
+  const minVal = minRaw < 0 ? -niceMax(-minRaw) : 0;
+  const range = maxVal - minVal || 1;
+  const yFor = (v: number) => PAD_T + plotH - ((v - minVal) / range) * plotH;
+  const yTicks = [0, 0.25, 0.5, 0.75, 1].map((f) => minVal + f * range);
+  const hasNegative = minVal < 0;
 
   const linePath = (field: "revenue" | "marginValue") =>
     months.map((m, i) => `${i === 0 ? "M" : "L"} ${xFor(i, months.length).toFixed(1)} ${yFor(m[field]).toFixed(1)}`).join(" ");
   const areaPath = (field: "revenue" | "marginValue") =>
-    `${linePath(field)} L ${xFor(months.length - 1, months.length).toFixed(1)} ${(PAD_T + plotH).toFixed(1)} L ${xFor(0, months.length).toFixed(1)} ${(PAD_T + plotH).toFixed(1)} Z`;
+    `${linePath(field)} L ${xFor(months.length - 1, months.length).toFixed(1)} ${yFor(0).toFixed(1)} L ${xFor(0, months.length).toFixed(1)} ${yFor(0).toFixed(1)} Z`;
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-[280px]">
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-[300px]">
       <defs>
         <linearGradient id="revenueAreaGrad" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="#4f46e5" stopOpacity="0.16" />
@@ -114,7 +184,7 @@ function FinancialPerformanceChart({ months }: { months: MonthRow[] }) {
         return (
           <g key={t}>
             <line x1={PAD_L} y1={y} x2={W - PAD_R} y2={y} stroke="currentColor" className="text-slate-100 dark:text-slate-800" strokeWidth="1" />
-            <text x={PAD_L - 8} y={y + 3} fontSize="10" textAnchor="end" className="fill-slate-400 dark:fill-slate-500">
+            <text x={PAD_L - 8} y={y + 3} fontSize="10" textAnchor="end" fill="#4f46e5">
               {money(t)}
             </text>
           </g>
@@ -125,6 +195,11 @@ function FinancialPerformanceChart({ months }: { months: MonthRow[] }) {
           {m.label}
         </text>
       ))}
+      <XAxisTitle label="Month" />
+      <YAxisTitle label="Financial Value (₹)" color="#4f46e5" />
+      {hasNegative && (
+        <line x1={PAD_L} y1={yFor(0)} x2={W - PAD_R} y2={yFor(0)} stroke="currentColor" className="text-slate-300 dark:text-slate-600" strokeWidth="1.5" />
+      )}
       <path d={areaPath("revenue")} fill="url(#revenueAreaGrad)" stroke="none" />
       <path d={areaPath("marginValue")} fill="url(#marginAreaGrad)" stroke="none" />
       <path d={linePath("revenue")} fill="none" stroke="#4f46e5" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -154,11 +229,11 @@ function FinancialPerformanceChart({ months }: { months: MonthRow[] }) {
 function OnboardingEconomicsChart({ months }: { months: MonthRow[] }) {
   if (months.length === 0) return <EmptyState />;
 
-  const maxCount = niceMax(Math.max(...months.map((m) => m.creatorsOnboarded), 1));
+  const countAxis = integerAxis(Math.max(...months.map((m) => m.creatorsOnboarded), 1));
+  const maxCount = countAxis.max;
   const maxCost = niceMax(Math.max(...months.map((m) => m.avgCostPerCreator), 1));
   const yForCount = (v: number) => PAD_T + plotH - (v / maxCount) * plotH;
   const yForCost = (v: number) => PAD_T + plotH - (v / maxCost) * plotH;
-  const countTicks = [0, 0.25, 0.5, 0.75, 1].map((f) => f * maxCount);
   const costTicks = [0, 0.25, 0.5, 0.75, 1].map((f) => f * maxCost);
 
   const bandW = plotW / months.length;
@@ -170,7 +245,7 @@ function OnboardingEconomicsChart({ months }: { months: MonthRow[] }) {
     .join(" ");
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-[280px]">
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-[300px]">
       <defs>
         <linearGradient id="onboardingBarGrad" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="#e879f9" />
@@ -183,13 +258,13 @@ function OnboardingEconomicsChart({ months }: { months: MonthRow[] }) {
           { label: "Avg Cost / Creator", color: "#f59e0b" },
         ]}
       />
-      {countTicks.map((t, i) => {
-        const y = PAD_T + plotH - (i * plotH) / (countTicks.length - 1);
+      {countAxis.ticks.map((t) => {
+        const y = yForCount(t);
         return (
           <g key={`l${t}`}>
             <line x1={PAD_L} y1={y} x2={W - PAD_R} y2={y} stroke="currentColor" className="text-slate-100 dark:text-slate-800" strokeWidth="1" />
             <text x={PAD_L - 10} y={y + 3} fontSize="10" textAnchor="end" fill="#c026d3">
-              {Math.round(t)}
+              {t}
             </text>
           </g>
         );
@@ -207,6 +282,9 @@ function OnboardingEconomicsChart({ months }: { months: MonthRow[] }) {
           {m.label}
         </text>
       ))}
+      <XAxisTitle label="Month" />
+      <YAxisTitle label="Creators Onboarded" color="#c026d3" />
+      <YAxisTitle label="Avg Cost / Creator (₹)" side="right" color="#d97706" />
       {months.map((m, i) => {
         const topY = yForCount(m.creatorsOnboarded);
         const barH = Math.max(0, PAD_T + plotH - topY);
@@ -264,13 +342,13 @@ function ClientRevenueStackChart({ rows }: { rows: RevenueDataRow[] }) {
     return { brands, monthKeys, dataByBrand: byBrand, totals };
   }, [rows]);
 
-  if (brands.length === 0) return <EmptyState height={340} />;
+  if (brands.length === 0) return <EmptyState height={360} />;
 
-  const H3 = 320;
-  const PAD_L3 = 64;
+  const H3 = 360;
+  const PAD_L3 = 78;
   const PAD_R3 = 24;
   const PAD_T3 = 28;
-  const PAD_B3 = 30;
+  const PAD_B3 = 48;
   const plotH3 = H3 - PAD_T3 - PAD_B3;
   const plotW3 = W - PAD_L3 - PAD_R3;
   const maxTotal = niceMax(Math.max(...Array.from(totals.values()), 1));
@@ -281,13 +359,13 @@ function ClientRevenueStackChart({ rows }: { rows: RevenueDataRow[] }) {
 
   return (
     <div className="space-y-3">
-      <svg viewBox={`0 0 ${W} ${H3}`} className="w-full h-[320px]">
+      <svg viewBox={`0 0 ${W} ${H3}`} className="w-full h-[360px]">
         {yTicks.map((t, i) => {
           const y = PAD_T3 + plotH3 - (i * plotH3) / (yTicks.length - 1);
           return (
             <g key={t}>
               <line x1={PAD_L3} y1={y} x2={W - PAD_R3} y2={y} stroke="currentColor" className="text-slate-100 dark:text-slate-800" strokeWidth="1" />
-              <text x={PAD_L3 - 8} y={y + 3} fontSize="10" textAnchor="end" className="fill-slate-400 dark:fill-slate-500">
+              <text x={PAD_L3 - 8} y={y + 3} fontSize="10" textAnchor="end" fill="#4f46e5">
                 {money(t)}
               </text>
             </g>
@@ -295,12 +373,19 @@ function ClientRevenueStackChart({ rows }: { rows: RevenueDataRow[] }) {
         })}
         <defs>
           {brands.map((brand, bi) => {
+            // Round only the top corners, keep the bottom square — the bar
+            // sits flush on the zero baseline, so rounding the bottom
+            // corners too (a plain rx on the full bounding box, as before)
+            // left visible gaps between the bar and the axis at its base.
             const x = PAD_L3 + bi * bandW + (bandW - barW) / 2;
             const total = totals.get(brand) ?? 0;
             const topY = yFor(total);
+            const baseY = PAD_T3 + plotH3;
+            const r = Math.min(7, barW / 2, Math.max(0, baseY - topY));
+            const clipPathD = `M ${x} ${baseY} L ${x} ${topY + r} Q ${x} ${topY} ${x + r} ${topY} L ${x + barW - r} ${topY} Q ${x + barW} ${topY} ${x + barW} ${topY + r} L ${x + barW} ${baseY} Z`;
             return (
               <clipPath id={`stack-clip-${bi}`} key={brand}>
-                <rect x={x} y={topY} width={barW} height={Math.max(0, PAD_T3 + plotH3 - topY)} rx="7" />
+                <path d={clipPathD} />
               </clipPath>
             );
           })}
@@ -343,6 +428,8 @@ function ClientRevenueStackChart({ rows }: { rows: RevenueDataRow[] }) {
             </g>
           );
         })}
+        <XAxisTitle label="Client" width={W} padB={PAD_B3} height={H3} />
+        <YAxisTitle label="Revenue (₹)" padT={PAD_T3} plotHeight={plotH3} color="#4f46e5" />
       </svg>
       <div className="flex flex-wrap gap-x-4 gap-y-1.5 px-2">
         {monthKeys.map((mk, i) => (
