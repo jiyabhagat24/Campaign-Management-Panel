@@ -18,13 +18,17 @@ const config: Config = {
         // rose/blue (danger/info) plus the YouTube/Instagram brand chips
         // are untouched by design.
         slate: {
-          50: "#F3F1FA", // Pale lavender — page background
-          100: "#EDE9F9", // Soft lavender tint — subtle card/badge bg
-          200: "#DCD6EF", // Lavender border — card borders
-          300: "#C7BFE0",
-          400: "#9C93B8", // Lavender-grey — secondary/meta text
-          500: "#8478A3",
-          600: "#5B4E93", // Muted violet — stage/status label text
+          // 50-600 are light mode's backgrounds/borders/secondary text — was
+          // a pale lavender tint, swapped for a warm off-white/beige (same
+          // hue held constant across the ramp the way the old lavender was,
+          // just a different hue) so the page reads as beige, not purple.
+          50: "#FAF8F3", // Very light warm off-white — page background
+          100: "#F5F0E7", // Soft beige tint — subtle card/badge bg
+          200: "#E9E1D2", // Beige border — card borders
+          300: "#D6C9B0",
+          400: "#B3A488", // Warm taupe — secondary/meta text
+          500: "#93876C",
+          600: "#6E6350", // Muted brown — stage/status label text
           // 700-950 are dark mode's actual surface/border/text colors (cards,
           // the sidebar shell, borders, and — via text-slate-900 — light-mode
           // heading text too). These used to carry the same "Deep Indigo"
@@ -75,7 +79,7 @@ const config: Config = {
         // primary-text color (always paired with dark:text-white), and used
         // to carry the same purple tint.
         ink: "#141414",
-        panel: "#F3F1FA",
+        panel: "#FAF8F3", // matches the new slate-50 light-mode page background
         // Mirrors the indigo scale above — same gold accent, referenced
         // directly as bg-brand/text-brand in a handful of components.
         brand: {
