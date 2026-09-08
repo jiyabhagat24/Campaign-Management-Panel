@@ -76,6 +76,16 @@ export async function createCampaign(formData: FormData) {
   const budgetPerCreatorMin = Number(formData.get("budgetPerCreatorMin") ?? 0) || null;
   const budgetPerCreatorMax = Number(formData.get("budgetPerCreatorMax") ?? 0) || null;
 
+  // "Came in" and a target go-live deadline — both optional, plain <input
+  // type="date"> values (YYYY-MM-DD). goLiveDeadline set here is a target
+  // only: onboardCreator (further down) will tighten it automatically to
+  // whichever's sooner once a creator actually gets onboarded, same as
+  // before this field existed.
+  const startDateRaw = String(formData.get("startDate") ?? "").trim();
+  const startDate = startDateRaw ? new Date(startDateRaw) : null;
+  const goLiveDeadlineRaw = String(formData.get("goLiveDeadline") ?? "").trim();
+  const goLiveDeadline = goLiveDeadlineRaw ? new Date(goLiveDeadlineRaw) : null;
+
   // Language-wise requirement rows come in as parallel arrays (language[i]
   // pairs with creatorsRequired[i]) from LanguageRequirementRows — drop any
   // row where the language name is blank or the count isn't a positive
@@ -102,6 +112,8 @@ export async function createCampaign(formData: FormData) {
       budgetPerCreatorMin: budgetPerCreatorMin ?? undefined,
       budgetPerCreatorMax: budgetPerCreatorMax ?? undefined,
       totalCreatorsRequired: totalCreatorsRequired ?? undefined,
+      startDate: startDate ?? undefined,
+      goLiveDeadline: goLiveDeadline ?? undefined,
       languageRequirements: languageRequirements.length
         ? { create: languageRequirements }
         : undefined,
