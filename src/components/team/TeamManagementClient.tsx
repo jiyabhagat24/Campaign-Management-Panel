@@ -246,7 +246,7 @@ export default function TeamManagementClient({
                   </td>
                   <td className="px-4 py-3 text-slate-500 dark:text-slate-400">{u.email}</td>
                   <td className="px-4 py-3">
-                    <RoleSelect value={u.role} onChange={(role) => handleRoleChange(u.id, role)} disabled={pendingId === u.id} />
+                    <RoleSelect value={u.role} onChange={(role) => handleRoleChange(u.id, role)} />
                     {rowError[u.id] && <p className="mt-1 max-w-[220px] text-[10px] font-medium text-rose-600 dark:text-rose-400">{rowError[u.id]}</p>}
                   </td>
                   <td className="px-4 py-3 text-xs text-slate-400 dark:text-slate-500">

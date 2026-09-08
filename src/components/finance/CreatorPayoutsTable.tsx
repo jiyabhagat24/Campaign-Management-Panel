@@ -33,11 +33,10 @@ const paymentTone: Record<string, string> = {
 // Yes/No dropdown backed by a real boolean field — mirrors the sheet's own
 // "Yes or No dropdown" columns (Invoice Raised, Invoice Received).
 function YesNoSelect({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
-  const [pending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
   return (
     <select
       value={value ? "yes" : "no"}
-      disabled={pending}
       onChange={(e) => startTransition(() => onChange(e.target.value === "yes"))}
       className={`rounded-lg border px-2 py-1 text-xs font-bold outline-none disabled:opacity-50 ${
         value

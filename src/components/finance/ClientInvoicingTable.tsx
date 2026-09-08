@@ -19,7 +19,7 @@ const money = (n: number | null) => (n ? `â‚¹${n.toLocaleString("en-IN")}` : "â€
 
 function InvoicedRow({ row }: { row: ClientInvoicingRow }) {
   const [invoiced, setInvoiced] = useState(row.invoiced);
-  const [pending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
 
   return (
     <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
@@ -35,7 +35,6 @@ function InvoicedRow({ row }: { row: ClientInvoicingRow }) {
       <td className="border-b border-slate-100 px-4 py-3 text-left dark:border-slate-800">
         <select
           value={invoiced ? "yes" : "no"}
-          disabled={pending}
           onChange={(e) => {
             const v = e.target.value === "yes";
             setInvoiced(v);
