@@ -30,7 +30,10 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
       },
       clientAccess: { include: { client: { select: { id: true, name: true } } }, orderBy: { createdAt: "asc" } },
       teamMembers: { include: { user: { select: { id: true, name: true } } }, orderBy: { createdAt: "asc" } },
-      languageRequirements: { orderBy: { createdAt: "asc" } },
+      platformBriefs: {
+        include: { languageRequirements: { orderBy: { createdAt: "asc" } } },
+        orderBy: { createdAt: "asc" },
+      },
     },
   });
   if (!campaign) notFound();
@@ -92,16 +95,11 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
             brand: campaign.brand,
             brandLogoUrl: campaign.brandLogoUrl,
             product: campaign.product,
-            category: campaign.category,
-            platformMix: campaign.platformMix,
-            deliverables: campaign.deliverables,
-            budgetPerCreatorMin: campaign.budgetPerCreatorMin,
-            budgetPerCreatorMax: campaign.budgetPerCreatorMax,
             budgetQuoted: campaign.budgetQuoted,
             startDate: campaign.startDate ? campaign.startDate.toISOString() : null,
             goLiveDeadline: campaign.goLiveDeadline ? campaign.goLiveDeadline.toISOString() : null,
             brief: campaign.brief,
-            languageRequirements: campaign.languageRequirements,
+            platformBriefs: campaign.platformBriefs,
           }}
           canEdit={canCreateCampaign(user.role)}
           breached={breached}

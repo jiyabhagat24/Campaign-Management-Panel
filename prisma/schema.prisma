@@ -143,21 +143,20 @@ model Campaign {
   goLiveDeadline DateTime? // computed default: onboard date + slaOnboardToGoLiveDays
 
   // ---------- Structured brief (Atomberg-style brief format) ----------
-  // Mirrors how briefs actually arrive from brand teams: Product,
-  // Deliverables (free text, e.g. "1 Collab Reel + 1 Month Usage Rights"),
-  // Category, a per-creator budget range/cap, and a language-wise creator
-  // breakdown (languageRequirements below). All optional — older campaigns
-  // and the plain free-text `brief` field above still work without these.
-  product              String?
-  deliverables         String? // e.g. "YT Dedicated Video + YT Short"
-  category             String? // e.g. "Lifestyle / Comic", "Tech"
-  budgetPerCreatorMin  Float?
-  budgetPerCreatorMax  Float? // set alone (min left empty) for a "X max" style budget
-  // Sum of languageRequirements' creatorsRequired at creation time — stored
-  // so the campaigns list/dashboard can show it without joining that table
-  // on every row. Not kept in sync if requirements are edited later (no
-  // edit UI yet), same "computed once" tradeoff as other snapshot fields.
-  totalCreatorsRequired Int?
+  // v1 of this — Product only. Deliverables/Category/budget-per-creator/
+  // language breakdown now live per-platform on platformBriefs below, since
+  // one campaign (e.g. "Atomberg") commonly runs a completely different
+  // brief per platform (an Instagram brief and a separate YouTube brief,
+  // different category, deliverables, budget, and languages each). These
+  // four fields are kept only so the one campaign created under the old
+  // single-brief v1 shape still has its data; new campaigns don't write to
+  // them — see CampaignPlatformBrief instead.
+  product                     String?
+  deliverables                String? // deprecated — see CampaignPlatformBrief.deliverables
+  category                    String? // deprecated — see CampaignPlatformBrief.category
+  budgetPerCreatorMin         Float? // deprecated — see CampaignPlatformBrief.budgetPerCreatorMin
+  budgetPerCreatorMax         Float? // deprecated — see CampaignPlatformBrief.budgetPerCreatorMax
+  totalCreatorsRequired       Int? // deprecated — see CampaignPlatformBrief.totalCreatorsRequired
 
   // ---------- Finance (manual entry, phase 1) ----------
   // No invoicing/payment system exists yet, so these four numbers — pulled
@@ -201,7 +200,8 @@ model Campaign {
   activity             ActivityLog[]
   clientAccess         CampaignClientAccess[]
   teamMembers          CampaignTeamMember[]
-  languageRequirements CampaignLanguageRequirement[]
+  languageRequirements CampaignLanguageRequirement[] // deprecated — see platformBriefs
+  platformBriefs       CampaignPlatformBrief[]
 
   // status/brand/createdAt all get filtered on directly (dashboard filter
   // bar, campaign directory) without going through a relation, so unlike
@@ -213,10 +213,10 @@ model Campaign {
   @@index([createdAt])
 }
 
-// One row per language named in the brief's "Language-wise Requirement"
-// list (e.g. Hindi – 4 Creators, Tamil – 3 Creators...). Kept as its own
-// table rather than a JSON blob so it can be queried/summed directly if
-// needed later, same pattern as CampaignTeamMember.
+// Deprecated — the v1 single-brief-per-campaign shape. Superseded by
+// CampaignPlatformLanguageRequirement (scoped to a CampaignPlatformBrief
+// instead of directly to a Campaign), left in place only so the one
+// campaign created before platform-scoped briefs existed keeps its data.
 model CampaignLanguageRequirement {
   id                String   @id @default(cuid())
   campaignId        String
@@ -226,6 +226,47 @@ model CampaignLanguageRequirement {
   createdAt         DateTime @default(now())
 
   @@index([campaignId])
+}
+
+// One brief per platform within a campaign — e.g. an "Atomberg" campaign
+// can have a separate Instagram brief (Lifestyle/Comic category, 1 Collab
+// Reel + 1 MUR, ₹60-70K/creator, 20 creators across 6 languages) and a
+// separate YouTube brief (Tech category, Dedicated Video + Short, ₹80K
+// max/creator, 5 languages) at the same time. Which platforms a campaign
+// runs on is just "which CampaignPlatformBrief rows exist for it" — ticking
+// a platform on the New Campaign form (or the edit form) adds one of these;
+// unticking removes it.
+model CampaignPlatformBrief {
+  id                     String   @id @default(cuid())
+  campaignId             String
+  campaign               Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  platform               String // "Instagram" | "YouTube" | ... — free text so new platforms don't need a migration
+  category               String? // e.g. "Lifestyle / Comic", "Tech"
+  deliverables           String? // e.g. "1 Collab Reel + 1 Month Usage Rights"
+  budgetPerCreatorMin    Float?
+  budgetPerCreatorMax    Float? // set alone (min left empty) for a "X max" style budget
+  // Sum of languageRequirements' creatorsRequired at save time — stored so
+  // list views can show it without joining, same "computed once, refreshed
+  // on every save" tradeoff as other snapshot fields on Campaign.
+  totalCreatorsRequired  Int?
+  createdAt              DateTime @default(now())
+
+  languageRequirements CampaignPlatformLanguageRequirement[]
+
+  @@index([campaignId])
+}
+
+// One row per language named in a platform brief's "Language-wise
+// Requirement" list (e.g. Hindi – 4 Creators, Tamil – 3 Creators...).
+model CampaignPlatformLanguageRequirement {
+  id                String                @id @default(cuid())
+  platformBriefId   String
+  platformBrief     CampaignPlatformBrief @relation(fields: [platformBriefId], references: [id], onDelete: Cascade)
+  language          String
+  creatorsRequired  Int
+  createdAt         DateTime @default(now())
+
+  @@index([platformBriefId])
 }
 
 // ---------- Creator (cost lives here — brief slide 06 & 07) ----------

@@ -2,9 +2,20 @@
 
 import { useState } from "react";
 import { updateCampaignDetails } from "@/lib/actions";
-import LanguageRequirementRows from "./LanguageRequirementRows";
+import PlatformBriefsEditor, { type PlatformBriefValue } from "./PlatformBriefsEditor";
 import BrandAvatar from "./BrandAvatar";
 import { Pencil, Calendar, Clock, IndianRupee, AlertTriangle } from "lucide-react";
+
+export type CampaignHeaderPlatformBrief = {
+  id: string;
+  platform: string;
+  category: string | null;
+  deliverables: string | null;
+  budgetPerCreatorMin: number | null;
+  budgetPerCreatorMax: number | null;
+  totalCreatorsRequired: number | null;
+  languageRequirements: { id: string; language: string; creatorsRequired: number }[];
+};
 
 export type CampaignHeaderData = {
   id: string;
@@ -12,27 +23,37 @@ export type CampaignHeaderData = {
   brand: string;
   brandLogoUrl: string | null;
   product: string | null;
-  category: string | null;
-  platformMix: string | null;
-  deliverables: string | null;
-  budgetPerCreatorMin: number | null;
-  budgetPerCreatorMax: number | null;
   budgetQuoted: number | null;
   startDate: string | null; // ISO
   goLiveDeadline: string | null; // ISO
   brief: string | null;
-  languageRequirements: { id: string; language: string; creatorsRequired: number }[];
+  platformBriefs: CampaignHeaderPlatformBrief[];
 };
 
 const toDateInputValue = (iso: string | null) => (iso ? iso.slice(0, 10) : "");
 
-// Everything shown in the campaign page's hero card — name, brand, the
-// structured brief chips, free-text brief, language breakdown, dates, and
-// budgets — behind a single "Edit campaign" toggle, rather than a separate
-// click-to-edit per field. On save, the page reloads so the SLA
-// breached/at-risk badges (computed server-side from the new deadline) and
-// everything else that reads from `campaign` stays in sync without having
-// to duplicate that logic here.
+const toEditableBriefs = (briefs: CampaignHeaderPlatformBrief[]): PlatformBriefValue[] =>
+  briefs.map((b) => ({
+    platform: b.platform,
+    category: b.category ?? "",
+    deliverables: b.deliverables ?? "",
+    budgetPerCreatorMin: b.budgetPerCreatorMin?.toString() ?? "",
+    budgetPerCreatorMax: b.budgetPerCreatorMax?.toString() ?? "",
+    languageRequirements:
+      b.languageRequirements.length > 0
+        ? b.languageRequirements.map((r) => ({ language: r.language, creatorsRequired: r.creatorsRequired.toString() }))
+        : [
+            { language: "", creatorsRequired: "" },
+            { language: "", creatorsRequired: "" },
+          ],
+  }));
+
+// Everything shown in the campaign page's hero card — name, brand, product,
+// dates, final budget, free-text brief, and one brief block per platform
+// (category / deliverables / budget-per-creator / language breakdown) —
+// behind a single "Edit campaign" toggle. On save, the page reloads so the
+// SLA breached/at-risk badges (computed server-side from the new deadline)
+// stay in sync without duplicating that logic here.
 export default function CampaignHeaderEditor({
   campaign,
   canEdit,
@@ -51,15 +72,11 @@ export default function CampaignHeaderEditor({
   const [name, setName] = useState(campaign.name);
   const [brand, setBrand] = useState(campaign.brand);
   const [product, setProduct] = useState(campaign.product ?? "");
-  const [category, setCategory] = useState(campaign.category ?? "");
-  const [platformMix, setPlatformMix] = useState(campaign.platformMix ?? "");
-  const [deliverables, setDeliverables] = useState(campaign.deliverables ?? "");
-  const [budgetPerCreatorMin, setBudgetPerCreatorMin] = useState(campaign.budgetPerCreatorMin?.toString() ?? "");
-  const [budgetPerCreatorMax, setBudgetPerCreatorMax] = useState(campaign.budgetPerCreatorMax?.toString() ?? "");
   const [budgetQuoted, setBudgetQuoted] = useState(campaign.budgetQuoted?.toString() ?? "");
   const [startDate, setStartDate] = useState(toDateInputValue(campaign.startDate));
   const [goLiveDeadline, setGoLiveDeadline] = useState(toDateInputValue(campaign.goLiveDeadline));
   const [brief, setBrief] = useState(campaign.brief ?? "");
+  const [platformBriefs, setPlatformBriefs] = useState<PlatformBriefValue[]>(() => toEditableBriefs(campaign.platformBriefs));
 
   if (!editing) {
     return (
@@ -81,6 +98,11 @@ export default function CampaignHeaderEditor({
                   <AlertTriangle className="h-3 w-3" /> SLA At Risk
                 </span>
               )}
+              {campaign.product && (
+                <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                  {campaign.product}
+                </span>
+              )}
               {canEdit && (
                 <button
                   type="button"
@@ -95,56 +117,56 @@ export default function CampaignHeaderEditor({
 
             <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">{campaign.name}</h1>
 
-            {(campaign.product || campaign.category || campaign.platformMix || campaign.deliverables || campaign.budgetPerCreatorMin || campaign.budgetPerCreatorMax) && (
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {campaign.product && (
-                  <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                    {campaign.product}
-                  </span>
-                )}
-                {campaign.category && (
-                  <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                    {campaign.category}
-                  </span>
-                )}
-                {campaign.platformMix && (
-                  <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                    {campaign.platformMix}
-                  </span>
-                )}
-                {campaign.deliverables && (
-                  <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                    {campaign.deliverables}
-                  </span>
-                )}
-                {(campaign.budgetPerCreatorMin || campaign.budgetPerCreatorMax) && (
-                  <span className="rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[11px] font-bold text-indigo-700 dark:border-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-300">
-                    ₹{campaign.budgetPerCreatorMin ? `${campaign.budgetPerCreatorMin.toLocaleString("en-IN")}–` : ""}
-                    {campaign.budgetPerCreatorMax ? campaign.budgetPerCreatorMax.toLocaleString("en-IN") : "max"} / creator
-                  </span>
-                )}
-              </div>
-            )}
-
             {campaign.brief && (
               <p className="mt-2 max-w-2xl whitespace-pre-wrap text-sm leading-relaxed text-slate-600 dark:text-slate-400">
                 {campaign.brief}
               </p>
             )}
 
-            {campaign.languageRequirements.length > 0 && (
-              <div className="mt-3 flex flex-wrap items-center gap-1.5">
-                {campaign.languageRequirements.map((r) => (
-                  <span
-                    key={r.id}
-                    className="rounded-lg bg-violet-50 border border-violet-100 px-2 py-1 text-[11px] font-semibold text-violet-700 dark:bg-violet-950/50 dark:border-violet-800/80 dark:text-violet-300"
-                  >
-                    {r.language} · {r.creatorsRequired}
-                  </span>
+            {/* One block per platform brief — Instagram and YouTube (etc.)
+                can have completely different category/deliverables/budget/
+                languages on the same campaign. */}
+            {campaign.platformBriefs.length > 0 && (
+              <div className="mt-3 space-y-2.5">
+                {campaign.platformBriefs.map((b) => (
+                  <div key={b.id} className="rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-800/40">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="rounded-full bg-indigo-600 px-2 py-0.5 text-[11px] font-bold text-white">{b.platform}</span>
+                      {b.category && (
+                        <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+                          {b.category}
+                        </span>
+                      )}
+                      {b.deliverables && (
+                        <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+                          {b.deliverables}
+                        </span>
+                      )}
+                      {(b.budgetPerCreatorMin || b.budgetPerCreatorMax) && (
+                        <span className="rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[11px] font-bold text-indigo-700 dark:border-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-300">
+                          ₹{b.budgetPerCreatorMin ? `${b.budgetPerCreatorMin.toLocaleString("en-IN")}–` : ""}
+                          {b.budgetPerCreatorMax ? b.budgetPerCreatorMax.toLocaleString("en-IN") : "max"} / creator
+                        </span>
+                      )}
+                    </div>
+
+                    {b.languageRequirements.length > 0 && (
+                      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                        {b.languageRequirements.map((r) => (
+                          <span
+                            key={r.id}
+                            className="rounded-lg bg-violet-50 border border-violet-100 px-2 py-1 text-[11px] font-semibold text-violet-700 dark:bg-violet-950/50 dark:border-violet-800/80 dark:text-violet-300"
+                          >
+                            {r.language} · {r.creatorsRequired}
+                          </span>
+                        ))}
+                        <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                          Total: {b.totalCreatorsRequired ?? b.languageRequirements.reduce((s, r) => s + r.creatorsRequired, 0)} creators
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 ))}
-                <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">
-                  Total: {campaign.languageRequirements.reduce((s, r) => s + r.creatorsRequired, 0)} creators
-                </span>
               </div>
             )}
           </div>
@@ -193,29 +215,15 @@ export default function CampaignHeaderEditor({
         setSaving(true);
         setError(null);
         try {
-          const form = e.currentTarget;
-          const languages = Array.from(form.querySelectorAll<HTMLInputElement>('input[name="language"]')).map((el) => el.value);
-          const counts = Array.from(form.querySelectorAll<HTMLInputElement>('input[name="creatorsRequired"]')).map((el) =>
-            parseInt(el.value, 10)
-          );
-          const languageRequirements = languages
-            .map((language, i) => ({ language: language.trim(), creatorsRequired: counts[i] }))
-            .filter((r) => r.language && Number.isFinite(r.creatorsRequired) && r.creatorsRequired > 0);
-
           await updateCampaignDetails(campaign.id, {
             name,
             brand,
             product: product || null,
-            category: category || null,
-            platformMix: platformMix || null,
-            deliverables: deliverables || null,
-            budgetPerCreatorMin: budgetPerCreatorMin ? Number(budgetPerCreatorMin) : null,
-            budgetPerCreatorMax: budgetPerCreatorMax ? Number(budgetPerCreatorMax) : null,
             budgetQuoted: budgetQuoted ? Number(budgetQuoted) : null,
             startDate: startDate || null,
             goLiveDeadline: goLiveDeadline || null,
             brief: brief || null,
-            languageRequirements,
+            platformBriefs,
           });
           window.location.reload();
         } catch (err) {
@@ -242,32 +250,6 @@ export default function CampaignHeaderEditor({
           <input value={product} onChange={(e) => setProduct(e.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200" />
         </div>
         <div>
-          <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Category</label>
-          <input value={category} onChange={(e) => setCategory(e.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200" />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Platform</label>
-          <input value={platformMix} onChange={(e) => setPlatformMix(e.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200" />
-        </div>
-        <div>
-          <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Deliverables</label>
-          <input value={deliverables} onChange={(e) => setDeliverables(e.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200" />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-3 gap-4">
-        <div>
-          <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Budget/creator — min (₹)</label>
-          <input value={budgetPerCreatorMin} onChange={(e) => setBudgetPerCreatorMin(e.target.value)} type="number" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200" />
-        </div>
-        <div>
-          <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Budget/creator — max (₹)</label>
-          <input value={budgetPerCreatorMax} onChange={(e) => setBudgetPerCreatorMax(e.target.value)} type="number" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200" />
-        </div>
-        <div>
           <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Final cost / total budget (₹)</label>
           <input value={budgetQuoted} onChange={(e) => setBudgetQuoted(e.target.value)} type="number" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200" />
         </div>
@@ -284,7 +266,7 @@ export default function CampaignHeaderEditor({
         </div>
       </div>
 
-      <LanguageRequirementRows initial={campaign.languageRequirements} />
+      <PlatformBriefsEditor value={platformBriefs} onChange={setPlatformBriefs} />
 
       <div>
         <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Brief</label>

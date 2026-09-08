@@ -58,6 +58,85 @@ function authorFields(user: { id: string; role: Role }) {
 
 // ---------- Campaign ----------
 
+// Shape PlatformBriefsEditor (New Campaign form / CampaignHeaderEditor)
+// sends per platform — budget/creator-count fields arrive as strings since
+// they come off plain <input>s.
+type RawPlatformBrief = {
+  platform: string;
+  category: string;
+  deliverables: string;
+  budgetPerCreatorMin: string;
+  budgetPerCreatorMax: string;
+  languageRequirements: { language: string; creatorsRequired: string }[];
+};
+
+type ParsedPlatformBrief = {
+  platform: string;
+  category: string | null;
+  deliverables: string | null;
+  budgetPerCreatorMin: number | null;
+  budgetPerCreatorMax: number | null;
+  totalCreatorsRequired: number | null;
+  languageRequirements: { language: string; creatorsRequired: number }[];
+};
+
+// Parses the hidden platformBriefsJson field into clean data, dropping any
+// platform with no name and any language row that's blank or non-positive
+// (an empty trailing row the user never filled in). Shared by createCampaign
+// (reads it off FormData) and updateCampaignDetails (reads it off a plain
+// object, same shape).
+function parsePlatformBriefsJson(raw: string): ParsedPlatformBrief[] {
+  let parsed: RawPlatformBrief[];
+  try {
+    parsed = JSON.parse(raw || "[]");
+  } catch {
+    parsed = [];
+  }
+  return sanitizePlatformBriefs(parsed);
+}
+
+// Shared by parsePlatformBriefsJson (createCampaign, off FormData) and
+// updateCampaignDetails (called directly with a plain array — already a
+// client component, no FormData/JSON round-trip needed).
+function sanitizePlatformBriefs(parsed: RawPlatformBrief[]): ParsedPlatformBrief[] {
+  if (!Array.isArray(parsed)) return [];
+
+  return parsed
+    .filter((p) => p && typeof p.platform === "string" && p.platform.trim())
+    .map((p) => {
+      const languageRequirements = (Array.isArray(p.languageRequirements) ? p.languageRequirements : [])
+        .map((r) => ({
+          language: String(r?.language ?? "").trim(),
+          creatorsRequired: parseInt(String(r?.creatorsRequired ?? ""), 10),
+        }))
+        .filter((r) => r.language && Number.isFinite(r.creatorsRequired) && r.creatorsRequired > 0);
+
+      return {
+        platform: p.platform.trim(),
+        category: String(p.category ?? "").trim() || null,
+        deliverables: String(p.deliverables ?? "").trim() || null,
+        budgetPerCreatorMin: Number(p.budgetPerCreatorMin) || null,
+        budgetPerCreatorMax: Number(p.budgetPerCreatorMax) || null,
+        totalCreatorsRequired: languageRequirements.length
+          ? languageRequirements.reduce((sum, r) => sum + r.creatorsRequired, 0)
+          : null,
+        languageRequirements,
+      };
+    });
+}
+
+function toPlatformBriefCreateInput(p: ParsedPlatformBrief) {
+  return {
+    platform: p.platform,
+    category: p.category ?? undefined,
+    deliverables: p.deliverables ?? undefined,
+    budgetPerCreatorMin: p.budgetPerCreatorMin ?? undefined,
+    budgetPerCreatorMax: p.budgetPerCreatorMax ?? undefined,
+    totalCreatorsRequired: p.totalCreatorsRequired ?? undefined,
+    languageRequirements: p.languageRequirements.length ? { create: p.languageRequirements } : undefined,
+  };
+}
+
 export async function createCampaign(formData: FormData) {
   const user = await requireUser();
   if (!canCreateCampaign(user.role)) throw new Error("Only a CXO or Brand Solutions can create a campaign.");
@@ -66,15 +145,9 @@ export async function createCampaign(formData: FormData) {
   const brand = String(formData.get("brand") ?? "").trim();
   const brief = String(formData.get("brief") ?? "").trim() || null;
   const budgetQuoted = Number(formData.get("budgetQuoted") ?? 0) || null;
-  const platformMix = String(formData.get("platformMix") ?? "").trim() || null;
   if (!name || !brand) throw new Error("Name and brand are required");
 
-  // Structured brief fields (Atomberg-style brief format) — all optional.
   const product = String(formData.get("product") ?? "").trim() || null;
-  const deliverables = String(formData.get("deliverables") ?? "").trim() || null;
-  const category = String(formData.get("category") ?? "").trim() || null;
-  const budgetPerCreatorMin = Number(formData.get("budgetPerCreatorMin") ?? 0) || null;
-  const budgetPerCreatorMax = Number(formData.get("budgetPerCreatorMax") ?? 0) || null;
 
   // "Came in" and a target go-live deadline — both optional, plain <input
   // type="date"> values (YYYY-MM-DD). goLiveDeadline set here is a target
@@ -86,18 +159,14 @@ export async function createCampaign(formData: FormData) {
   const goLiveDeadlineRaw = String(formData.get("goLiveDeadline") ?? "").trim();
   const goLiveDeadline = goLiveDeadlineRaw ? new Date(goLiveDeadlineRaw) : null;
 
-  // Language-wise requirement rows come in as parallel arrays (language[i]
-  // pairs with creatorsRequired[i]) from LanguageRequirementRows — drop any
-  // row where the language name is blank or the count isn't a positive
-  // integer (an empty trailing row a user never filled in).
-  const languageNames = formData.getAll("language").map((v) => String(v).trim());
-  const languageCounts = formData.getAll("creatorsRequired").map((v) => parseInt(String(v), 10));
-  const languageRequirements = languageNames
-    .map((language, i) => ({ language, creatorsRequired: languageCounts[i] }))
-    .filter((r) => r.language && Number.isFinite(r.creatorsRequired) && r.creatorsRequired > 0);
-  const totalCreatorsRequired = languageRequirements.length
-    ? languageRequirements.reduce((sum, r) => sum + r.creatorsRequired, 0)
-    : null;
+  // One brief per ticked platform (PlatformBriefsFormField serializes its
+  // state to this hidden JSON field) — an Instagram brief and a YouTube
+  // brief on the same campaign are usually completely different (category,
+  // deliverables, budget per creator, languages), so each ticked platform
+  // gets its own CampaignPlatformBrief row. platformMix is derived from
+  // whichever platforms were ticked, for the summary badge/filters.
+  const platformBriefs = parsePlatformBriefsJson(String(formData.get("platformBriefsJson") ?? "[]"));
+  const platformMix = platformBriefs.length ? platformBriefs.map((p) => p.platform).join(", ") : null;
 
   const campaign = await prisma.campaign.create({
     data: {
@@ -107,16 +176,9 @@ export async function createCampaign(formData: FormData) {
       budgetQuoted: budgetQuoted ?? undefined,
       platformMix: platformMix ?? undefined,
       product: product ?? undefined,
-      deliverables: deliverables ?? undefined,
-      category: category ?? undefined,
-      budgetPerCreatorMin: budgetPerCreatorMin ?? undefined,
-      budgetPerCreatorMax: budgetPerCreatorMax ?? undefined,
-      totalCreatorsRequired: totalCreatorsRequired ?? undefined,
       startDate: startDate ?? undefined,
       goLiveDeadline: goLiveDeadline ?? undefined,
-      languageRequirements: languageRequirements.length
-        ? { create: languageRequirements }
-        : undefined,
+      platformBriefs: platformBriefs.length ? { create: platformBriefs.map(toPlatformBriefCreateInput) } : undefined,
       createdById: user.id,
       slaClientFeedbackHours: DEFAULT_SLA.clientFeedbackHours,
       slaScriptFromCreatorDays: DEFAULT_SLA.scriptFromCreatorDays,
@@ -202,16 +264,11 @@ export async function updateCampaignDetails(
     name: string;
     brand: string;
     product: string | null;
-    category: string | null;
-    platformMix: string | null;
-    deliverables: string | null;
-    budgetPerCreatorMin: number | null;
-    budgetPerCreatorMax: number | null;
     budgetQuoted: number | null;
     startDate: string | null; // "YYYY-MM-DD" or null
     goLiveDeadline: string | null; // "YYYY-MM-DD" or null
     brief: string | null;
-    languageRequirements: { language: string; creatorsRequired: number }[];
+    platformBriefs: RawPlatformBrief[];
   }
 ) {
   const user = await requireUser();
@@ -221,31 +278,26 @@ export async function updateCampaignDetails(
   const brand = data.brand.trim();
   if (!name || !brand) throw new Error("Name and brand are required.");
 
-  const languageRequirements = data.languageRequirements.filter(
-    (r) => r.language.trim() && Number.isFinite(r.creatorsRequired) && r.creatorsRequired > 0
-  );
-  const totalCreatorsRequired = languageRequirements.length
-    ? languageRequirements.reduce((sum, r) => sum + r.creatorsRequired, 0)
-    : null;
+  const platformBriefs = sanitizePlatformBriefs(data.platformBriefs);
+  const platformMix = platformBriefs.length ? platformBriefs.map((p) => p.platform).join(", ") : null;
 
-  await prisma.campaignLanguageRequirement.deleteMany({ where: { campaignId } });
+  // Full replace: drop every existing platform brief (cascades its
+  // language rows) and recreate from what was submitted — simplest correct
+  // behavior for an edit form where platforms/languages can be added or
+  // removed each save.
+  await prisma.campaignPlatformBrief.deleteMany({ where: { campaignId } });
   await prisma.campaign.update({
     where: { id: campaignId },
     data: {
       name,
       brand,
       product: data.product?.trim() || null,
-      category: data.category?.trim() || null,
-      platformMix: data.platformMix?.trim() || null,
-      deliverables: data.deliverables?.trim() || null,
-      budgetPerCreatorMin: data.budgetPerCreatorMin,
-      budgetPerCreatorMax: data.budgetPerCreatorMax,
+      platformMix,
       budgetQuoted: data.budgetQuoted,
       startDate: data.startDate ? new Date(data.startDate) : null,
       goLiveDeadline: data.goLiveDeadline ? new Date(data.goLiveDeadline) : null,
       brief: data.brief?.trim() || null,
-      totalCreatorsRequired,
-      languageRequirements: languageRequirements.length ? { create: languageRequirements } : undefined,
+      platformBriefs: platformBriefs.length ? { create: platformBriefs.map(toPlatformBriefCreateInput) } : undefined,
     },
   });
 
