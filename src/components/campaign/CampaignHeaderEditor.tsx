@@ -175,22 +175,11 @@ export default function CampaignHeaderEditor({
             </span>
           </div>
 
-          {campaign.budgetQuoted ? (
+          {campaign.budgetQuoted && (
             <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-xl px-3 py-2 dark:bg-indigo-950/50 dark:border-indigo-800 dark:text-indigo-300">
               <IndianRupee className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
               <span>Budget: ₹{campaign.budgetQuoted.toLocaleString("en-IN")}</span>
             </div>
-          ) : (
-            canEdit && (
-              <button
-                type="button"
-                onClick={() => setEditing(true)}
-                className="flex items-center gap-1.5 rounded-xl border border-dashed border-slate-300 px-3 py-2 text-xs font-semibold text-slate-400 hover:border-indigo-400 hover:text-indigo-600 dark:border-slate-700 dark:text-slate-500 dark:hover:border-indigo-600 dark:hover:text-indigo-400"
-              >
-                <IndianRupee className="h-3.5 w-3.5" />
-                Add final cost
-              </button>
-            )
           )}
         </div>
       </div>
