@@ -132,7 +132,7 @@ model Campaign {
   name    String
   brand   String
   brandLogoUrl String? // optional; UI falls back to a colored initial circle if unset
-  brief   String // objective, mandatories, platform mix — free text v1
+  brief   String? // objective, mandatories, platform mix — free text v1; optional, editable later via updateCampaignBrief
   status  String @default("ACTIVE") // ACTIVE | COMPLETED | ARCHIVED
   stage   String @default("BRIEF") // legacy 11-stage field, still used by /pipeline
 

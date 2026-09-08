@@ -64,10 +64,10 @@ export async function createCampaign(formData: FormData) {
 
   const name = String(formData.get("name") ?? "").trim();
   const brand = String(formData.get("brand") ?? "").trim();
-  const brief = String(formData.get("brief") ?? "").trim();
+  const brief = String(formData.get("brief") ?? "").trim() || null;
   const budgetQuoted = Number(formData.get("budgetQuoted") ?? 0) || null;
   const platformMix = String(formData.get("platformMix") ?? "").trim() || null;
-  if (!name || !brand || !brief) throw new Error("Name, brand and brief are required");
+  if (!name || !brand) throw new Error("Name and brand are required");
 
   // Structured brief fields (Atomberg-style brief format) — all optional.
   const product = String(formData.get("product") ?? "").trim() || null;
@@ -157,6 +157,23 @@ export async function updateCampaignStatus(campaignId: string, status: string) {
 
   revalidatePath("/dashboard");
   revalidatePath("/campaigns");
+  revalidatePath(`/campaigns/${campaignId}`);
+}
+
+// Brief is optional at creation (an ops person often kicks off a campaign
+// before the full brief doc is ready) — this lets whoever created it, or
+// any CXO/Brand Solutions user, fill it in or edit it afterward from the
+// campaign page itself. Same gate as who can create a campaign in the
+// first place.
+export async function updateCampaignBrief(campaignId: string, brief: string) {
+  const user = await requireUser();
+  if (!canCreateCampaign(user.role)) throw new Error("Not authorized to edit the brief.");
+
+  await prisma.campaign.update({
+    where: { id: campaignId },
+    data: { brief: brief.trim() || null },
+  });
+
   revalidatePath(`/campaigns/${campaignId}`);
 }
 

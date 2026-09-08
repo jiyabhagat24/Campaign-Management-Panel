@@ -2,7 +2,8 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { currentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { canSeeInternalCost, canViewCampaign, isClient, serializeCreatorsForClient } from "@/lib/rbac";
+import { canCreateCampaign, canSeeInternalCost, canViewCampaign, isClient, serializeCreatorsForClient } from "@/lib/rbac";
+import BriefEditor from "@/components/campaign/BriefEditor";
 import BrandAvatar from "@/components/campaign/BrandAvatar";
 import TeamRow from "@/components/campaign/TeamRow";
 import ClientRow from "@/components/campaign/ClientRow";
@@ -141,7 +142,7 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
                 </div>
               )}
 
-              {campaign.brief && <p className="mt-2 max-w-2xl text-sm text-slate-600 dark:text-slate-400 leading-relaxed">{campaign.brief}</p>}
+              <BriefEditor campaignId={campaign.id} initial={campaign.brief} canEdit={canCreateCampaign(user.role)} />
 
               {/* Language-wise requirement breakdown, e.g. "Hindi – 4",
                   "Tamil – 3" ... plus the running total. */}
