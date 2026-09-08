@@ -14,8 +14,18 @@ type Row = { key: number; language: string; count: string };
 let nextKey = 0;
 const newRow = (): Row => ({ key: nextKey++, language: "", count: "" });
 
-export default function LanguageRequirementRows() {
-  const [rows, setRows] = useState<Row[]>([newRow(), newRow()]);
+export default function LanguageRequirementRows({
+  initial,
+}: {
+  // Pre-fill for editing an existing campaign; omitted (or empty) gives two
+  // blank rows to start from, same as the New Campaign form.
+  initial?: { language: string; creatorsRequired: number }[];
+}) {
+  const [rows, setRows] = useState<Row[]>(() =>
+    initial && initial.length > 0
+      ? initial.map((r) => ({ key: nextKey++, language: r.language, count: String(r.creatorsRequired) }))
+      : [newRow(), newRow()]
+  );
 
   const total = rows.reduce((sum, r) => sum + (parseInt(r.count, 10) || 0), 0);
 

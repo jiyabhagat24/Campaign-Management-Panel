@@ -189,6 +189,71 @@ export async function updateCampaignBrief(campaignId: string, brief: string) {
   revalidatePath(`/campaigns/${campaignId}`);
 }
 
+// Single "edit the whole thing" action backing CampaignHeaderEditor — every
+// field shown in the campaign page's hero card (name/brand/structured
+// brief/dates/budgets/free-text brief/language breakdown) in one save,
+// rather than a separate click-to-edit per field. Same gate as who can
+// create a campaign in the first place. Language requirements are a full
+// replace (delete all, recreate from what's submitted) — simplest correct
+// behavior for an edit form with add/remove rows.
+export async function updateCampaignDetails(
+  campaignId: string,
+  data: {
+    name: string;
+    brand: string;
+    product: string | null;
+    category: string | null;
+    platformMix: string | null;
+    deliverables: string | null;
+    budgetPerCreatorMin: number | null;
+    budgetPerCreatorMax: number | null;
+    budgetQuoted: number | null;
+    startDate: string | null; // "YYYY-MM-DD" or null
+    goLiveDeadline: string | null; // "YYYY-MM-DD" or null
+    brief: string | null;
+    languageRequirements: { language: string; creatorsRequired: number }[];
+  }
+) {
+  const user = await requireUser();
+  if (!canCreateCampaign(user.role)) throw new Error("Not authorized to edit this campaign.");
+
+  const name = data.name.trim();
+  const brand = data.brand.trim();
+  if (!name || !brand) throw new Error("Name and brand are required.");
+
+  const languageRequirements = data.languageRequirements.filter(
+    (r) => r.language.trim() && Number.isFinite(r.creatorsRequired) && r.creatorsRequired > 0
+  );
+  const totalCreatorsRequired = languageRequirements.length
+    ? languageRequirements.reduce((sum, r) => sum + r.creatorsRequired, 0)
+    : null;
+
+  await prisma.campaignLanguageRequirement.deleteMany({ where: { campaignId } });
+  await prisma.campaign.update({
+    where: { id: campaignId },
+    data: {
+      name,
+      brand,
+      product: data.product?.trim() || null,
+      category: data.category?.trim() || null,
+      platformMix: data.platformMix?.trim() || null,
+      deliverables: data.deliverables?.trim() || null,
+      budgetPerCreatorMin: data.budgetPerCreatorMin,
+      budgetPerCreatorMax: data.budgetPerCreatorMax,
+      budgetQuoted: data.budgetQuoted,
+      startDate: data.startDate ? new Date(data.startDate) : null,
+      goLiveDeadline: data.goLiveDeadline ? new Date(data.goLiveDeadline) : null,
+      brief: data.brief?.trim() || null,
+      totalCreatorsRequired,
+      languageRequirements: languageRequirements.length ? { create: languageRequirements } : undefined,
+    },
+  });
+
+  revalidatePath(`/campaigns/${campaignId}`);
+  revalidatePath("/campaigns");
+  revalidatePath("/dashboard");
+}
+
 // Manual entry for the four Finance numbers the dashboard's Summary row
 // needs (Yet to be Invoiced / Yet to be Received / Value of Cleared Due /
 // Creator Payable Pending) — see the schema comment on Campaign. Gated the

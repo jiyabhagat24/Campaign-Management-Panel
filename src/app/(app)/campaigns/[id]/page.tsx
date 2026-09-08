@@ -3,14 +3,13 @@ import { notFound, redirect } from "next/navigation";
 import { currentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { canCreateCampaign, canSeeInternalCost, canViewCampaign, isClient, serializeCreatorsForClient } from "@/lib/rbac";
-import BriefEditor from "@/components/campaign/BriefEditor";
-import BrandAvatar from "@/components/campaign/BrandAvatar";
+import CampaignHeaderEditor from "@/components/campaign/CampaignHeaderEditor";
 import TeamRow from "@/components/campaign/TeamRow";
 import ClientRow from "@/components/campaign/ClientRow";
 import FinanceRow from "@/components/campaign/FinanceRow";
 import CreatorKanban from "@/components/campaign/CreatorKanban";
 import { isGoLiveAtRisk, isGoLiveBreached } from "@/lib/sla";
-import { ArrowLeft, Calendar, AlertTriangle, MessageSquare, IndianRupee, Clock } from "lucide-react";
+import { ArrowLeft, MessageSquare } from "lucide-react";
 
 export default async function CampaignDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -86,111 +85,28 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
 
       {/* Hero Header Card */}
       <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-card dark:bg-slate-900 dark:border-slate-800">
-        <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
-          <div className="flex items-start gap-4">
-            <BrandAvatar brand={campaign.brand} logoUrl={campaign.brandLogoUrl} size={52} />
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold uppercase tracking-wider text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-full px-2.5 py-0.5 dark:bg-indigo-950/80 dark:border-indigo-800/80 dark:text-indigo-300">
-                  {campaign.brand}
-                </span>
-                {breached && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 border border-rose-200 px-2.5 py-0.5 text-xs font-bold text-rose-600 dark:bg-rose-950/60 dark:border-rose-800 dark:text-rose-300">
-                    <AlertTriangle className="h-3 w-3" /> SLA Breached
-                  </span>
-                )}
-                {!breached && atRisk && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-2.5 py-0.5 text-xs font-bold text-amber-600 dark:bg-amber-950/60 dark:border-amber-800 dark:text-amber-300">
-                    <AlertTriangle className="h-3 w-3" /> SLA At Risk
-                  </span>
-                )}
-              </div>
-              <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">{campaign.name}</h1>
-
-              {/* Structured brief chips — Product / Category / Platform /
-                  Deliverables / Budget per creator, matching how briefs like
-                  the Atomberg one actually arrive. Only shown when set, so
-                  older free-text-only campaigns render exactly as before. */}
-              {(campaign.product || campaign.category || campaign.platformMix || campaign.deliverables || campaign.budgetPerCreatorMin || campaign.budgetPerCreatorMax) && (
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {campaign.product && (
-                    <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                      {campaign.product}
-                    </span>
-                  )}
-                  {campaign.category && (
-                    <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                      {campaign.category}
-                    </span>
-                  )}
-                  {campaign.platformMix && (
-                    <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                      {campaign.platformMix}
-                    </span>
-                  )}
-                  {campaign.deliverables && (
-                    <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                      {campaign.deliverables}
-                    </span>
-                  )}
-                  {(campaign.budgetPerCreatorMin || campaign.budgetPerCreatorMax) && (
-                    <span className="rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[11px] font-bold text-indigo-700 dark:border-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-300">
-                      ₹{campaign.budgetPerCreatorMin ? `${campaign.budgetPerCreatorMin.toLocaleString("en-IN")}–` : ""}
-                      {campaign.budgetPerCreatorMax ? campaign.budgetPerCreatorMax.toLocaleString("en-IN") : "max"} / creator
-                    </span>
-                  )}
-                </div>
-              )}
-
-              <BriefEditor campaignId={campaign.id} initial={campaign.brief} canEdit={canCreateCampaign(user.role)} />
-
-              {/* Language-wise requirement breakdown, e.g. "Hindi – 4",
-                  "Tamil – 3" ... plus the running total. */}
-              {campaign.languageRequirements.length > 0 && (
-                <div className="mt-3 flex flex-wrap items-center gap-1.5">
-                  {campaign.languageRequirements.map((r) => (
-                    <span
-                      key={r.id}
-                      className="rounded-lg bg-violet-50 border border-violet-100 px-2 py-1 text-[11px] font-semibold text-violet-700 dark:bg-violet-950/50 dark:border-violet-800/80 dark:text-violet-300"
-                    >
-                      {r.language} · {r.creatorsRequired}
-                    </span>
-                  ))}
-                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">
-                    Total: {campaign.totalCreatorsRequired ?? campaign.languageRequirements.reduce((s, r) => s + r.creatorsRequired, 0)} creators
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3 md:flex-col md:items-end flex-shrink-0 border-t md:border-t-0 border-slate-100 dark:border-slate-800 pt-4 md:pt-0">
-            <div className="flex items-center gap-2 text-xs font-medium text-slate-600 bg-slate-50 border border-slate-200/70 rounded-xl px-3 py-2 dark:bg-slate-800/50 dark:border-slate-700 dark:text-slate-300">
-              <Calendar className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
-              <span>Came in:</span>
-              <span className="font-bold text-slate-900 dark:text-white">
-                {campaign.startDate ? new Date(campaign.startDate).toLocaleDateString("en-IN") : "—"}
-              </span>
-            </div>
-
-            <div className={`flex items-center gap-2 text-xs font-medium border rounded-xl px-3 py-2 ${
-              breached ? "bg-rose-50 border-rose-200 text-rose-700 dark:bg-rose-950/50 dark:border-rose-800 dark:text-rose-300" : atRisk ? "bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-950/50 dark:border-amber-800 dark:text-amber-300" : "bg-slate-50 border-slate-200/70 text-slate-600 dark:bg-slate-800/50 dark:border-slate-700 dark:text-slate-300"
-            }`}>
-              <Clock className="h-4 w-4" />
-              <span>Deadline:</span>
-              <span className="font-bold">
-                {campaign.goLiveDeadline ? new Date(campaign.goLiveDeadline).toLocaleDateString("en-IN") : "—"}
-              </span>
-            </div>
-
-            {campaign.budgetQuoted && (
-              <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-xl px-3 py-2 dark:bg-indigo-950/50 dark:border-indigo-800 dark:text-indigo-300">
-                <IndianRupee className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
-                <span>Budget: ₹{campaign.budgetQuoted.toLocaleString("en-IN")}</span>
-              </div>
-            )}
-          </div>
-        </div>
+        <CampaignHeaderEditor
+          campaign={{
+            id: campaign.id,
+            name: campaign.name,
+            brand: campaign.brand,
+            brandLogoUrl: campaign.brandLogoUrl,
+            product: campaign.product,
+            category: campaign.category,
+            platformMix: campaign.platformMix,
+            deliverables: campaign.deliverables,
+            budgetPerCreatorMin: campaign.budgetPerCreatorMin,
+            budgetPerCreatorMax: campaign.budgetPerCreatorMax,
+            budgetQuoted: campaign.budgetQuoted,
+            startDate: campaign.startDate ? campaign.startDate.toISOString() : null,
+            goLiveDeadline: campaign.goLiveDeadline ? campaign.goLiveDeadline.toISOString() : null,
+            brief: campaign.brief,
+            languageRequirements: campaign.languageRequirements,
+          }}
+          canEdit={canCreateCampaign(user.role)}
+          breached={breached}
+          atRisk={atRisk}
+        />
 
         {/* Team Members Row */}
         <div className="mt-6 border-t border-slate-100 dark:border-slate-800 pt-4">
