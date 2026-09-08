@@ -30,6 +30,7 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
       },
       clientAccess: { include: { client: { select: { id: true, name: true } } }, orderBy: { createdAt: "asc" } },
       teamMembers: { include: { user: { select: { id: true, name: true } } }, orderBy: { createdAt: "asc" } },
+      languageRequirements: { orderBy: { createdAt: "asc" } },
     },
   });
   if (!campaign) notFound();
@@ -104,7 +105,61 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
                 )}
               </div>
               <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">{campaign.name}</h1>
+
+              {/* Structured brief chips — Product / Category / Platform /
+                  Deliverables / Budget per creator, matching how briefs like
+                  the Atomberg one actually arrive. Only shown when set, so
+                  older free-text-only campaigns render exactly as before. */}
+              {(campaign.product || campaign.category || campaign.platformMix || campaign.deliverables || campaign.budgetPerCreatorMin || campaign.budgetPerCreatorMax) && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {campaign.product && (
+                    <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                      {campaign.product}
+                    </span>
+                  )}
+                  {campaign.category && (
+                    <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                      {campaign.category}
+                    </span>
+                  )}
+                  {campaign.platformMix && (
+                    <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                      {campaign.platformMix}
+                    </span>
+                  )}
+                  {campaign.deliverables && (
+                    <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                      {campaign.deliverables}
+                    </span>
+                  )}
+                  {(campaign.budgetPerCreatorMin || campaign.budgetPerCreatorMax) && (
+                    <span className="rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[11px] font-bold text-indigo-700 dark:border-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-300">
+                      ₹{campaign.budgetPerCreatorMin ? `${campaign.budgetPerCreatorMin.toLocaleString("en-IN")}–` : ""}
+                      {campaign.budgetPerCreatorMax ? campaign.budgetPerCreatorMax.toLocaleString("en-IN") : "max"} / creator
+                    </span>
+                  )}
+                </div>
+              )}
+
               {campaign.brief && <p className="mt-2 max-w-2xl text-sm text-slate-600 dark:text-slate-400 leading-relaxed">{campaign.brief}</p>}
+
+              {/* Language-wise requirement breakdown, e.g. "Hindi – 4",
+                  "Tamil – 3" ... plus the running total. */}
+              {campaign.languageRequirements.length > 0 && (
+                <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                  {campaign.languageRequirements.map((r) => (
+                    <span
+                      key={r.id}
+                      className="rounded-lg bg-violet-50 border border-violet-100 px-2 py-1 text-[11px] font-semibold text-violet-700 dark:bg-violet-950/50 dark:border-violet-800/80 dark:text-violet-300"
+                    >
+                      {r.language} · {r.creatorsRequired}
+                    </span>
+                  ))}
+                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                    Total: {campaign.totalCreatorsRequired ?? campaign.languageRequirements.reduce((s, r) => s + r.creatorsRequired, 0)} creators
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 

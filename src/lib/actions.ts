@@ -69,6 +69,26 @@ export async function createCampaign(formData: FormData) {
   const platformMix = String(formData.get("platformMix") ?? "").trim() || null;
   if (!name || !brand || !brief) throw new Error("Name, brand and brief are required");
 
+  // Structured brief fields (Atomberg-style brief format) — all optional.
+  const product = String(formData.get("product") ?? "").trim() || null;
+  const deliverables = String(formData.get("deliverables") ?? "").trim() || null;
+  const category = String(formData.get("category") ?? "").trim() || null;
+  const budgetPerCreatorMin = Number(formData.get("budgetPerCreatorMin") ?? 0) || null;
+  const budgetPerCreatorMax = Number(formData.get("budgetPerCreatorMax") ?? 0) || null;
+
+  // Language-wise requirement rows come in as parallel arrays (language[i]
+  // pairs with creatorsRequired[i]) from LanguageRequirementRows — drop any
+  // row where the language name is blank or the count isn't a positive
+  // integer (an empty trailing row a user never filled in).
+  const languageNames = formData.getAll("language").map((v) => String(v).trim());
+  const languageCounts = formData.getAll("creatorsRequired").map((v) => parseInt(String(v), 10));
+  const languageRequirements = languageNames
+    .map((language, i) => ({ language, creatorsRequired: languageCounts[i] }))
+    .filter((r) => r.language && Number.isFinite(r.creatorsRequired) && r.creatorsRequired > 0);
+  const totalCreatorsRequired = languageRequirements.length
+    ? languageRequirements.reduce((sum, r) => sum + r.creatorsRequired, 0)
+    : null;
+
   const campaign = await prisma.campaign.create({
     data: {
       name,
@@ -76,6 +96,15 @@ export async function createCampaign(formData: FormData) {
       brief,
       budgetQuoted: budgetQuoted ?? undefined,
       platformMix: platformMix ?? undefined,
+      product: product ?? undefined,
+      deliverables: deliverables ?? undefined,
+      category: category ?? undefined,
+      budgetPerCreatorMin: budgetPerCreatorMin ?? undefined,
+      budgetPerCreatorMax: budgetPerCreatorMax ?? undefined,
+      totalCreatorsRequired: totalCreatorsRequired ?? undefined,
+      languageRequirements: languageRequirements.length
+        ? { create: languageRequirements }
+        : undefined,
       createdById: user.id,
       slaClientFeedbackHours: DEFAULT_SLA.clientFeedbackHours,
       slaScriptFromCreatorDays: DEFAULT_SLA.scriptFromCreatorDays,

@@ -142,6 +142,23 @@ model Campaign {
   endDate        DateTime?
   goLiveDeadline DateTime? // computed default: onboard date + slaOnboardToGoLiveDays
 
+  // ---------- Structured brief (Atomberg-style brief format) ----------
+  // Mirrors how briefs actually arrive from brand teams: Product,
+  // Deliverables (free text, e.g. "1 Collab Reel + 1 Month Usage Rights"),
+  // Category, a per-creator budget range/cap, and a language-wise creator
+  // breakdown (languageRequirements below). All optional — older campaigns
+  // and the plain free-text `brief` field above still work without these.
+  product              String?
+  deliverables         String? // e.g. "YT Dedicated Video + YT Short"
+  category             String? // e.g. "Lifestyle / Comic", "Tech"
+  budgetPerCreatorMin  Float?
+  budgetPerCreatorMax  Float? // set alone (min left empty) for a "X max" style budget
+  // Sum of languageRequirements' creatorsRequired at creation time — stored
+  // so the campaigns list/dashboard can show it without joining that table
+  // on every row. Not kept in sync if requirements are edited later (no
+  // edit UI yet), same "computed once" tradeoff as other snapshot fields.
+  totalCreatorsRequired Int?
+
   // ---------- Finance (manual entry, phase 1) ----------
   // No invoicing/payment system exists yet, so these four numbers — pulled
   // straight from the ops team's Portfolio Dashboard sheet ("Yet to be
@@ -178,12 +195,13 @@ model Campaign {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  creators      Creator[]
-  remarks       Remark[]
-  files         FileAsset[]
-  activity      ActivityLog[]
-  clientAccess  CampaignClientAccess[]
-  teamMembers   CampaignTeamMember[]
+  creators             Creator[]
+  remarks              Remark[]
+  files                FileAsset[]
+  activity             ActivityLog[]
+  clientAccess         CampaignClientAccess[]
+  teamMembers          CampaignTeamMember[]
+  languageRequirements CampaignLanguageRequirement[]
 
   // status/brand/createdAt all get filtered on directly (dashboard filter
   // bar, campaign directory) without going through a relation, so unlike
@@ -193,6 +211,21 @@ model Campaign {
   @@index([status])
   @@index([brand])
   @@index([createdAt])
+}
+
+// One row per language named in the brief's "Language-wise Requirement"
+// list (e.g. Hindi – 4 Creators, Tamil – 3 Creators...). Kept as its own
+// table rather than a JSON blob so it can be queried/summed directly if
+// needed later, same pattern as CampaignTeamMember.
+model CampaignLanguageRequirement {
+  id                String   @id @default(cuid())
+  campaignId        String
+  campaign          Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  language          String
+  creatorsRequired  Int
+  createdAt         DateTime @default(now())
+
+  @@index([campaignId])
 }
 
 // ---------- Creator (cost lives here — brief slide 06 & 07) ----------
