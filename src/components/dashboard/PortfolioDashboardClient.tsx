@@ -5,7 +5,6 @@ import Link from "next/link";
 import BrandAvatar from "@/components/campaign/BrandAvatar";
 import { isGoLiveAtRisk, isGoLiveBreached } from "@/lib/sla";
 import { CAMPAIGN_STATUSES, CAMPAIGN_STATUS_LABELS, FINANCE_VISIBLE_STATUSES, type CampaignStatus } from "@/lib/constants";
-import CampaignStatusSelect from "@/components/campaign/CampaignStatusSelect";
 import FinanceTableClient, { type FinanceCampaignRow } from "@/components/finance/FinanceTableClient";
 import RevenueBreakdownChart, { type RevenueDataRow } from "@/components/dashboard/RevenueBreakdownChart";
 import { formatCompactINR } from "@/lib/format";
@@ -466,15 +465,15 @@ export default function PortfolioDashboardClient({
                       <td className="border-b border-slate-100 px-4 py-3 text-slate-600 dark:border-slate-800 dark:text-slate-300">{c.campaignManager ?? "—"}</td>
                     )}
                     <td className="border-b border-slate-100 px-4 py-3 dark:border-slate-800">
-                      {isClientView ? (
-                        <span
-                          className={`rounded-lg border px-2 py-1 text-[11px] font-bold uppercase tracking-wide ${STATUS_BADGE_COLORS[c.status] ?? STATUS_BADGE_COLORS.ACTIVE}`}
-                        >
-                          {CAMPAIGN_STATUS_LABELS[c.status as CampaignStatus] ?? c.status}
-                        </span>
-                      ) : (
-                        <CampaignStatusSelect campaignId={c.id} status={c.status} />
-                      )}
+                      {/* Static on the dashboard — this table is a rolled-up
+                          overview, not where you manage a campaign. Editing
+                          status happens on the Campaigns Directory or the
+                          campaign's own page. */}
+                      <span
+                        className={`rounded-lg border px-2 py-1 text-[11px] font-bold uppercase tracking-wide ${STATUS_BADGE_COLORS[c.status] ?? STATUS_BADGE_COLORS.ACTIVE}`}
+                      >
+                        {CAMPAIGN_STATUS_LABELS[c.status as CampaignStatus] ?? c.status}
+                      </span>
                     </td>
                     <td className="border-b border-slate-100 px-4 py-3 text-left text-slate-700 dark:border-slate-800 dark:text-slate-200">{c.onboardedCount}</td>
                     <td className="border-b border-slate-100 px-4 py-3 text-left text-slate-700 dark:border-slate-800 dark:text-slate-200">
