@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const result = await refreshAllCreatorsSocialStats();
-    return NextResponse.json({ ok: true, ...result, refreshedAt: new Date().toISOString() });
+    return NextResponse.json({ ...result, refreshedAt: new Date().toISOString() });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Creator stats refresh failed unexpectedly." },
