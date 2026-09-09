@@ -800,7 +800,8 @@ type CreatorRecord = Awaited<ReturnType<typeof prisma.creator.findUniqueOrThrow>
 // numbers from the same cache-first/24h-TTL lookup the add-form uses, then
 // writes back only the fields that actually have fresher, non-null data —
 // never clobbers a manually-entered value with a blank.
-async function refreshCreatorStatsCore(creator: CreatorRecord) {
+async function refreshCreatorStatsCore(creator: CreatorRecord, opts: { forceYoutubeRefresh?: boolean } = {}) {
+  const { forceYoutubeRefresh = false } = opts;
   const changes: { field: string; before: number | null; after: number | null }[] = [];
   const data: Record<string, number | null> = {};
 
@@ -833,7 +834,7 @@ async function refreshCreatorStatsCore(creator: CreatorRecord) {
   let ytError: string | null = null;
   if (creator.youtubeUrl) {
     const cached = await prisma.youtubeChannelCache.findUnique({ where: { channelUrl: creator.youtubeUrl } });
-    const isFresh = cached && Date.now() - cached.updatedAt.getTime() < YOUTUBE_CACHE_TTL_MS;
+    const isFresh = !forceYoutubeRefresh && cached && Date.now() - cached.updatedAt.getTime() < YOUTUBE_CACHE_TTL_MS;
     let stats = isFresh ? cached : null;
     if (!stats) {
       try {
@@ -909,7 +910,12 @@ export async function refreshAllCreatorsSocialStats() {
 
   for (const creator of creators) {
     try {
-      const result = await refreshCreatorStatsCore(creator);
+      // forceYoutubeRefresh: this sweep only runs once a day (the cron
+      // schedule itself is the rate limit), so always hit the live YouTube
+      // API here rather than trusting the 24h cache — otherwise a cache
+      // entry written a few hours before today's cron run looks "fresh"
+      // and the sweep silently reuses yesterday's numbers.
+      const result = await refreshCreatorStatsCore(creator, { forceYoutubeRefresh: true });
       if (result.changed) {
         updated += 1;
         campaignIdsToRevalidate.add(creator.campaignId);
