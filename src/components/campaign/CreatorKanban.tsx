@@ -395,6 +395,9 @@ function AddCreatorForm({ campaignId, onDone }: { campaignId: string; onDone: ()
   const [showYoutubeModal, setShowYoutubeModal] = useState(false);
   const [youtubeAdded, setYoutubeAdded] = useState(false);
 
+  const [showInstagramModal, setShowInstagramModal] = useState(false);
+  const [instagramAdded, setInstagramAdded] = useState(false);
+
   async function handleAutoFill(rawUrl: string) {
     const url = rawUrl.trim();
     const form = formRef.current;
@@ -423,6 +426,7 @@ function AddCreatorForm({ campaignId, onDone }: { campaignId: string; onDone: ()
     if (!handleInput.value.trim()) handleInput.value = `@${data.username}`;
     const nameInput = form.elements.namedItem("name") as HTMLInputElement;
     if (!nameInput.value.trim()) nameInput.value = data.username;
+    setInstagramAdded(true);
 
     const parts = [`${data.followers.toLocaleString("en-IN")} followers`];
     if (data.engagementRate !== null && data.engagementRate !== undefined) parts.push(`${data.engagementRate}% engagement`);
@@ -478,6 +482,19 @@ function AddCreatorForm({ campaignId, onDone }: { campaignId: string; onDone: ()
     });
   }
 
+  function clearInstagramFields() {
+    const form = formRef.current;
+    if (form) {
+      ["profileUrl", "followers", "avgViews", "engagementRate"].forEach((n) => {
+        const el = form.elements.namedItem(n) as HTMLInputElement | null;
+        if (el) el.value = "";
+      });
+    }
+    lastFetchedUrl.current = "";
+    setFetchMsg(null);
+    setInstagramAdded(false);
+  }
+
   function clearYoutubeFields() {
     const form = formRef.current;
     if (form) {
@@ -522,43 +539,6 @@ function AddCreatorForm({ campaignId, onDone }: { campaignId: string; onDone: ()
             <input name="channelHandle" placeholder="@handle" required className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-medium focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:placeholder:text-slate-500" />
           </div>
 
-          <div className="rounded-xl border border-pink-200/70 bg-pink-50/40 p-4 dark:border-pink-900/50 dark:bg-pink-950/10">
-            <p className="mb-3 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-pink-700 dark:text-pink-400">
-              <Camera className="h-3.5 w-3.5" />
-              <span>Instagram</span>
-            </p>
-            <div className="relative">
-              <input
-                name="profileUrl"
-                placeholder="Paste Instagram profile URL"
-                onBlur={(e) => handleAutoFill(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    handleAutoFill((e.target as HTMLInputElement).value);
-                  }
-                }}
-                className="w-full rounded-xl border border-slate-200 px-3 py-2 pr-8 text-xs font-medium focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:placeholder:text-slate-500"
-              />
-              {fetching && <Loader2 className="absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-indigo-500" />}
-              {!fetching && (
-                <span className="absolute right-2.5 top-1/2 -translate-y-1/2" title="Auto-fills on blur from Instagram">
-                  <Wand2 className="h-3.5 w-3.5 text-slate-300 dark:text-slate-600" />
-                </span>
-              )}
-            </div>
-            <div className="mt-3 grid grid-cols-3 gap-3">
-              <NumField name="followers" label="Audience Size" />
-              <NumField name="avgViews" label="Median Views" />
-              <NumField name="engagementRate" label="Median ER%" step="0.01" />
-            </div>
-            {fetchMsg && (
-              <p className={`mt-2 text-xs ${fetchMsg.type === "error" ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400"}`}>
-                {fetchMsg.text}
-              </p>
-            )}
-          </div>
-
           <div className="grid grid-cols-2 gap-3">
             <NumField name="quotedCost" label="Budget given" prefix="₹" />
             <NumField name="internalCost" label="Internal cost" prefix="₹" />
@@ -573,6 +553,91 @@ function AddCreatorForm({ campaignId, onDone }: { campaignId: string; onDone: ()
                   <span>{SHORTLIST_DELIVERABLE_LABELS[type]}</span>
                 </label>
               ))}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-dashed border-slate-300 p-4 dark:border-slate-700">
+            <div className="flex items-center justify-between gap-3">
+              <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-pink-600 dark:text-pink-400">
+                <Camera className="h-3.5 w-3.5" />
+                <span>Instagram</span>
+              </p>
+              {instagramAdded ? (
+                <div className="flex items-center gap-3">
+                  <span className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
+                    <CheckCircle2 className="h-3 w-3" />
+                    <span>Profile added</span>
+                  </span>
+                  <button type="button" onClick={() => setShowInstagramModal(true)} className="text-xs font-semibold text-indigo-600 hover:underline dark:text-indigo-400">Edit</button>
+                  <button type="button" onClick={clearInstagramFields} className="text-xs font-semibold text-rose-600 hover:underline dark:text-rose-400">Remove</button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowInstagramModal(true)}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:border-indigo-400 hover:text-indigo-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>Add Instagram Profile</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Nested Instagram dialog — same collapsed/expand-into-modal
+              pattern as YouTube below. Fields stay mounted (hidden via CSS,
+              never unmounted) so values survive closing/reopening and still
+              submit as part of the outer form. */}
+          <div
+            className={`fixed inset-0 z-[60] items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4 dark:bg-black/60 ${showInstagramModal ? "flex" : "hidden"}`}
+            onClick={() => setShowInstagramModal(false)}
+          >
+            <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-slate-200 dark:bg-slate-900 dark:border-slate-800" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
+                <h4 className="flex items-center gap-1.5 text-sm font-bold text-slate-900 dark:text-white">
+                  <Camera className="h-4 w-4 text-pink-600 dark:text-pink-400" />
+                  <span>Instagram Profile</span>
+                </h4>
+                <button type="button" onClick={() => setShowInstagramModal(false)} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-500 dark:hover:bg-slate-800">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="mt-4 space-y-3">
+                <div className="relative">
+                  <input
+                    name="profileUrl"
+                    placeholder="Paste Instagram profile URL"
+                    onChange={(e) => { if (e.target.value.trim()) setInstagramAdded(true); }}
+                    onBlur={(e) => handleAutoFill(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleAutoFill((e.target as HTMLInputElement).value);
+                      }
+                    }}
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 pr-8 text-xs font-medium focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:placeholder:text-slate-500"
+                  />
+                  {fetching && <Loader2 className="absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-indigo-500" />}
+                  {!fetching && (
+                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2" title="Auto-fills on blur from Instagram">
+                      <Wand2 className="h-3.5 w-3.5 text-slate-300 dark:text-slate-600" />
+                    </span>
+                  )}
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <NumField name="followers" label="Audience Size" onValueChange={(v) => v.trim() && setInstagramAdded(true)} />
+                  <NumField name="avgViews" label="Median Views" onValueChange={(v) => v.trim() && setInstagramAdded(true)} />
+                  <NumField name="engagementRate" label="Median ER%" step="0.01" onValueChange={(v) => v.trim() && setInstagramAdded(true)} />
+                </div>
+                {fetchMsg && (
+                  <p className={`text-xs ${fetchMsg.type === "error" ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400"}`}>
+                    {fetchMsg.text}
+                  </p>
+                )}
+              </div>
+              <div className="mt-5 flex justify-end">
+                <button type="button" onClick={() => setShowInstagramModal(false)} className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-indigo-700">Done</button>
+              </div>
             </div>
           </div>
 
