@@ -27,30 +27,37 @@ export type Role = (typeof ROLES)[number];
 // deleteClientAccount actions, not createTeamUser.
 export const INTERNAL_ROLES = ROLES.filter((r) => r !== "CLIENT") as Exclude<Role, "CLIENT">[];
 
-// Roles allowed to see internal cost / margin. Updated per the team's
-// explicit call: every internal role sees everything (cost, margin,
-// payouts) about the campaigns they're assigned to — CXO sees it org-wide
-// with no assignment scoping at all. Only the client is excluded. Campaign
-// *visibility* itself (which campaigns a non-CXO role can even open) is a
-// separate scope, see campaignVisibilityWhere in rbac.ts.
-export const INTERNAL_COST_ROLES: Role[] = ROLES.filter((r) => r !== "CLIENT");
-export const COMMERCIAL_APPROVER_ROLES: Role[] = [
-  "CXO",
-  "BRAND_SOLUTIONS",
-  "CAMPAIGN_MANAGER",
-];
+// Roles allowed to see internal cost / margin. IR Intern is deliberately
+// excluded (spec Gate G3: quoted cost must be absent from the IR Intern
+// login) — every other internal role still sees cost/margin/payouts on the
+// campaigns they're assigned to, CXO org-wide with no assignment scoping.
+// Campaign *visibility* itself (which campaigns a non-CXO role can even
+// open) is a separate scope, see campaignVisibilityWhere in rbac.ts.
+export const INTERNAL_COST_ROLES: Role[] = ROLES.filter((r) => r !== "CLIENT" && r !== "IR_INTERN");
+// Only the Campaign Manager sets/approves commercials (see canSetCommercials
+// in rbac.ts) — narrowed from an earlier 4-role set per spec.
+export const COMMERCIAL_APPROVER_ROLES: Role[] = ["CAMPAIGN_MANAGER"];
 
 // Campaign.status vocabulary — a plain string column (see model comment),
-// so no migration was needed to change this. Every campaign still defaults
-// to ACTIVE at creation; changing status is a deliberate action via
-// updateCampaignStatus in actions.ts, exposed as a dropdown on both the
-// dashboard's Campaign Table and the Campaigns Directory's Action column.
-export const CAMPAIGN_STATUSES = ["ACTIVE", "HOLD", "COMPLETED", "CANCELLED"] as const;
+// so no migration was needed to change this. Task #11: migrated to the
+// spec's State Machine (Draft -> Assigned -> Active -> On Hold -> Closed),
+// with CANCELLED kept as a 6th terminal state so existing cancelled
+// campaigns keep their distinct meaning instead of collapsing into CLOSED.
+// New campaigns default to DRAFT (Brand Solutions creates the brief);
+// DRAFT -> ASSIGNED happens automatically once a Campaign Manager + at
+// least one IR Executive are on the team (see assignTeamMember in
+// actions.ts); ASSIGNED -> ACTIVE is the Campaign Manager accepting the
+// brief (see acceptCampaignBrief); ACTIVE -> ON_HOLD / CLOSED are manual via
+// updateCampaignStatus, exposed as the dropdown on the dashboard's Campaign
+// Table and the Campaigns Directory's Action column.
+export const CAMPAIGN_STATUSES = ["DRAFT", "ASSIGNED", "ACTIVE", "ON_HOLD", "CLOSED", "CANCELLED"] as const;
 export type CampaignStatus = (typeof CAMPAIGN_STATUSES)[number];
 export const CAMPAIGN_STATUS_LABELS: Record<CampaignStatus, string> = {
+  DRAFT: "Draft",
+  ASSIGNED: "Assigned",
   ACTIVE: "Active",
-  HOLD: "On Hold",
-  COMPLETED: "Completed",
+  ON_HOLD: "On Hold",
+  CLOSED: "Closed",
   CANCELLED: "Cancelled",
 };
 
@@ -61,7 +68,7 @@ export const CAMPAIGN_STATUS_LABELS: Record<CampaignStatus, string> = {
 // that's paused or dead shouldn't inflate (or appear in) the live financial
 // picture. Does NOT affect the Campaign Table/Directory list itself, which
 // always shows every campaign regardless of status.
-export const FINANCE_VISIBLE_STATUSES: CampaignStatus[] = ["ACTIVE", "COMPLETED"];
+export const FINANCE_VISIBLE_STATUSES: CampaignStatus[] = ["ACTIVE", "CLOSED"];
 
 // "Client Invoice status" column on the Finance Table sheet tab — manual
 // entry (see Campaign.financeClientInvoiceStatus), same reasoning as the
@@ -137,6 +144,7 @@ export const CREATOR_STATUSES = [
   "CLIENT_NEGOTIATING",
   "CLIENT_REJECTED",
   "ONBOARDED",
+  "BLOCKED",
   "REJECTED",
 ] as const;
 export type CreatorStatus = (typeof CREATOR_STATUSES)[number];
@@ -155,7 +163,10 @@ export const KANBAN_COLUMN_LABELS: Record<KanbanColumn, string> = {
 };
 
 export function creatorKanbanColumn(status: string): KanbanColumn {
-  return status === "ONBOARDED" ? "ONBOARDING" : "SHORTLIST";
+  // BLOCKED is a paused-in-execution state (spec Gate G6 two-person pause) —
+  // it belongs with Onboarding/execution rows, not back in pre-onboarding
+  // Shortlist.
+  return status === "ONBOARDED" || status === "BLOCKED" ? "ONBOARDING" : "SHORTLIST";
 }
 
 export const DELIVERABLE_STATUSES = [

@@ -51,6 +51,14 @@ model User {
   notifications    Notification[]
   pocForCreators   Creator[]             @relation("CreatorPOC")
   uploadedFiles    FileAsset[]
+  sourcedCreators        Creator[]    @relation("CreatorSourcedBy")
+  pauseRequestedCreators Creator[]    @relation("CreatorPauseRequestedBy")
+  pauseConfirmedCreators Creator[]    @relation("CreatorPauseConfirmedBy")
+  escalationsRaised         Escalation[] @relation("EscalationRaisedByUser")
+  escalationsProposedOwner  Escalation[] @relation("EscalationProposedOwner")
+  escalationsOwned          Escalation[] @relation("EscalationOwner")
+  monthsLocked              Month[]
+  chaseLogs                 ChaseLog[]
 }
 
 // External accounts — the brand-side contacts who log in to review shortlists,
@@ -72,6 +80,7 @@ model Client {
   activity       ActivityLog[]
   notifications  Notification[]
   signup         ClientSignup?
+  escalationsRaised Escalation[] @relation("EscalationRaisedByClient")
 }
 
 // Raw record of a self-serve sign-up submitted from the login page's "Don't
@@ -133,7 +142,7 @@ model Campaign {
   brand   String
   brandLogoUrl String? // optional; UI falls back to a colored initial circle if unset
   brief   String? // objective, mandatories, platform mix — free text v1; optional, editable later via updateCampaignBrief
-  status  String @default("ACTIVE") // ACTIVE | COMPLETED | ARCHIVED
+  status  String @default("DRAFT") // see constants.ts CAMPAIGN_STATUSES — DRAFT | ASSIGNED | ACTIVE | ON_HOLD | CLOSED | CANCELLED
   stage   String @default("BRIEF") // legacy 11-stage field, still used by /pipeline
 
   budgetQuoted   Float? // client-facing total budget
@@ -202,6 +211,8 @@ model Campaign {
   teamMembers          CampaignTeamMember[]
   languageRequirements CampaignLanguageRequirement[] // deprecated — see platformBriefs
   platformBriefs       CampaignPlatformBrief[]
+  escalations          Escalation[]
+  chaseLogs            ChaseLog[]
 
   // status/brand/createdAt all get filtered on directly (dashboard filter
   // bar, campaign directory) without going through a relation, so unlike
@@ -307,6 +318,29 @@ model Creator {
   onboardedAt      DateTime?
   commercialsLocked Boolean @default(false)
 
+  // Ball owner (spec Gate G7): stored, not computed — written on every status
+  // change, read by the Action Tracker/clock/scorecard. TBM | CLIENT |
+  // CREATOR | BLOCKED — see constants.ts BALL_OWNERS.
+  ballOwner String @default("TBM")
+
+  // Who sourced this row (IR Executive or IR Intern) — drives row-level
+  // shortlist scoping (spec: Intern edits own rows only, Executive edits own
+  // + their assigned Interns' rows).
+  sourcedByUserId String?
+  sourcedBy       User?   @relation("CreatorSourcedBy", fields: [sourcedByUserId], references: [id], onDelete: SetNull)
+
+  // Two-person pause (Gate G6): IR SPOC triggers, Campaign Manager confirms.
+  // Never takes effect on the trigger alone. pausedDays accumulates the
+  // blocked bucket, excluded from every clock parameter.
+  pauseRequestedAt       DateTime?
+  pauseRequestedByUserId String?
+  pauseRequestedBy       User?     @relation("CreatorPauseRequestedBy", fields: [pauseRequestedByUserId], references: [id], onDelete: SetNull)
+  pauseReason            String?
+  pauseConfirmedAt       DateTime?
+  pauseConfirmedByUserId String?
+  pauseConfirmedBy       User?     @relation("CreatorPauseConfirmedBy", fields: [pauseConfirmedByUserId], references: [id], onDelete: SetNull)
+  pausedDays             Int       @default(0)
+
   // ---------- Onboarding-stage ownership + go-live tracking ----------
   // POC: the IR Executive who owns every reminder/flag on this creator once
   // onboarded. goLiveDeadline is a per-creator override — when null, the UI
@@ -348,11 +382,15 @@ model Creator {
   deliverables          Deliverable[]
   shortlistDeliverables ShortlistDeliverable[]
   remarks               Remark[]
+  escalations           Escalation[]
+  chaseLogs             ChaseLog[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([status])
+  @@index([sourcedByUserId])
+  @@index([ballOwner])
 }
 
 // ---------- Shortlist deliverable tag (pre-onboarding pitch types) ----------
@@ -372,6 +410,84 @@ model ShortlistDeliverable {
   executionDeliverableId String? // set once promoted — soft link to the real Deliverable created for execution tracking
 
   createdAt DateTime @default(now())
+}
+
+// Escalation object (spec State Machine: Open -> Owned -> Closed). Raised by
+// any internal role or the Client, claimed by its proposed owner (or the IR
+// Manager), closed only with a resolution note + root cause logged.
+model Escalation {
+  id         String  @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  creatorId  String?
+  creator    Creator? @relation(fields: [creatorId], references: [id], onDelete: SetNull)
+
+  title       String
+  description String?
+  sitsAt      String // which stage/page this escalation concerns, e.g. "PRICING", "EXECUTION"
+  severity    String // e.g. LOW | MEDIUM | HIGH
+  status      String @default("OPEN") // OPEN | OWNED | CLOSED
+
+  raisedByUserId   String?
+  raisedByUser     User?   @relation("EscalationRaisedByUser", fields: [raisedByUserId], references: [id], onDelete: SetNull)
+  raisedByClientId String?
+  raisedByClient   Client? @relation("EscalationRaisedByClient", fields: [raisedByClientId], references: [id], onDelete: SetNull)
+
+  proposedOwnerId String?
+  proposedOwner   User?   @relation("EscalationProposedOwner", fields: [proposedOwnerId], references: [id], onDelete: SetNull)
+  ownerId         String?
+  owner           User?   @relation("EscalationOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+
+  resolutionNote     String?
+  rootCauseCategory  String?
+  closedAt           DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([campaignId])
+  @@index([creatorId])
+  @@index([status])
+}
+
+// Month lock object (spec State Machine: Provisional -> Locked). Finance
+// figures for a month stay provisional/editable until CXO or admin locks it
+// once the accounts audit is complete (Gate G12).
+model Month {
+  id     String @id @default(cuid())
+  month  String // "YYYY-MM"
+  status String @default("PROVISIONAL") // PROVISIONAL | LOCKED
+
+  lockedAt   DateTime?
+  lockedByUserId String?
+  lockedBy       User?     @relation(fields: [lockedByUserId], references: [id], onDelete: SetNull)
+
+  auditCorrectionNotes String?
+
+  createdAt DateTime @default(now())
+
+  @@index([month])
+}
+
+// Action Tracker: every client-chase touchpoint logged (spec Gate — 7-day
+// no-contact triggers auto-escalation). One row per chase attempt.
+model ChaseLog {
+  id         String   @id @default(cuid())
+  creatorId  String
+  creator    Creator  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  channel String // e.g. EMAIL | CALL | WHATSAPP
+  note    String?
+
+  loggedByUserId String?
+  loggedByUser   User?   @relation(fields: [loggedByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([creatorId])
+  @@index([campaignId])
 }
 
 // Every negotiation round is logged, never overwritten (brief slide 10).

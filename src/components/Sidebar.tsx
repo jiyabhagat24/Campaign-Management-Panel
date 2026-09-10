@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { Role } from "@/lib/constants";
-import { canSeeInternalCost, canManageTeam, isClient } from "@/lib/rbac";
+import { canSeeInternalCost, canManageTeam, canSetCommercials, isClient } from "@/lib/rbac";
 import ThemeToggle from "@/components/ThemeToggle";
 import NotificationBell, { type NotificationItem } from "@/components/NotificationBell";
 import {
@@ -14,6 +14,10 @@ import {
   Users,
   UserCheck,
   LogOut,
+  AlertTriangle,
+  PhoneCall,
+  CalendarCheck,
+  DollarSign,
 } from "lucide-react";
 
 const NAV = [
@@ -25,12 +29,21 @@ const NAV = [
   // page itself. What each of them actually sees there is further scoped
   // per campaign assignment (campaignVisibilityWhere in rbac.ts).
   { href: "/finance", label: "Finance", icon: Receipt, financeOnly: true },
+  // Campaign-Manager-only — Pricing Queue (task #15).
+  { href: "/pricing-queue", label: "Pricing Queue", icon: DollarSign, pricingOnly: true },
+  // Escalations (task #14) and Action Tracker (task #16) — internal-only,
+  // not gated to a single role since any internal role can raise/own an
+  // escalation and any internal role logs a client chase.
+  { href: "/escalations", label: "Escalations", icon: AlertTriangle, internalOnly: true },
+  { href: "/action-tracker", label: "Action Tracker", icon: PhoneCall, internalOnly: true },
   // CXO-only — the Team admin page (add/re-role/remove logins).
   { href: "/team", label: "Team", icon: Users, teamOnly: true },
   // CXO-only — client login management (reset password/remove) plus
   // grant/revoke which campaigns each client can see. Same gate as Team
   // since it's the same "who gets what access" admin surface.
   { href: "/clients", label: "Clients", icon: UserCheck, teamOnly: true },
+  // CXO-only — month lock (task #17 / spec Gate G12).
+  { href: "/admin/months", label: "Month Lock", icon: CalendarCheck, teamOnly: true },
 ];
 
 export default function Sidebar({ role, name, notifications }: { role: Role; name: string; notifications: NotificationItem[] }) {
@@ -55,6 +68,8 @@ export default function Sidebar({ role, name, notifications }: { role: Role; nam
     if (role === "CLIENT" && item.href === "/pipeline") return false;
     if ("financeOnly" in item && item.financeOnly && (isClient(role) || !canSeeInternalCost(role))) return false;
     if ("teamOnly" in item && item.teamOnly && !canManageTeam(role)) return false;
+    if ("internalOnly" in item && item.internalOnly && isClient(role)) return false;
+    if ("pricingOnly" in item && item.pricingOnly && !canSetCommercials(role)) return false;
     return true;
   });
 

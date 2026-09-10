@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { Role } from "@/lib/constants";
+import { canSetCommercials, canApproveCommercialEdit, canOperateShortlist } from "@/lib/rbac";
 import {
   PLATFORM_LABELS,
   creatorKanbanColumn,
@@ -34,6 +35,9 @@ import {
   updateCreatorDeadline,
   requestFinalCostEdit,
   rejectCreator,
+  triggerPause,
+  confirmPause,
+  resumeFromPause,
 } from "@/lib/actions";
 import {
   UserPlus,
@@ -134,6 +138,8 @@ export type Creator = {
   goLiveDeadline: string | Date | null;
   pocUserId: string | null;
   poc: { id: string; name: string } | null;
+  pauseRequestedAt?: string | Date | null;
+  pauseConfirmedAt?: string | Date | null;
   negotiationRounds: NegotiationRound[];
   deliverables: Deliverable[];
   shortlistDeliverables: ShortlistDeliverableRow[];
@@ -170,7 +176,9 @@ export default function CreatorKanban({
   // this board. CLIENT_REJECTED is left visible since the team may still
   // need to act on/negotiate a client's rejection.
   const shortlist = creators.filter((c) => creatorKanbanColumn(c.status) === "SHORTLIST" && c.status !== "REJECTED");
-  const onboarding = creators.filter((c) => c.status === "ONBOARDED");
+  // BLOCKED (paused-in-execution, Gate G6) stays on the Onboarding tab
+  // alongside ONBOARDED — see creatorKanbanColumn in constants.ts.
+  const onboarding = creators.filter((c) => c.status === "ONBOARDED" || c.status === "BLOCKED");
 
   // Shortlisting Stage sheet tab's own summary strip — only the four
   // cleanly-computable fields (Shared/Shortlisted/Average Quoted Price/
@@ -207,7 +215,10 @@ export default function CreatorKanban({
                 </div>
               ))}
             </div>
-            {!isClientView && (
+            {/* Only IR Executive/IR Intern add creators to Shortlisting per
+                spec — not Campaign Manager, Brand Solutions, or CXO (see
+                rbac.ts canOperateShortlist). */}
+            {canOperateShortlist(role) && (
               <div>
                 {!addingCreator ? (
                   <button
@@ -237,16 +248,21 @@ export default function CreatorKanban({
                       <th className="sticky top-0 z-30 w-[150px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Median ER%</th>
                       <th className="sticky top-0 z-30 w-[110px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Insights</th>
                       {canSeeCost && <th className="sticky top-0 z-30 w-[150px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Internal Cost</th>}
-                      <th className="sticky top-0 z-30 w-[150px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Quoted Cost</th>
+                      {/* Quoted Cost is the price quoted to the client, so
+                          clients do see this column — only IR Intern is
+                          excluded (Gate G3), not the client. */}
+                      {role !== "IR_INTERN" && (
+                        <th className="sticky top-0 z-30 w-[150px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Quoted Cost</th>
+                      )}
                       <th className="sticky top-0 z-30 w-[170px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Client&apos;s Intent</th>
                       <th className="sticky top-0 z-30 w-[200px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Client&apos;s Counter Cost</th>
                       <th className="sticky top-0 z-30 w-[220px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Client&apos;s Remark</th>
                       <th className="sticky top-0 z-30 w-[150px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Final Quoted Cost</th>
                       <th className="sticky top-0 z-30 w-[200px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Client&apos;s Final Intent</th>
-                      {isClientView ? (
-                        <th className="sticky top-0 z-30 w-6 border-b border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800" aria-hidden />
-                      ) : (
+                      {canOperateShortlist(role) || canSetCommercials(role) ? (
                         <th className="sticky top-0 z-30 w-[70px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Remove</th>
+                      ) : (
+                        <th className="sticky top-0 z-30 w-6 border-b border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800" aria-hidden />
                       )}
                     </tr>
                   </thead>
@@ -307,8 +323,9 @@ export default function CreatorKanban({
                       isClientView={isClientView}
                       internalUsers={internalUsers}
                       activityLogs={activityLogs}
-                      canApproveCost={role === "CXO" || role === "CAMPAIGN_MANAGER" || role === "BRAND_SOLUTIONS"}
-                      canSetCost={role === "CXO" || role === "BRAND_SOLUTIONS" || role === "CAMPAIGN_MANAGER" || role === "IR_MANAGER"}
+                      canApproveCost={canApproveCommercialEdit(role)}
+                      canSetCost={canSetCommercials(role)}
+                      role={role}
                     />
                   ))}
                   {onboarding.length === 0 && (
@@ -1073,18 +1090,20 @@ function ShortlistCreatorRow({ creator, canSeeCost, isClientView, role }: { crea
         <EditableNumberCell
           value={creator.internalCost ?? null}
           prefix="₹"
-          editable={!isClientView}
+          editable={canOperateShortlist(role)}
           onSave={(v) => updateCreatorShortlist(creator.id, { internalCost: v })}
           textClassName="text-indigo-600 dark:text-indigo-400"
         />
       )}
-      <EditableNumberCell
-        value={creator.quotedCost}
-        prefix="₹"
-        editable={role === "CAMPAIGN_MANAGER"}
-        onSave={(v) => updateCreatorShortlist(creator.id, { quotedCost: v })}
-        textClassName="font-bold text-slate-900 dark:text-white"
-      />
+      {role !== "IR_INTERN" && (
+        <EditableNumberCell
+          value={creator.quotedCost}
+          prefix="₹"
+          editable={role === "CAMPAIGN_MANAGER"}
+          onSave={(v) => updateCreatorShortlist(creator.id, { quotedCost: v })}
+          textClassName="font-bold text-slate-900 dark:text-white"
+        />
+      )}
       <td className="whitespace-nowrap border-b border-slate-100 px-5 py-4 dark:border-slate-800">
         {isClientView ? (
           <select
@@ -1153,7 +1172,7 @@ function ShortlistCreatorRow({ creator, canSeeCost, isClientView, role }: { crea
           <StatusBadge status={creator.clientFinalIntent ?? "PENDING"} />
         )}
       </td>
-      {!isClientView && (
+      {(canOperateShortlist(role) || canSetCommercials(role)) && (
         <td className="whitespace-nowrap border-b border-slate-100 px-5 py-4 dark:border-slate-800">
           <button
             type="button"
@@ -1327,6 +1346,7 @@ function OnboardingCreatorRow({
   activityLogs,
   canApproveCost,
   canSetCost,
+  role,
 }: {
   creator: Creator;
   isClientView: boolean;
@@ -1334,10 +1354,52 @@ function OnboardingCreatorRow({
   activityLogs: ActivityLogEntry[];
   canApproveCost: boolean;
   canSetCost: boolean;
+  role: Role;
 }) {
   const [showInsights, setShowInsights] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshMsg, setRefreshMsg] = useState<string | null>(null);
+  const [pauseBusy, setPauseBusy] = useState(false);
+
+  // Two-person pause (spec Gate G6): an IR role triggers it with a reason,
+  // the Campaign Manager confirms before the row actually goes Blocked, and
+  // an IR role resumes it once the product's actually delivered. Simple
+  // window.prompt for the reason — same pattern as the campaign On Hold
+  // reason prompt — rather than a new modal for one field.
+  async function handleTriggerPause() {
+    const reason = window.prompt("Why is this creator blocked on product?");
+    if (!reason || !reason.trim()) return;
+    setPauseBusy(true);
+    try {
+      await triggerPause(creator.id, reason.trim());
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "Couldn't request a pause.");
+    } finally {
+      setPauseBusy(false);
+    }
+  }
+
+  async function handleConfirmPause() {
+    setPauseBusy(true);
+    try {
+      await confirmPause(creator.id);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "Couldn't confirm the pause.");
+    } finally {
+      setPauseBusy(false);
+    }
+  }
+
+  async function handleResumeFromPause() {
+    setPauseBusy(true);
+    try {
+      await resumeFromPause(creator.id);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "Couldn't resume this creator.");
+    } finally {
+      setPauseBusy(false);
+    }
+  }
   const [editingDeadline, setEditingDeadline] = useState(false);
   const [deadlineDraft, setDeadlineDraft] = useState("");
   const [deadlineReason, setDeadlineReason] = useState("");
@@ -1524,6 +1586,43 @@ function OnboardingCreatorRow({
             </button>
           )}
           {refreshMsg && <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400">{refreshMsg}</span>}
+          {!isClientView && creator.status !== "BLOCKED" && !creator.pauseRequestedAt && (
+            <button
+              type="button"
+              onClick={handleTriggerPause}
+              disabled={pauseBusy}
+              title="Flag this creator as blocked on product — needs Campaign Manager confirmation"
+              className="inline-flex w-fit items-center gap-1 text-[10px] font-semibold text-slate-400 hover:text-amber-600 disabled:opacity-50 dark:text-slate-500 dark:hover:text-amber-400"
+            >
+              <span>Flag blocked on product</span>
+            </button>
+          )}
+          {!isClientView && creator.pauseRequestedAt && !creator.pauseConfirmedAt && (
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400">Pause pending confirmation</span>
+              {role === "CAMPAIGN_MANAGER" && (
+                <button
+                  type="button"
+                  onClick={handleConfirmPause}
+                  disabled={pauseBusy}
+                  className="inline-flex w-fit items-center gap-1 text-[10px] font-semibold text-amber-600 hover:text-amber-700 disabled:opacity-50 dark:text-amber-400"
+                >
+                  <span>Confirm pause</span>
+                </button>
+              )}
+            </div>
+          )}
+          {!isClientView && creator.status === "BLOCKED" && creator.pauseConfirmedAt && (
+            <button
+              type="button"
+              onClick={handleResumeFromPause}
+              disabled={pauseBusy}
+              title="Product delivered — resume execution"
+              className="inline-flex w-fit items-center gap-1 text-[10px] font-semibold text-rose-600 hover:text-rose-700 disabled:opacity-50 dark:text-rose-400"
+            >
+              <span>Resume (product delivered)</span>
+            </button>
+          )}
         </div>
       </td>
       <td className="sticky left-[430px] z-10 w-[260px] min-w-[260px] max-w-[260px] border-b border-slate-100 bg-white px-5 py-4 group-hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:group-hover:bg-slate-800">

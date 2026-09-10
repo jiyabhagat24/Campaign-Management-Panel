@@ -20,8 +20,22 @@ export function canEditShortlistAndStatus(role: Role) {
   return role !== "CLIENT";
 }
 
+// Per spec Page Permissions: Shortlisting row creation/editing (adding a
+// creator, its socials/deliverables/internal cost/etc.) belongs to IR
+// Executive and IR Intern only — "Create and edit, own rows" / "own and
+// Intern rows". Campaign Manager only vets/prices via canSetCommercials
+// (their Shortlisting grant is "Vet, price and publish", not row editing).
+// Brand Solutions is "View published rows only". CXO is "Not available" —
+// locked out entirely, not even read access to this specific page.
+export function canOperateShortlist(role: Role) {
+  return role === "IR_EXECUTIVE" || role === "IR_INTERN";
+}
+
+// Campaign Manager exclusively sets/edits Campaign Commercials and Pricing —
+// not CXO, Brand Solutions, or IR Manager, even though they can view it (see
+// canSeeInternalCost). Narrowed from the earlier 4-role set per spec.
 export function canSetCommercials(role: Role) {
-  return role === "CXO" || role === "BRAND_SOLUTIONS" || role === "CAMPAIGN_MANAGER" || role === "IR_MANAGER";
+  return role === "CAMPAIGN_MANAGER";
 }
 
 // IR Intern: works shortlisting/onboarding rows like an IR Executive, and
@@ -31,17 +45,16 @@ export function isIntern(role: Role) {
   return role === "IR_INTERN";
 }
 
-// CXO is the only org-wide, unscoped role — everyone else, no exceptions,
-// only sees the campaigns they're personally assigned to (a
-// CampaignTeamMember row): the 3 Brand Solutions people see only the
-// brands/campaigns they personally talk to, the 3 Campaign Managers see
-// only the campaigns they personally run, and within the IR team the IR
-// Manager, IR Executives, and IR Interns each only see the campaigns
-// they're personally on — an IR Manager does not automatically see every
-// campaign their reports are working on. Matches a client only seeing
-// campaigns they have clientAccess to.
+// CXO and IR Manager are the only org-wide, unscoped roles (spec Gate G13 /
+// Read Me: "The IR Manager and CXO are the only unscoped logins") — everyone
+// else only sees the campaigns they're personally assigned to (a
+// CampaignTeamMember row): Brand Solutions sees only the brands/campaigns
+// they personally talk to, Campaign Managers see only the campaigns they
+// personally run, and IR Executives/Interns each only see the campaigns
+// they're personally on. Matches a client only seeing campaigns they have
+// clientAccess to.
 export function isOrgWide(role: Role) {
-  return role === "CXO";
+  return role === "CXO" || role === "IR_MANAGER";
 }
 
 // Prisma `where` fragment for "which campaigns can this user see": clients
@@ -73,13 +86,38 @@ export function canManageTeam(role: Role) {
   return role === "CXO";
 }
 
-// Who can create a new campaign — explicit product call: only the two
-// roles that actually bring in / own the client relationship (CXO,
-// Brand Solutions). Campaign Managers and the IR team work campaigns once
-// they exist, they don't originate them. Gates both the "New Campaign"
+// Who can create a new campaign — spec: Brand Solutions exclusively ("Brief
+// intake" is their step 1, and Page Permissions gives them "Create and
+// edit, own clients" on Campaigns while CXO gets only "View, all"; Read Me
+// is explicit that CXO writes the month lock and nothing else). Campaign
+// Managers and the IR team work campaigns once they exist, they don't
+// originate them. Gates both the "New Campaign"
 // button/link and the createCampaign server action itself.
 export function canCreateCampaign(role: Role) {
-  return role === "CXO" || role === "BRAND_SOLUTIONS";
+  return role === "BRAND_SOLUTIONS";
+}
+
+// Task #19 / Page Permissions: within the Shortlisting page itself, IR
+// Intern only sees rows they personally sourced ("Create and edit, own
+// rows"), IR Executive sees their own rows plus any sourced by an IR Intern
+// on the same campaign team ("own and Intern rows"). Every other role that
+// can see the campaign at all (CM, Brand Solutions, IR Manager, CXO, Client)
+// sees every row — this only narrows the two sourcing roles. Pass the
+// campaign's own IR_INTERN team-member user ids (from CampaignTeamMember),
+// not a global lookup, since scope is per-campaign like everything else here.
+export function filterCreatorsForShortlistScope<T extends { sourcedByUserId: string | null }>(
+  user: { id: string; role: Role },
+  creators: T[],
+  campaignInternUserIds: string[]
+): T[] {
+  if (user.role === "IR_INTERN") {
+    return creators.filter((c) => c.sourcedByUserId === user.id);
+  }
+  if (user.role === "IR_EXECUTIVE") {
+    const internIds = new Set(campaignInternUserIds);
+    return creators.filter((c) => c.sourcedByUserId === user.id || (c.sourcedByUserId !== null && internIds.has(c.sourcedByUserId)));
+  }
+  return creators;
 }
 
 // The margin guardrail (brief slide 07): strip internal cost + rejection
@@ -92,8 +130,12 @@ export function serializeCreatorForClient<T extends { internalCost: number | nul
   return rest;
 }
 
-export function serializeCreatorsForClient<T extends { internalCost: number | null }>(
+// Gate G1: a creator row with no vet decision (Campaign Manager never set
+// quotedCost) or that's been internally rejected must never reach a
+// client-facing query — filtered out here, not left to each call site to
+// remember, so nothing client-facing can accidentally skip this.
+export function serializeCreatorsForClient<T extends { internalCost: number | null; quotedCost: number | null; status: string }>(
   creators: T[]
 ): Omit<T, "internalCost">[] {
-  return creators.map(serializeCreatorForClient);
+  return creators.filter((c) => c.quotedCost !== null && c.status !== "REJECTED").map(serializeCreatorForClient);
 }

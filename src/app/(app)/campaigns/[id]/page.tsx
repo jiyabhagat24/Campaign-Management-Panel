@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { currentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { canCreateCampaign, canSeeInternalCost, canViewCampaign, isClient, serializeCreatorsForClient } from "@/lib/rbac";
+import { canCreateCampaign, canSeeInternalCost, canViewCampaign, isClient, serializeCreatorsForClient, filterCreatorsForShortlistScope } from "@/lib/rbac";
 import CampaignHeaderEditor from "@/components/campaign/CampaignHeaderEditor";
 import TeamRow from "@/components/campaign/TeamRow";
 import ClientRow from "@/components/campaign/ClientRow";
@@ -57,7 +57,15 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
   const canSeeCost = canSeeInternalCost(user.role);
   const isClientView = isClient(user.role);
 
-  const creators = isClientView ? serializeCreatorsForClient(campaign.creators) : campaign.creators;
+  // serializeCreatorsForClient itself now filters out un-priced/rejected
+  // rows (Gate G1) — see rbac.ts. Task #19: row-level Shortlisting scope for
+  // IR Intern/Executive is applied on top, internal-side only (a client's
+  // creators are already filtered to published rows above and isn't scoped
+  // by sourcing — that's an internal-team concept).
+  const campaignInternUserIds = campaign.teamMembers.filter((t) => t.user && t.roleOnCampaign === "IR_INTERN").map((t) => t.userId);
+  const creators = isClientView
+    ? serializeCreatorsForClient(campaign.creators)
+    : filterCreatorsForShortlistScope(user, campaign.creators, campaignInternUserIds);
 
   // Onboarding tab derives "Last Action" / status-history / overdue-dormant
   // flags entirely from the audit trail — no separate columns needed for
@@ -113,7 +121,7 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
             campaignId={campaign.id}
             teamMembers={campaign.teamMembers}
             internalUsers={internalUsers}
-            canEdit={!isClientView}
+            canEdit={user.role === "IR_MANAGER"}
           />
         </div>
 

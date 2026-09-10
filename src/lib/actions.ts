@@ -6,7 +6,7 @@ import bcrypt from "bcryptjs";
 import { requireUser } from "@/lib/auth";
 import { logActivity } from "@/lib/activity";
 import { notify } from "@/lib/notify";
-import { canApproveCommercialEdit, canSetCommercials, canSeeInternalCost, canManageTeam, canCreateCampaign, isClient } from "@/lib/rbac";
+import { canApproveCommercialEdit, canSetCommercials, canSeeInternalCost, canManageTeam, canCreateCampaign, canOperateShortlist, isClient } from "@/lib/rbac";
 import {
   DEFAULT_SLA,
   type Stage,
@@ -139,7 +139,7 @@ function toPlatformBriefCreateInput(p: ParsedPlatformBrief) {
 
 export async function createCampaign(formData: FormData) {
   const user = await requireUser();
-  if (!canCreateCampaign(user.role)) throw new Error("Only a CXO or Brand Solutions can create a campaign.");
+  if (!canCreateCampaign(user.role)) throw new Error("Only Brand Solutions can create a campaign.");
 
   const name = String(formData.get("name") ?? "").trim();
   const brand = String(formData.get("brand") ?? "").trim();
@@ -184,6 +184,10 @@ export async function createCampaign(formData: FormData) {
       slaScriptFromCreatorDays: DEFAULT_SLA.scriptFromCreatorDays,
       slaContentFromCreatorDays: DEFAULT_SLA.contentFromCreatorDays,
       slaOnboardToGoLiveDays: DEFAULT_SLA.onboardToGoLiveDays,
+      // Spec State Machine: a campaign starts life in Draft (brief
+      // published) — status defaults to DRAFT at the schema level too, set
+      // explicitly here for clarity.
+      status: "DRAFT",
       // Campaign visibility is now scoped to team assignment for everyone
       // except CXO (see campaignVisibilityWhere in rbac.ts) — without this,
       // the creator would immediately lose access to the campaign they just
@@ -205,16 +209,38 @@ export async function createCampaign(formData: FormData) {
   return campaign.id;
 }
 
-// Sets Active/Hold/Closed on a campaign — used by the status dropdown in the
-// dashboard's Campaign Table (and anywhere else that needs it later). Any
-// non-client internal user can pause/close a campaign, same as other
-// campaign-level edits in this file. Campaigns are never deleted — status
-// (e.g. Cancelled) is the only way a campaign leaves the active set.
-export async function updateCampaignStatus(campaignId: string, status: string) {
+// Sets Draft/Assigned/Active/On Hold/Closed/Cancelled on a campaign — used
+// by the status dropdown in the dashboard's Campaign Table (and anywhere
+// else that needs it later). Task #11: DRAFT -> ASSIGNED is automatic (see
+// assignTeamMember below) and never settable here; every other transition
+// is manual through this one action, gated per spec State Machine:
+// ASSIGNED -> ACTIVE is "brief accepted" (Campaign Manager only), ACTIVE ->
+// ON_HOLD is CM or Brand Solutions with a reason, ACTIVE -> CLOSED is
+// Campaign Manager only. CANCELLED is reachable by either from any
+// non-terminal state, same as before this task (a campaign that's dead is
+// dead regardless of exactly which stage it died at). Campaigns are never
+// deleted — status is the only way one leaves the active set.
+export async function updateCampaignStatus(campaignId: string, status: string, reason?: string) {
   const user = await requireUser();
   if (isClient(user.role)) throw new Error("Clients cannot change campaign status");
   if (!(CAMPAIGN_STATUSES as readonly string[]).includes(status)) {
     throw new Error("Invalid status.");
+  }
+  if (status === "DRAFT" || status === "ASSIGNED") {
+    throw new Error("Draft and Assigned are set automatically as the team is built — they can't be picked manually.");
+  }
+
+  const campaign = await prisma.campaign.findUniqueOrThrow({ where: { id: campaignId }, select: { status: true } });
+  const isCmOrBrandSolutions = user.role === "CAMPAIGN_MANAGER" || user.role === "BRAND_SOLUTIONS";
+
+  if (status === "ACTIVE") {
+    if (campaign.status !== "ASSIGNED") throw new Error("A campaign can only go Active from Assigned (brief accepted).");
+    if (user.role !== "CAMPAIGN_MANAGER") throw new Error("Only the Campaign Manager can accept the brief and move this campaign to Active.");
+  } else if (status === "ON_HOLD") {
+    if (!isCmOrBrandSolutions) throw new Error("Only the Campaign Manager or Brand Solutions can put a campaign on hold.");
+    if (!reason || !reason.trim()) throw new Error("A reason is required to put a campaign on hold.");
+  } else if (status === "CLOSED") {
+    if (user.role !== "CAMPAIGN_MANAGER") throw new Error("Only the Campaign Manager can close a campaign.");
   }
 
   await prisma.campaign.update({ where: { id: campaignId }, data: { status } });
@@ -226,7 +252,7 @@ export async function updateCampaignStatus(campaignId: string, status: string) {
     action: "CAMPAIGN_STATUS_CHANGED",
     entityType: "Campaign",
     entityId: campaignId,
-    meta: { status },
+    meta: { status, reason },
   });
 
   revalidatePath("/dashboard");
@@ -484,21 +510,50 @@ export async function setClientCampaignAccess(clientId: string, campaignId: stri
 // Assigns an internal user to a role on this campaign (Brand Solutions,
 // Campaign Manager, IR Manager/Executive) — shown in the team row on the
 // campaign detail page. A campaign can have more than one person per role.
+// Per spec Field Ownership: Campaign Manager/IR Executive/IR Intern
+// assignment is written by the IR Manager exclusively — this is the access
+// control key (assignment grants row-level visibility), so it's not left
+// open to Brand Solutions/CXO/Campaign Manager the way it was before.
 export async function assignTeamMember(campaignId: string, userId: string, roleOnCampaign: string) {
   const user = await requireUser();
-  if (isClient(user.role)) throw new Error("Clients cannot manage the campaign team");
+  if (user.role !== "IR_MANAGER") throw new Error("Only the IR Manager can assign the campaign team.");
 
   await prisma.campaignTeamMember.upsert({
     where: { campaignId_userId_roleOnCampaign: { campaignId, userId, roleOnCampaign } },
     update: {},
     create: { campaignId, userId, roleOnCampaign },
   });
+
+  // Spec State Machine: DRAFT -> ASSIGNED fires automatically once a
+  // Campaign Manager and at least one IR Executive are on the team — it's
+  // not a manual status pick (see updateCampaignStatus above).
+  const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { status: true } });
+  if (campaign?.status === "DRAFT") {
+    const team = await prisma.campaignTeamMember.findMany({ where: { campaignId }, select: { roleOnCampaign: true } });
+    const hasCM = team.some((t) => t.roleOnCampaign === "CAMPAIGN_MANAGER");
+    const hasExecutive = team.some((t) => t.roleOnCampaign === "IR_EXECUTIVE");
+    if (hasCM && hasExecutive) {
+      await prisma.campaign.update({ where: { id: campaignId }, data: { status: "ASSIGNED" } });
+      await logActivity({
+        campaignId,
+        actorId: user.id,
+        actorName: user.name,
+        action: "CAMPAIGN_STATUS_CHANGED",
+        entityType: "Campaign",
+        entityId: campaignId,
+        meta: { status: "ASSIGNED", auto: true },
+      });
+    }
+  }
+
   revalidatePath(`/campaigns/${campaignId}`);
+  revalidatePath("/dashboard");
+  revalidatePath("/campaigns");
 }
 
 export async function removeTeamMember(teamMemberId: string, campaignId: string) {
   const user = await requireUser();
-  if (isClient(user.role)) throw new Error("Clients cannot manage the campaign team");
+  if (user.role !== "IR_MANAGER") throw new Error("Only the IR Manager can change the campaign team.");
 
   await prisma.campaignTeamMember.delete({ where: { id: teamMemberId } });
   revalidatePath(`/campaigns/${campaignId}`);
@@ -508,7 +563,7 @@ export async function removeTeamMember(teamMemberId: string, campaignId: string)
 
 export async function addCreator(campaignId: string, formData: FormData) {
   const user = await requireUser();
-  if (isClient(user.role)) throw new Error("Clients cannot add creators");
+  if (!canOperateShortlist(user.role)) throw new Error("Not authorized to add creators to the shortlist.");
 
   const name = String(formData.get("name") ?? "").trim();
   const channelHandle = String(formData.get("channelHandle") ?? "").trim();
@@ -564,6 +619,10 @@ export async function addCreator(campaignId: string, formData: FormData) {
       youtubeShortsMedianERPercent,
       internalCost,
       quotedCost,
+      // Task #19: who sourced this row, for row-level Shortlisting scope
+      // (IR Intern sees only their own rows, IR Executive sees their own +
+      // their Interns' — see rbac.filterCreatorsForShortlistScope).
+      sourcedByUserId: user.id,
       shortlistDeliverables: {
         create: deliverableTypes.map((type) => ({ deliverableType: type })),
       },
@@ -608,18 +667,30 @@ export async function updateCreatorShortlist(
   }>
 ) {
   const user = await requireUser();
-  if (isClient(user.role)) throw new Error("Clients cannot edit shortlist details");
 
-  // Quoted Cost is what the Campaign Manager tells the client the creator
-  // costs — everything else on the shortlist (internal cost, socials,
-  // deliverables, etc.) stays open to the wider internal team, but only the
-  // Campaign Manager can move this specific number.
-  if (fields.quotedCost !== undefined && user.role !== "CAMPAIGN_MANAGER") {
-    throw new Error("Only a Campaign Manager can change the Quoted Cost.");
+  // Field Ownership: Quoted/Final Cost are Campaign-Manager-exclusive.
+  // Everything else here (internal cost, socials, deliverables, insights,
+  // rights of usage) is IR Executive/IR Intern territory — not Brand
+  // Solutions, not CXO, not Campaign Manager either.
+  const COMMERCIAL_FIELDS = ["quotedCost", "finalQuotedCost"] as const;
+  const hasCommercialField = COMMERCIAL_FIELDS.some((f) => fields[f] !== undefined);
+  const hasGeneralField = Object.keys(fields).some((k) => !(COMMERCIAL_FIELDS as readonly string[]).includes(k));
+  if (hasCommercialField && !canSetCommercials(user.role)) {
+    throw new Error("Only a Campaign Manager can change the Quoted Cost or Final Quoted Cost.");
+  }
+  if (hasGeneralField && !canOperateShortlist(user.role)) {
+    throw new Error("Not authorized to edit shortlist details.");
   }
 
-  const creator = await prisma.creator.findUnique({ where: { id: creatorId }, select: { campaignId: true } });
+  const creator = await prisma.creator.findUnique({ where: { id: creatorId }, select: { campaignId: true, internalCost: true } });
   if (!creator) throw new Error("Creator not found");
+
+  // Gate G11: block a quoted-cost save that leaves less than 12% margin —
+  // uses whatever internal cost this same call sets, else the stored one.
+  if (fields.quotedCost !== undefined && fields.quotedCost !== null) {
+    const internalCostForCheck = fields.internalCost !== undefined ? fields.internalCost : creator.internalCost;
+    assertMarginFloor(fields.quotedCost, internalCostForCheck);
+  }
 
   const { insightsLinks, ...rest } = fields;
   await prisma.creator.update({
@@ -627,6 +698,10 @@ export async function updateCreatorShortlist(
     data: {
       ...rest,
       ...(insightsLinks ? { insightsLinks: JSON.stringify(insightsLinks.filter(Boolean).slice(0, 4)) } : {}),
+      // Ball owner: the Campaign Manager setting a Quoted Cost is publishing
+      // this row to the client (spec State Machine: In Pricing -> Published,
+      // ball owner Client) — it's now their move.
+      ...(fields.quotedCost !== undefined && fields.quotedCost !== null ? { ballOwner: "CLIENT" } : {}),
     },
   });
 
@@ -688,7 +763,10 @@ export async function setCreatorClientDecision(
     throw new Error("Final costing hasn't been set yet — ask TBM to lock in the Final Quoted Cost before onboarding this creator.");
   }
 
-  await prisma.creator.update({ where: { id: creatorId }, data: fields });
+  // Ball owner comes back to TBM the moment the client sets any decision —
+  // same as clientReviewCreator, it's now TBM's move (onboarding kickoff,
+  // re-pricing, or nothing further if rejected).
+  await prisma.creator.update({ where: { id: creatorId }, data: { ...fields, ballOwner: "TBM" } });
 
   const wantsOnboard = fields.clientIntent === "ONBOARD" || fields.clientFinalIntent === "ONBOARD";
   const wantsReject = fields.clientIntent === "REJECTED" || fields.clientFinalIntent === "REJECTED";
@@ -698,10 +776,10 @@ export async function setCreatorClientDecision(
     const defaultDeadline = new Date(Date.now() + campaign.slaOnboardToGoLiveDays * 24 * 60 * 60 * 1000);
     await prisma.creator.update({
       where: { id: creatorId },
-      data: { status: "ONBOARDED", onboardedAt: new Date(), commercialsLocked: true, goLiveDeadline: defaultDeadline },
+      data: { status: "ONBOARDED", onboardedAt: new Date(), commercialsLocked: true, goLiveDeadline: defaultDeadline, ballOwner: "TBM" },
     });
   } else if (wantsReject && creator.status !== "ONBOARDED") {
-    await prisma.creator.update({ where: { id: creatorId }, data: { status: "CLIENT_REJECTED" } });
+    await prisma.creator.update({ where: { id: creatorId }, data: { status: "CLIENT_REJECTED", ballOwner: "TBM" } });
   }
 
   if (wantsOnboard) {
@@ -952,6 +1030,12 @@ export async function refreshAllCreatorsSocialStats() {
 
 export async function rejectCreator(creatorId: string, reason: string) {
   const user = await requireUser();
+  // Two distinct spec flows land on this one action: IR Executive/Intern
+  // correcting a row before it's submitted, and Campaign Manager's formal
+  // Pricing Queue rejection (In Pricing → Rejected). Both allowed here.
+  if (!canOperateShortlist(user.role) && !canSetCommercials(user.role)) {
+    throw new Error("Not authorized to remove creators from the shortlist.");
+  }
   const creator = await prisma.creator.update({
     where: { id: creatorId },
     data: { status: "REJECTED", rejectionReason: reason },
@@ -977,7 +1061,9 @@ export async function clientReviewCreator(
   const user = await requireUser();
   if (!isClient(user.role)) throw new Error("Only the client can submit a review decision");
 
-  const creator = await prisma.creator.update({ where: { id: creatorId }, data: { status: decision } });
+  // Ball owner comes back to TBM the moment the client submits any review
+  // decision — they now have to act on it (renegotiate, re-price, etc.).
+  const creator = await prisma.creator.update({ where: { id: creatorId }, data: { status: decision, ballOwner: "TBM" } });
 
   if (remark) {
     await prisma.remark.create({
@@ -1017,6 +1103,10 @@ export async function clientReviewCreator(
 
 // ---------- Negotiation ----------
 
+// Gate G10: negotiation is capped at 3 rounds — a 4th round must be
+// escalated to a manager rather than just becoming another back-and-forth.
+const NEGOTIATION_ROUND_CAP = 3;
+
 export async function proposeNegotiationRound(creatorId: string, proposedCost: number, note?: string) {
   const user = await requireUser();
   const creator = await prisma.creator.findUniqueOrThrow({ where: { id: creatorId } });
@@ -1025,6 +1115,20 @@ export async function proposeNegotiationRound(creatorId: string, proposedCost: n
     orderBy: { roundNumber: "desc" },
   });
   const roundNumber = (lastRound?.roundNumber ?? 0) + 1;
+
+  if (roundNumber > NEGOTIATION_ROUND_CAP) {
+    throw new Error(
+      `This creator has already hit ${NEGOTIATION_ROUND_CAP} negotiation rounds — escalate to a manager instead of proposing another round.`
+    );
+  }
+
+  // Same "Campaign Manager exclusively moves Quoted Cost" rule as every
+  // other write path (see updateCreatorShortlist) — only applies to TBM's
+  // own proposal below, not the client's counter-offer.
+  if (!isClient(user.role)) {
+    if (!canSetCommercials(user.role)) throw new Error("Only a Campaign Manager can propose a negotiation round.");
+    assertMarginFloor(proposedCost, creator.internalCost);
+  }
 
   await prisma.negotiationRound.create({
     data: {
@@ -1039,9 +1143,15 @@ export async function proposeNegotiationRound(creatorId: string, proposedCost: n
 
   // TBM proposing writes the final number to the quoted field ONLY — the
   // internal cost field is never touched by negotiation (margin guardrail,
-  // brief slide 07).
+  // brief slide 07). Ball owner flips to whichever side didn't just move —
+  // Client after a TBM proposal, TBM after a client counter-offer.
   if (!isClient(user.role)) {
-    await prisma.creator.update({ where: { id: creatorId }, data: { quotedCost: proposedCost, status: "CLIENT_NEGOTIATING" } });
+    await prisma.creator.update({
+      where: { id: creatorId },
+      data: { quotedCost: proposedCost, status: "CLIENT_NEGOTIATING", ballOwner: "CLIENT" },
+    });
+  } else {
+    await prisma.creator.update({ where: { id: creatorId }, data: { ballOwner: "TBM" } });
   }
 
   await logActivity({
@@ -1061,9 +1171,10 @@ export async function proposeNegotiationRound(creatorId: string, proposedCost: n
 
 export async function onboardCreator(creatorId: string) {
   const user = await requireUser();
-  if (!isClient(user.role) && user.role !== "CAMPAIGN_MANAGER" && user.role !== "BRAND_SOLUTIONS") {
-    // Either the client marks onboard, or CM/Brand Solutions can confirm it internally.
-  }
+  // CXO is locked out of the Onboarding operation itself (spec: view-only,
+  // not a day-to-day operator) — clients and every other internal role can
+  // still mark onboard as before.
+  if (user.role === "CXO") throw new Error("Not authorized to onboard creators.");
 
   const existing = await prisma.creator.findUniqueOrThrow({ where: { id: creatorId } });
   const campaign = await prisma.campaign.findUniqueOrThrow({ where: { id: existing.campaignId } });
@@ -1091,6 +1202,108 @@ export async function onboardCreator(creatorId: string) {
     action: "CREATOR_ONBOARDED",
     entityType: "Creator",
     entityId: creator.id,
+  });
+
+  revalidatePath(`/campaigns/${creator.campaignId}`);
+}
+
+// ---------- Two-person pause (task #10 remainder, spec Gate G6) ----------
+// "Blocked on Product" needs two people: an IR SPOC triggers the pause
+// (something's stuck on the creator/product side), a Campaign Manager
+// confirms it — only then does the row actually go Blocked and the clock
+// stop. Resuming (product delivered) is the IR SPOC's call alone, same as
+// the trigger side, and rolls the blocked days into pausedDays so the SLA
+// clock can exclude them.
+
+export async function triggerPause(creatorId: string, reason: string) {
+  const user = await requireUser();
+  if (isClient(user.role)) throw new Error("Clients cannot trigger a pause.");
+  if (!reason.trim()) throw new Error("A reason is required to request a pause.");
+
+  const creator = await prisma.creator.findUniqueOrThrow({ where: { id: creatorId } });
+  if (creator.pauseRequestedAt && !creator.pauseConfirmedAt) {
+    throw new Error("A pause is already pending confirmation for this creator.");
+  }
+
+  await prisma.creator.update({
+    where: { id: creatorId },
+    data: { pauseRequestedAt: new Date(), pauseRequestedByUserId: user.id, pauseReason: reason.trim() },
+  });
+
+  await logActivity({
+    campaignId: creator.campaignId,
+    actorId: user.id,
+    actorName: user.name,
+    action: "PAUSE_REQUESTED",
+    entityType: "Creator",
+    entityId: creatorId,
+    meta: { reason },
+  });
+
+  revalidatePath(`/campaigns/${creator.campaignId}`);
+}
+
+export async function confirmPause(creatorId: string) {
+  const user = await requireUser();
+  if (user.role !== "CAMPAIGN_MANAGER") throw new Error("Only the Campaign Manager can confirm a pause.");
+
+  const creator = await prisma.creator.findUniqueOrThrow({ where: { id: creatorId } });
+  if (!creator.pauseRequestedAt) throw new Error("No pause has been requested for this creator.");
+  if (creator.pauseConfirmedAt) throw new Error("This pause is already confirmed.");
+
+  await prisma.creator.update({
+    where: { id: creatorId },
+    data: { pauseConfirmedAt: new Date(), pauseConfirmedByUserId: user.id, status: "BLOCKED", ballOwner: "BLOCKED" },
+  });
+
+  await logActivity({
+    campaignId: creator.campaignId,
+    actorId: user.id,
+    actorName: user.name,
+    action: "PAUSE_CONFIRMED",
+    entityType: "Creator",
+    entityId: creatorId,
+  });
+
+  revalidatePath(`/campaigns/${creator.campaignId}`);
+}
+
+// IR SPOC's call — product delivered, back in execution. Clears the pause
+// fields, folds the blocked window into pausedDays (so the go-live SLA
+// clock can subtract it), and hands the ball to the Creator per spec
+// (State Machine: Blocked on Product -> In Execution).
+export async function resumeFromPause(creatorId: string) {
+  const user = await requireUser();
+  if (isClient(user.role)) throw new Error("Clients cannot resume a paused creator.");
+
+  const creator = await prisma.creator.findUniqueOrThrow({ where: { id: creatorId } });
+  if (!creator.pauseConfirmedAt) throw new Error("This creator isn't in a confirmed pause.");
+
+  const blockedMs = Date.now() - creator.pauseConfirmedAt.getTime();
+  const blockedDays = Math.max(0, Math.round(blockedMs / (24 * 60 * 60 * 1000)));
+
+  await prisma.creator.update({
+    where: { id: creatorId },
+    data: {
+      status: "ONBOARDED",
+      ballOwner: "CREATOR",
+      pausedDays: creator.pausedDays + blockedDays,
+      pauseRequestedAt: null,
+      pauseRequestedByUserId: null,
+      pauseReason: null,
+      pauseConfirmedAt: null,
+      pauseConfirmedByUserId: null,
+    },
+  });
+
+  await logActivity({
+    campaignId: creator.campaignId,
+    actorId: user.id,
+    actorName: user.name,
+    action: "PAUSE_RESOLVED",
+    entityType: "Creator",
+    entityId: creatorId,
+    meta: { blockedDays },
   });
 
   revalidatePath(`/campaigns/${creator.campaignId}`);
@@ -1141,11 +1354,28 @@ export async function updateCreatorDeadline(creatorId: string, newDeadline: stri
 
 // Commercial edit after lock requires a logged reason + dual approval
 // (Campaign Manager + Brand Solutions) per brief slide 11.
+// Gate G11: quoted cost can't be saved if it leaves less than a 12% margin
+// over internal cost — that needs Brand Solutions sign-off outside the
+// system today (no separate approval-queue object exists yet), so this
+// blocks the direct save with a clear reason rather than silently applying
+// a thin-margin price.
+const MARGIN_FLOOR_PERCENT = 12;
+function assertMarginFloor(quotedCost: number, internalCost: number | null) {
+  if (internalCost === null || internalCost <= 0 || quotedCost <= 0) return;
+  const marginPercent = ((quotedCost - internalCost) / quotedCost) * 100;
+  if (marginPercent < MARGIN_FLOOR_PERCENT) {
+    throw new Error(
+      `This price leaves only ${marginPercent.toFixed(1)}% margin, below the ${MARGIN_FLOOR_PERCENT}% floor. Get Brand Solutions sign-off before pricing this low.`
+    );
+  }
+}
+
 export async function requestCommercialEdit(creatorId: string, newQuotedCost: number, reason: string) {
   const user = await requireUser();
   if (!canSetCommercials(user.role)) throw new Error("Not authorized to edit commercials");
 
   const creator = await prisma.creator.findUniqueOrThrow({ where: { id: creatorId } });
+  assertMarginFloor(newQuotedCost, creator.internalCost);
   await logActivity({
     campaignId: creator.campaignId,
     actorId: user.id,
@@ -1174,6 +1404,7 @@ export async function requestFinalCostEdit(creatorId: string, newFinalQuotedCost
   if (!reason.trim()) throw new Error("A reason is required to change a locked final cost");
 
   const creator = await prisma.creator.findUniqueOrThrow({ where: { id: creatorId } });
+  assertMarginFloor(newFinalQuotedCost, creator.internalCost);
   await logActivity({
     campaignId: creator.campaignId,
     actorId: user.id,
@@ -1341,6 +1572,14 @@ export async function addLiveLink(deliverableId: string, liveLink: string) {
   // Adding a live link is the trigger for automated tracking (brief slide 14).
   // Wire the real fetch in src/lib/tracking.ts (see README) and call it here
   // or from a scheduled job keyed off deliverables with status LIVE.
+
+  // Ball owner: In Execution -> Live is a Closed state (spec State Machine)
+  // once every one of this creator's deliverables is live — not just this one.
+  const siblingDeliverables = await prisma.deliverable.findMany({ where: { creatorId: deliverable.creatorId } });
+  const allLive = siblingDeliverables.every((d) => d.status === "LIVE");
+  if (allLive) {
+    await prisma.creator.update({ where: { id: deliverable.creatorId }, data: { ballOwner: "CLOSED" } });
+  }
 
   await logActivity({
     campaignId: deliverable.creator.campaignId,
@@ -2053,4 +2292,230 @@ export async function deleteClientAccount(clientId: string) {
     throw err;
   }
   revalidatePath("/team");
+}
+
+// ---------- Month lock (task #17 / spec Gate G12) ----------
+// Finance figures stay provisional/editable all month; only CXO (or admin,
+// same role gate as canManageTeam) can lock a month once the accounts audit
+// is done. Once locked there's no unlock action by design — a correction
+// after lock goes through auditCorrectionNotes on a fresh review, not by
+// reopening the month.
+
+export async function getOrCreateMonth(month: string) {
+  await requireUser();
+  const existing = await prisma.month.findFirst({ where: { month } });
+  if (existing) return existing;
+  return prisma.month.create({ data: { month } });
+}
+
+export async function listMonths() {
+  await requireUser();
+  return prisma.month.findMany({ orderBy: { month: "desc" }, include: { lockedBy: { select: { id: true, name: true } } } });
+}
+
+export async function lockMonth(month: string, auditCorrectionNotes?: string) {
+  const user = await requireUser();
+  if (!canManageTeam(user.role)) throw new Error("Only a CXO can lock a month.");
+
+  const existing = await prisma.month.findFirst({ where: { month } });
+  const record = existing
+    ? await prisma.month.update({
+        where: { id: existing.id },
+        data: { status: "LOCKED", lockedAt: new Date(), lockedByUserId: user.id, auditCorrectionNotes },
+      })
+    : await prisma.month.create({
+        data: { month, status: "LOCKED", lockedAt: new Date(), lockedByUserId: user.id, auditCorrectionNotes },
+      });
+
+  // No logActivity call here — ActivityLog is campaign-scoped (campaignId is
+  // required) and a Month lock isn't tied to one campaign. The Month row
+  // itself (lockedAt/lockedByUserId) is the audit record for this action.
+
+  revalidatePath("/finance");
+  revalidatePath("/admin/months");
+  return record;
+}
+
+// ---------- Escalation (task #14, spec State Machine: Open -> Owned -> Closed) ----------
+// Raised by any internal role or the Client, claimed by its proposed owner
+// (or the IR Manager, who can claim anything), closed only with a
+// resolution note + root cause logged (spec Gate G14).
+
+export async function raiseEscalation(input: {
+  campaignId: string;
+  creatorId?: string | null;
+  title: string;
+  description?: string;
+  sitsAt: string;
+  severity: string;
+  proposedOwnerId?: string | null;
+}) {
+  const user = await requireUser();
+  const title = input.title.trim();
+  if (!title) throw new Error("Title is required.");
+
+  const escalation = await prisma.escalation.create({
+    data: {
+      campaignId: input.campaignId,
+      creatorId: input.creatorId || null,
+      title,
+      description: input.description || null,
+      sitsAt: input.sitsAt,
+      severity: input.severity,
+      proposedOwnerId: input.proposedOwnerId || null,
+      ...(isClient(user.role) ? { raisedByClientId: user.id } : { raisedByUserId: user.id }),
+    },
+  });
+
+  await logActivity({
+    campaignId: input.campaignId,
+    ...actorFields(user),
+    actorName: user.name,
+    action: "ESCALATION_RAISED",
+    entityType: "Escalation",
+    entityId: escalation.id,
+    meta: { title, severity: input.severity },
+  });
+
+  // Instant-notify the proposed owner — an open escalation with nobody
+  // watching it defeats the point.
+  if (escalation.proposedOwnerId) {
+    await notify({
+      userId: escalation.proposedOwnerId,
+      channel: "INSTANT",
+      title: `New escalation: ${title}`,
+      body: `${user.name} raised "${title}" and proposed you as owner.`,
+    });
+  }
+
+  revalidatePath(`/campaigns/${input.campaignId}`);
+  revalidatePath("/escalations");
+  return escalation;
+}
+
+export async function claimEscalation(escalationId: string) {
+  const user = await requireUser();
+  if (isClient(user.role)) throw new Error("Clients cannot claim escalations.");
+
+  const escalation = await prisma.escalation.findUniqueOrThrow({ where: { id: escalationId } });
+  const isProposedOwner = escalation.proposedOwnerId === user.id;
+  if (!isProposedOwner && user.role !== "IR_MANAGER") {
+    throw new Error("Only the proposed owner or the IR Manager can claim this escalation.");
+  }
+
+  const updated = await prisma.escalation.update({
+    where: { id: escalationId },
+    data: { status: "OWNED", ownerId: user.id },
+  });
+
+  await logActivity({
+    campaignId: escalation.campaignId,
+    actorId: user.id,
+    actorName: user.name,
+    action: "ESCALATION_OWNED",
+    entityType: "Escalation",
+    entityId: escalationId,
+  });
+
+  revalidatePath(`/campaigns/${escalation.campaignId}`);
+  revalidatePath("/escalations");
+  return updated;
+}
+
+export async function closeEscalation(escalationId: string, resolutionNote: string, rootCauseCategory: string) {
+  const user = await requireUser();
+  if (isClient(user.role)) throw new Error("Clients cannot close escalations.");
+  if (!resolutionNote.trim()) throw new Error("A resolution note is required to close an escalation.");
+
+  const escalation = await prisma.escalation.findUniqueOrThrow({ where: { id: escalationId } });
+  if (escalation.ownerId !== user.id && user.role !== "IR_MANAGER") {
+    throw new Error("Only the owner or the IR Manager can close this escalation.");
+  }
+
+  const updated = await prisma.escalation.update({
+    where: { id: escalationId },
+    data: { status: "CLOSED", resolutionNote, rootCauseCategory, closedAt: new Date() },
+  });
+
+  await logActivity({
+    campaignId: escalation.campaignId,
+    actorId: user.id,
+    actorName: user.name,
+    action: "ESCALATION_CLOSED",
+    entityType: "Escalation",
+    entityId: escalationId,
+    meta: { rootCauseCategory },
+  });
+
+  revalidatePath(`/campaigns/${escalation.campaignId}`);
+  revalidatePath("/escalations");
+  return updated;
+}
+
+export async function listEscalations() {
+  const user = await requireUser();
+  const where = isClient(user.role) ? { raisedByClientId: user.id } : {};
+  return prisma.escalation.findMany({
+    where,
+    orderBy: { createdAt: "desc" },
+    include: {
+      campaign: { select: { id: true, name: true, brand: true } },
+      creator: { select: { id: true, name: true } },
+      raisedByUser: { select: { id: true, name: true } },
+      raisedByClient: { select: { id: true, name: true } },
+      proposedOwner: { select: { id: true, name: true } },
+      owner: { select: { id: true, name: true } },
+    },
+  });
+}
+
+// ---------- Action Tracker / chase log (task #16, 7-day client-chase gate) ----------
+
+export async function logChase(creatorId: string, channel: string, note?: string) {
+  const user = await requireUser();
+  if (isClient(user.role)) throw new Error("Clients cannot log chase attempts.");
+
+  const creator = await prisma.creator.findUniqueOrThrow({ where: { id: creatorId }, select: { campaignId: true } });
+  const chase = await prisma.chaseLog.create({
+    data: { creatorId, campaignId: creator.campaignId, channel, note: note || null, loggedByUserId: user.id },
+  });
+
+  await logActivity({
+    campaignId: creator.campaignId,
+    actorId: user.id,
+    actorName: user.name,
+    action: "CHASE_LOGGED",
+    entityType: "ChaseLog",
+    entityId: chase.id,
+    meta: { channel },
+  });
+
+  revalidatePath(`/campaigns/${creator.campaignId}`);
+  revalidatePath("/action-tracker");
+  return chase;
+}
+
+// Rows where the last chase (or the row's own creation, if never chased) is
+// more than 7 days old and the creator isn't already in a terminal state —
+// the trigger the spec's Action Tracker page is built around.
+export async function getStaleChaseCandidates() {
+  await requireUser();
+  const creators = await prisma.creator.findMany({
+    where: { status: { notIn: ["ONBOARDED", "REJECTED", "CLIENT_REJECTED"] } },
+    include: {
+      campaign: { select: { id: true, name: true } },
+      chaseLogs: { orderBy: { createdAt: "desc" }, take: 1 },
+    },
+  });
+
+  const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+  const now = Date.now();
+  return creators
+    .map((c) => {
+      const lastChaseAt = c.chaseLogs[0]?.createdAt ?? c.createdAt;
+      const daysSinceChase = Math.floor((now - lastChaseAt.getTime()) / (24 * 60 * 60 * 1000));
+      return { creator: c, lastChaseAt, daysSinceChase };
+    })
+    .filter((row) => now - row.lastChaseAt.getTime() > sevenDaysMs)
+    .sort((a, b) => b.daysSinceChase - a.daysSinceChase);
 }

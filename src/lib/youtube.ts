@@ -4,7 +4,9 @@
 //
 // Median Views/ER% methodology (matches the shortlist sheet's own spec):
 // pull the channel's most recent uploads, split them into long-form vs
-// Shorts by duration (<=60s = Shorts), then per bucket:
+// Shorts by duration (<=180s = Shorts, matching YouTube's Oct 2024 Shorts
+// definition — most creators now post Shorts well past the old 60s cap),
+// then per bucket:
 //   Median Views = median(viewCount) across that bucket's videos
 //   Median ER%   = (median(likeCount) + median(commentCount)) / Median Views * 100
 // This intentionally omits "outlier removal" beyond using the median itself
@@ -17,7 +19,7 @@
 
 const API_BASE = "https://www.googleapis.com/youtube/v3";
 const RECENT_VIDEO_SAMPLE_SIZE = 15; // pulled, then split into long-form/Shorts buckets
-const SHORTS_MAX_SECONDS = 60;
+const SHORTS_MAX_SECONDS = 180; // YouTube's current Shorts ceiling (raised from 60s in Oct 2024)
 
 export type YoutubeChannelStats = {
   channelId: string;
