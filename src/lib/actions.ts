@@ -606,6 +606,14 @@ export async function updateCreatorShortlist(
   const user = await requireUser();
   if (isClient(user.role)) throw new Error("Clients cannot edit shortlist details");
 
+  // Quoted Cost is what the Campaign Manager tells the client the creator
+  // costs — everything else on the shortlist (internal cost, socials,
+  // deliverables, etc.) stays open to the wider internal team, but only the
+  // Campaign Manager can move this specific number.
+  if (fields.quotedCost !== undefined && user.role !== "CAMPAIGN_MANAGER") {
+    throw new Error("Only a Campaign Manager can change the Quoted Cost.");
+  }
+
   const creator = await prisma.creator.findUnique({ where: { id: creatorId }, select: { campaignId: true } });
   if (!creator) throw new Error("Creator not found");
 

@@ -252,7 +252,7 @@ export default function CreatorKanban({
                   </thead>
                   <tbody className="divide-y divide-slate-100 font-medium dark:divide-slate-800">
                     {shortlist.map((c) => (
-                      <ShortlistCreatorRow key={c.id} creator={c} canSeeCost={canSeeCost} isClientView={isClientView} />
+                      <ShortlistCreatorRow key={c.id} creator={c} canSeeCost={canSeeCost} isClientView={isClientView} role={role} />
                     ))}
                     {shortlist.length === 0 && (
                       <tr>
@@ -814,7 +814,7 @@ function PlatformBadge({ platform, href }: { platform: string; href?: string | n
 // tags in a single cell rather than separate rows — Audience Size/Median
 // Views/Median ER%/costs/client decision are one shared set of numbers per
 // creator, not broken out per deliverable type.
-function ShortlistCreatorRow({ creator, canSeeCost, isClientView }: { creator: Creator; canSeeCost: boolean; isClientView: boolean }) {
+function ShortlistCreatorRow({ creator, canSeeCost, isClientView, role }: { creator: Creator; canSeeCost: boolean; isClientView: boolean; role: Role }) {
   const [showInsights, setShowInsights] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshMsg, setRefreshMsg] = useState<string | null>(null);
@@ -1080,7 +1080,7 @@ function ShortlistCreatorRow({ creator, canSeeCost, isClientView }: { creator: C
       <EditableNumberCell
         value={creator.quotedCost}
         prefix="₹"
-        editable={!isClientView}
+        editable={role === "CAMPAIGN_MANAGER"}
         onSave={(v) => updateCreatorShortlist(creator.id, { quotedCost: v })}
         textClassName="font-bold text-slate-900 dark:text-white"
       />
