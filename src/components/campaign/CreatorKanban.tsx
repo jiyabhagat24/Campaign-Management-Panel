@@ -549,10 +549,11 @@ function AddCreatorForm({ campaignId, onDone }: { campaignId: string; onDone: ()
             <input name="channelHandle" placeholder="@handle" required className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-medium focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:placeholder:text-slate-500" />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <NumField name="quotedCost" label="Budget given" prefix="₹" />
-            <NumField name="internalCost" label="Internal cost" prefix="₹" />
-          </div>
+          {/* Budget given (quotedCost) removed from this form on purpose —
+              that's the cost the Campaign Manager quotes to the client, so
+              it's only ever set from the shortlist table, and only by a
+              Campaign Manager (see updateCreatorShortlist in actions.ts). */}
+          <NumField name="internalCost" label="Internal cost" prefix="₹" />
 
           <div>
             <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Deliverables to pitch</p>

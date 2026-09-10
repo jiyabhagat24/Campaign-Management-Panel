@@ -519,7 +519,11 @@ export async function addCreator(campaignId: string, formData: FormData) {
   const avgViews = Number(formData.get("avgViews") ?? 0) || null;
   const engagementRate = Number(formData.get("engagementRate") ?? 0) || null;
   const internalCost = Number(formData.get("internalCost") ?? 0) || null;
-  const quotedCost = Number(formData.get("quotedCost") ?? 0) || null;
+  // Quoted Cost is deliberately never set here, even if a stray form field
+  // sent one — it's the cost the Campaign Manager quotes to the client, so
+  // it only gets set later from the shortlist table, only by a Campaign
+  // Manager (enforced in updateCreatorShortlist above).
+  const quotedCost = null;
   // Carried over from lookupYoutubeChannelAction's paste-URL auto-fill (see
   // hidden inputs on the form) — same pattern as the Instagram fields above.
   const youtubeSubscribers = Number(formData.get("youtubeSubscribers") ?? 0) || null;
