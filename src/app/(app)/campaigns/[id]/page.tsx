@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { currentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { canCreateCampaign, canSeeInternalCost, canViewCampaign, isClient, serializeCreatorsForClient, filterCreatorsForShortlistScope } from "@/lib/rbac";
+import { canCreateCampaign, canSeeInternalCost, canViewCampaign, isClient, serializeCreatorsForClient, filterCreatorsForShortlistScope, isSuperAdmin } from "@/lib/rbac";
 import CampaignHeaderEditor from "@/components/campaign/CampaignHeaderEditor";
 import TeamRow from "@/components/campaign/TeamRow";
 import ClientRow from "@/components/campaign/ClientRow";
@@ -109,7 +109,7 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
             brief: campaign.brief,
             platformBriefs: campaign.platformBriefs,
           }}
-          canEdit={canCreateCampaign(user.role)}
+          canEdit={canCreateCampaign(user.role) || isSuperAdmin(user.id)}
           breached={breached}
           atRisk={atRisk}
         />
@@ -121,7 +121,7 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
             campaignId={campaign.id}
             teamMembers={campaign.teamMembers}
             internalUsers={internalUsers}
-            canEdit={user.role === "IR_MANAGER"}
+            canEdit={user.role === "IR_MANAGER" || isSuperAdmin(user.id)}
           />
         </div>
 
@@ -175,6 +175,7 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
         campaignStartDate={campaign.startDate}
         creators={creators as any}
         role={user.role}
+        currentUserId={user.id}
         canSeeCost={canSeeCost}
         isClientView={isClientView}
         internalUsers={internalUsers}

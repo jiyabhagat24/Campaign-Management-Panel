@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { Role } from "@/lib/constants";
-import { canSetCommercials, canApproveCommercialEdit, canOperateShortlist } from "@/lib/rbac";
+import { canSetCommercials, canApproveCommercialEdit, canOperateShortlist, isSuperAdmin } from "@/lib/rbac";
 import {
   PLATFORM_LABELS,
   creatorKanbanColumn,
@@ -152,6 +152,7 @@ export default function CreatorKanban({
   campaignStartDate,
   creators,
   role,
+  currentUserId,
   canSeeCost,
   isClientView,
   internalUsers,
@@ -163,6 +164,7 @@ export default function CreatorKanban({
   campaignStartDate: string | Date | null;
   creators: Creator[];
   role: Role;
+  currentUserId?: string;
   canSeeCost: boolean;
   isClientView: boolean;
   internalUsers: { id: string; name: string; role: string }[];
@@ -170,6 +172,9 @@ export default function CreatorKanban({
 }) {
   const [addingCreator, setAddingCreator] = useState(false);
   const [tab, setTab] = useState<"SHORTLIST" | "ONBOARDING" | "REPORT">("SHORTLIST");
+  // Build/testing account with every UI gate bypassed too, not just the
+  // server actions — see isSuperAdmin in rbac.ts.
+  const superAdmin = isSuperAdmin(currentUserId);
 
   // A creator removed via the trash icon below gets status REJECTED
   // (see rejectCreator) — kept in the DB for history, just dropped off
@@ -218,7 +223,7 @@ export default function CreatorKanban({
             {/* Only IR Executive/IR Intern add creators to Shortlisting per
                 spec — not Campaign Manager, Brand Solutions, or CXO (see
                 rbac.ts canOperateShortlist). */}
-            {canOperateShortlist(role) && (
+            {(canOperateShortlist(role) || superAdmin) && (
               <div>
                 {!addingCreator ? (
                   <button
@@ -259,7 +264,7 @@ export default function CreatorKanban({
                       <th className="sticky top-0 z-30 w-[220px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Client&apos;s Remark</th>
                       <th className="sticky top-0 z-30 w-[150px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Final Quoted Cost</th>
                       <th className="sticky top-0 z-30 w-[200px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Client&apos;s Final Intent</th>
-                      {canOperateShortlist(role) || canSetCommercials(role) ? (
+                      {canOperateShortlist(role) || canSetCommercials(role) || superAdmin ? (
                         <th className="sticky top-0 z-30 w-[70px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Remove</th>
                       ) : (
                         <th className="sticky top-0 z-30 w-6 border-b border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800" aria-hidden />
@@ -268,7 +273,7 @@ export default function CreatorKanban({
                   </thead>
                   <tbody className="divide-y divide-slate-100 font-medium dark:divide-slate-800">
                     {shortlist.map((c) => (
-                      <ShortlistCreatorRow key={c.id} creator={c} canSeeCost={canSeeCost} isClientView={isClientView} role={role} />
+                      <ShortlistCreatorRow key={c.id} creator={c} canSeeCost={canSeeCost} isClientView={isClientView} role={role} superAdmin={superAdmin} />
                     ))}
                     {shortlist.length === 0 && (
                       <tr>
@@ -323,9 +328,10 @@ export default function CreatorKanban({
                       isClientView={isClientView}
                       internalUsers={internalUsers}
                       activityLogs={activityLogs}
-                      canApproveCost={canApproveCommercialEdit(role)}
-                      canSetCost={canSetCommercials(role)}
+                      canApproveCost={canApproveCommercialEdit(role) || superAdmin}
+                      canSetCost={canSetCommercials(role) || superAdmin}
                       role={role}
+                      superAdmin={superAdmin}
                     />
                   ))}
                   {onboarding.length === 0 && (
@@ -832,7 +838,7 @@ function PlatformBadge({ platform, href }: { platform: string; href?: string | n
 // tags in a single cell rather than separate rows — Audience Size/Median
 // Views/Median ER%/costs/client decision are one shared set of numbers per
 // creator, not broken out per deliverable type.
-function ShortlistCreatorRow({ creator, canSeeCost, isClientView, role }: { creator: Creator; canSeeCost: boolean; isClientView: boolean; role: Role }) {
+function ShortlistCreatorRow({ creator, canSeeCost, isClientView, role, superAdmin = false }: { creator: Creator; canSeeCost: boolean; isClientView: boolean; role: Role; superAdmin?: boolean }) {
   const [showInsights, setShowInsights] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshMsg, setRefreshMsg] = useState<string | null>(null);
@@ -1090,7 +1096,7 @@ function ShortlistCreatorRow({ creator, canSeeCost, isClientView, role }: { crea
         <EditableNumberCell
           value={creator.internalCost ?? null}
           prefix="₹"
-          editable={canOperateShortlist(role)}
+          editable={canOperateShortlist(role) || superAdmin}
           onSave={(v) => updateCreatorShortlist(creator.id, { internalCost: v })}
           textClassName="text-indigo-600 dark:text-indigo-400"
         />
@@ -1099,7 +1105,7 @@ function ShortlistCreatorRow({ creator, canSeeCost, isClientView, role }: { crea
         <EditableNumberCell
           value={creator.quotedCost}
           prefix="₹"
-          editable={role === "CAMPAIGN_MANAGER"}
+          editable={role === "CAMPAIGN_MANAGER" || superAdmin}
           onSave={(v) => updateCreatorShortlist(creator.id, { quotedCost: v })}
           textClassName="font-bold text-slate-900 dark:text-white"
         />
@@ -1172,7 +1178,7 @@ function ShortlistCreatorRow({ creator, canSeeCost, isClientView, role }: { crea
           <StatusBadge status={creator.clientFinalIntent ?? "PENDING"} />
         )}
       </td>
-      {(canOperateShortlist(role) || canSetCommercials(role)) && (
+      {(canOperateShortlist(role) || canSetCommercials(role) || superAdmin) && (
         <td className="whitespace-nowrap border-b border-slate-100 px-5 py-4 dark:border-slate-800">
           <button
             type="button"
@@ -1347,6 +1353,7 @@ function OnboardingCreatorRow({
   canApproveCost,
   canSetCost,
   role,
+  superAdmin = false,
 }: {
   creator: Creator;
   isClientView: boolean;
@@ -1355,6 +1362,7 @@ function OnboardingCreatorRow({
   canApproveCost: boolean;
   canSetCost: boolean;
   role: Role;
+  superAdmin?: boolean;
 }) {
   const [showInsights, setShowInsights] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -1600,7 +1608,7 @@ function OnboardingCreatorRow({
           {!isClientView && creator.pauseRequestedAt && !creator.pauseConfirmedAt && (
             <div className="flex flex-col gap-0.5">
               <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400">Pause pending confirmation</span>
-              {role === "CAMPAIGN_MANAGER" && (
+              {(role === "CAMPAIGN_MANAGER" || superAdmin) && (
                 <button
                   type="button"
                   onClick={handleConfirmPause}

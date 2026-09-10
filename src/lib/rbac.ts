@@ -1,5 +1,17 @@
 import { COMMERCIAL_APPROVER_ROLES, INTERNAL_COST_ROLES, type Role } from "@/lib/constants";
 
+// Single build/testing account with every exact-role gate in the app
+// bypassed. This app's roles are exclusive, not hierarchical (Campaign
+// Manager-only, IR Manager-only, Brand Solutions-only checks don't nest
+// under CXO), so a real "above CXO, no restrictions" account needs an
+// explicit override rather than a role value — checked by user id (stable
+// across name/email edits) at every gate that would otherwise block her.
+// jiya.bhagat@theboredmonkey.com, id confirmed via the Users table.
+const SUPERADMIN_USER_IDS = new Set<string>(["8d508989-0d07-47e4-a263-f111d7e2052d"]);
+export function isSuperAdmin(userId: string | null | undefined): boolean {
+  return Boolean(userId && SUPERADMIN_USER_IDS.has(userId));
+}
+
 export function isClient(role: Role) {
   return role === "CLIENT";
 }

@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { currentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { canSetCommercials, campaignVisibilityWhere } from "@/lib/rbac";
+import { canSetCommercials, campaignVisibilityWhere, isSuperAdmin } from "@/lib/rbac";
 import { DollarSign } from "lucide-react";
 
 // Task #15 — Pricing Queue: every shortlist row still waiting on a Campaign
@@ -13,7 +13,7 @@ import { DollarSign } from "lucide-react";
 export default async function PricingQueuePage() {
   const user = await currentUser();
   if (!user) redirect("/login");
-  if (!canSetCommercials(user.role)) redirect("/dashboard");
+  if (!canSetCommercials(user.role) && !isSuperAdmin(user.id)) redirect("/dashboard");
 
   const rows = await prisma.creator.findMany({
     where: {

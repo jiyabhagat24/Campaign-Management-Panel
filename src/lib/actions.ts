@@ -6,7 +6,7 @@ import bcrypt from "bcryptjs";
 import { requireUser } from "@/lib/auth";
 import { logActivity } from "@/lib/activity";
 import { notify } from "@/lib/notify";
-import { canApproveCommercialEdit, canSetCommercials, canSeeInternalCost, canManageTeam, canCreateCampaign, canOperateShortlist, isClient } from "@/lib/rbac";
+import { canApproveCommercialEdit, canSetCommercials, canSeeInternalCost, canManageTeam, canCreateCampaign, canOperateShortlist, isClient, isSuperAdmin } from "@/lib/rbac";
 import {
   DEFAULT_SLA,
   type Stage,
@@ -139,7 +139,7 @@ function toPlatformBriefCreateInput(p: ParsedPlatformBrief) {
 
 export async function createCampaign(formData: FormData) {
   const user = await requireUser();
-  if (!canCreateCampaign(user.role)) throw new Error("Only Brand Solutions can create a campaign.");
+  if (!canCreateCampaign(user.role) && !isSuperAdmin(user.id)) throw new Error("Only Brand Solutions can create a campaign.");
 
   const name = String(formData.get("name") ?? "").trim();
   const brand = String(formData.get("brand") ?? "").trim();
@@ -226,21 +226,21 @@ export async function updateCampaignStatus(campaignId: string, status: string, r
   if (!(CAMPAIGN_STATUSES as readonly string[]).includes(status)) {
     throw new Error("Invalid status.");
   }
-  if (status === "DRAFT" || status === "ASSIGNED") {
+  if ((status === "DRAFT" || status === "ASSIGNED") && !isSuperAdmin(user.id)) {
     throw new Error("Draft and Assigned are set automatically as the team is built — they can't be picked manually.");
   }
 
   const campaign = await prisma.campaign.findUniqueOrThrow({ where: { id: campaignId }, select: { status: true } });
-  const isCmOrBrandSolutions = user.role === "CAMPAIGN_MANAGER" || user.role === "BRAND_SOLUTIONS";
+  const isCmOrBrandSolutions = user.role === "CAMPAIGN_MANAGER" || user.role === "BRAND_SOLUTIONS" || isSuperAdmin(user.id);
 
   if (status === "ACTIVE") {
-    if (campaign.status !== "ASSIGNED") throw new Error("A campaign can only go Active from Assigned (brief accepted).");
-    if (user.role !== "CAMPAIGN_MANAGER") throw new Error("Only the Campaign Manager can accept the brief and move this campaign to Active.");
+    if (campaign.status !== "ASSIGNED" && !isSuperAdmin(user.id)) throw new Error("A campaign can only go Active from Assigned (brief accepted).");
+    if (user.role !== "CAMPAIGN_MANAGER" && !isSuperAdmin(user.id)) throw new Error("Only the Campaign Manager can accept the brief and move this campaign to Active.");
   } else if (status === "ON_HOLD") {
     if (!isCmOrBrandSolutions) throw new Error("Only the Campaign Manager or Brand Solutions can put a campaign on hold.");
     if (!reason || !reason.trim()) throw new Error("A reason is required to put a campaign on hold.");
   } else if (status === "CLOSED") {
-    if (user.role !== "CAMPAIGN_MANAGER") throw new Error("Only the Campaign Manager can close a campaign.");
+    if (user.role !== "CAMPAIGN_MANAGER" && !isSuperAdmin(user.id)) throw new Error("Only the Campaign Manager can close a campaign.");
   }
 
   await prisma.campaign.update({ where: { id: campaignId }, data: { status } });
@@ -267,7 +267,7 @@ export async function updateCampaignStatus(campaignId: string, status: string, r
 // first place.
 export async function updateCampaignBrief(campaignId: string, brief: string) {
   const user = await requireUser();
-  if (!canCreateCampaign(user.role)) throw new Error("Not authorized to edit the brief.");
+  if (!canCreateCampaign(user.role) && !isSuperAdmin(user.id)) throw new Error("Not authorized to edit the brief.");
 
   await prisma.campaign.update({
     where: { id: campaignId },
@@ -298,7 +298,7 @@ export async function updateCampaignDetails(
   }
 ) {
   const user = await requireUser();
-  if (!canCreateCampaign(user.role)) throw new Error("Not authorized to edit this campaign.");
+  if (!canCreateCampaign(user.role) && !isSuperAdmin(user.id)) throw new Error("Not authorized to edit this campaign.");
 
   const name = data.name.trim();
   const brand = data.brand.trim();
@@ -516,7 +516,7 @@ export async function setClientCampaignAccess(clientId: string, campaignId: stri
 // open to Brand Solutions/CXO/Campaign Manager the way it was before.
 export async function assignTeamMember(campaignId: string, userId: string, roleOnCampaign: string) {
   const user = await requireUser();
-  if (user.role !== "IR_MANAGER") throw new Error("Only the IR Manager can assign the campaign team.");
+  if (user.role !== "IR_MANAGER" && !isSuperAdmin(user.id)) throw new Error("Only the IR Manager can assign the campaign team.");
 
   await prisma.campaignTeamMember.upsert({
     where: { campaignId_userId_roleOnCampaign: { campaignId, userId, roleOnCampaign } },
@@ -553,7 +553,7 @@ export async function assignTeamMember(campaignId: string, userId: string, roleO
 
 export async function removeTeamMember(teamMemberId: string, campaignId: string) {
   const user = await requireUser();
-  if (user.role !== "IR_MANAGER") throw new Error("Only the IR Manager can change the campaign team.");
+  if (user.role !== "IR_MANAGER" && !isSuperAdmin(user.id)) throw new Error("Only the IR Manager can change the campaign team.");
 
   await prisma.campaignTeamMember.delete({ where: { id: teamMemberId } });
   revalidatePath(`/campaigns/${campaignId}`);
@@ -563,7 +563,7 @@ export async function removeTeamMember(teamMemberId: string, campaignId: string)
 
 export async function addCreator(campaignId: string, formData: FormData) {
   const user = await requireUser();
-  if (!canOperateShortlist(user.role)) throw new Error("Not authorized to add creators to the shortlist.");
+  if (!canOperateShortlist(user.role) && !isSuperAdmin(user.id)) throw new Error("Not authorized to add creators to the shortlist.");
 
   const name = String(formData.get("name") ?? "").trim();
   const channelHandle = String(formData.get("channelHandle") ?? "").trim();
@@ -675,10 +675,10 @@ export async function updateCreatorShortlist(
   const COMMERCIAL_FIELDS = ["quotedCost", "finalQuotedCost"] as const;
   const hasCommercialField = COMMERCIAL_FIELDS.some((f) => fields[f] !== undefined);
   const hasGeneralField = Object.keys(fields).some((k) => !(COMMERCIAL_FIELDS as readonly string[]).includes(k));
-  if (hasCommercialField && !canSetCommercials(user.role)) {
+  if (hasCommercialField && !canSetCommercials(user.role) && !isSuperAdmin(user.id)) {
     throw new Error("Only a Campaign Manager can change the Quoted Cost or Final Quoted Cost.");
   }
-  if (hasGeneralField && !canOperateShortlist(user.role)) {
+  if (hasGeneralField && !canOperateShortlist(user.role) && !isSuperAdmin(user.id)) {
     throw new Error("Not authorized to edit shortlist details.");
   }
 
@@ -748,7 +748,7 @@ export async function setCreatorClientDecision(
   }>
 ) {
   const user = await requireUser();
-  if (!isClient(user.role)) throw new Error("Only the client can set these fields");
+  if (!isClient(user.role) && !isSuperAdmin(user.id)) throw new Error("Only the client can set these fields");
 
   const creator = await prisma.creator.findUnique({ where: { id: creatorId }, include: { shortlistDeliverables: true } });
   if (!creator) throw new Error("Creator not found");
@@ -1033,7 +1033,7 @@ export async function rejectCreator(creatorId: string, reason: string) {
   // Two distinct spec flows land on this one action: IR Executive/Intern
   // correcting a row before it's submitted, and Campaign Manager's formal
   // Pricing Queue rejection (In Pricing → Rejected). Both allowed here.
-  if (!canOperateShortlist(user.role) && !canSetCommercials(user.role)) {
+  if (!canOperateShortlist(user.role) && !canSetCommercials(user.role) && !isSuperAdmin(user.id)) {
     throw new Error("Not authorized to remove creators from the shortlist.");
   }
   const creator = await prisma.creator.update({
@@ -1059,7 +1059,7 @@ export async function clientReviewCreator(
   remark?: string
 ) {
   const user = await requireUser();
-  if (!isClient(user.role)) throw new Error("Only the client can submit a review decision");
+  if (!isClient(user.role) && !isSuperAdmin(user.id)) throw new Error("Only the client can submit a review decision");
 
   // Ball owner comes back to TBM the moment the client submits any review
   // decision — they now have to act on it (renegotiate, re-price, etc.).
@@ -1126,7 +1126,7 @@ export async function proposeNegotiationRound(creatorId: string, proposedCost: n
   // other write path (see updateCreatorShortlist) — only applies to TBM's
   // own proposal below, not the client's counter-offer.
   if (!isClient(user.role)) {
-    if (!canSetCommercials(user.role)) throw new Error("Only a Campaign Manager can propose a negotiation round.");
+    if (!canSetCommercials(user.role) && !isSuperAdmin(user.id)) throw new Error("Only a Campaign Manager can propose a negotiation round.");
     assertMarginFloor(proposedCost, creator.internalCost);
   }
 
@@ -1174,7 +1174,7 @@ export async function onboardCreator(creatorId: string) {
   // CXO is locked out of the Onboarding operation itself (spec: view-only,
   // not a day-to-day operator) — clients and every other internal role can
   // still mark onboard as before.
-  if (user.role === "CXO") throw new Error("Not authorized to onboard creators.");
+  if (user.role === "CXO" && !isSuperAdmin(user.id)) throw new Error("Not authorized to onboard creators.");
 
   const existing = await prisma.creator.findUniqueOrThrow({ where: { id: creatorId } });
   const campaign = await prisma.campaign.findUniqueOrThrow({ where: { id: existing.campaignId } });
@@ -1245,7 +1245,7 @@ export async function triggerPause(creatorId: string, reason: string) {
 
 export async function confirmPause(creatorId: string) {
   const user = await requireUser();
-  if (user.role !== "CAMPAIGN_MANAGER") throw new Error("Only the Campaign Manager can confirm a pause.");
+  if (user.role !== "CAMPAIGN_MANAGER" && !isSuperAdmin(user.id)) throw new Error("Only the Campaign Manager can confirm a pause.");
 
   const creator = await prisma.creator.findUniqueOrThrow({ where: { id: creatorId } });
   if (!creator.pauseRequestedAt) throw new Error("No pause has been requested for this creator.");
@@ -1372,7 +1372,7 @@ function assertMarginFloor(quotedCost: number, internalCost: number | null) {
 
 export async function requestCommercialEdit(creatorId: string, newQuotedCost: number, reason: string) {
   const user = await requireUser();
-  if (!canSetCommercials(user.role)) throw new Error("Not authorized to edit commercials");
+  if (!canSetCommercials(user.role) && !isSuperAdmin(user.id)) throw new Error("Not authorized to edit commercials");
 
   const creator = await prisma.creator.findUniqueOrThrow({ where: { id: creatorId } });
   assertMarginFloor(newQuotedCost, creator.internalCost);
@@ -1400,7 +1400,7 @@ export async function requestCommercialEdit(creatorId: string, newQuotedCost: nu
 // is the client-facing number shown on the Onboarding page.
 export async function requestFinalCostEdit(creatorId: string, newFinalQuotedCost: number, reason: string) {
   const user = await requireUser();
-  if (!canSetCommercials(user.role)) throw new Error("Not authorized to edit commercials");
+  if (!canSetCommercials(user.role) && !isSuperAdmin(user.id)) throw new Error("Not authorized to edit commercials");
   if (!reason.trim()) throw new Error("A reason is required to change a locked final cost");
 
   const creator = await prisma.creator.findUniqueOrThrow({ where: { id: creatorId } });
@@ -2399,7 +2399,7 @@ export async function claimEscalation(escalationId: string) {
 
   const escalation = await prisma.escalation.findUniqueOrThrow({ where: { id: escalationId } });
   const isProposedOwner = escalation.proposedOwnerId === user.id;
-  if (!isProposedOwner && user.role !== "IR_MANAGER") {
+  if (!isProposedOwner && user.role !== "IR_MANAGER" && !isSuperAdmin(user.id)) {
     throw new Error("Only the proposed owner or the IR Manager can claim this escalation.");
   }
 
@@ -2428,7 +2428,7 @@ export async function closeEscalation(escalationId: string, resolutionNote: stri
   if (!resolutionNote.trim()) throw new Error("A resolution note is required to close an escalation.");
 
   const escalation = await prisma.escalation.findUniqueOrThrow({ where: { id: escalationId } });
-  if (escalation.ownerId !== user.id && user.role !== "IR_MANAGER") {
+  if (escalation.ownerId !== user.id && user.role !== "IR_MANAGER" && !isSuperAdmin(user.id)) {
     throw new Error("Only the owner or the IR Manager can close this escalation.");
   }
 

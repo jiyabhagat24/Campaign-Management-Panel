@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { currentUser } from "@/lib/auth";
-import { canCreateCampaign } from "@/lib/rbac";
+import { canCreateCampaign, isSuperAdmin } from "@/lib/rbac";
 import { createCampaign } from "@/lib/actions";
 import BackLink from "@/components/BackLink";
 import { PlatformBriefsFormField } from "@/components/campaign/PlatformBriefsEditor";
@@ -17,7 +17,7 @@ export default async function NewCampaignPage() {
   // Matches canCreateCampaign's gate on the createCampaign server action —
   // this just stops a CM/IR-team user from reaching the form directly by
   // URL instead of only hiding the button.
-  if (!canCreateCampaign(user.role)) redirect("/campaigns");
+  if (!canCreateCampaign(user.role) && !isSuperAdmin(user.id)) redirect("/campaigns");
 
   return (
     <div className="p-8">

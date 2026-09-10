@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { Role } from "@/lib/constants";
-import { canSeeInternalCost, canManageTeam, canSetCommercials, isClient } from "@/lib/rbac";
+import { canSeeInternalCost, canManageTeam, canSetCommercials, isClient, isSuperAdmin } from "@/lib/rbac";
 import ThemeToggle from "@/components/ThemeToggle";
 import NotificationBell, { type NotificationItem } from "@/components/NotificationBell";
 import {
@@ -46,8 +46,9 @@ const NAV = [
   { href: "/admin/months", label: "Month Lock", icon: CalendarCheck, teamOnly: true },
 ];
 
-export default function Sidebar({ role, name, notifications }: { role: Role; name: string; notifications: NotificationItem[] }) {
+export default function Sidebar({ role, name, notifications, userId }: { role: Role; name: string; notifications: NotificationItem[]; userId?: string }) {
   const pathname = usePathname();
+  const superAdmin = isSuperAdmin(userId);
 
   const getRoleBadgeColor = (r: Role) => {
     switch (r) {
@@ -65,6 +66,7 @@ export default function Sidebar({ role, name, notifications }: { role: Role; nam
   };
 
   const filteredNav = NAV.filter((item) => {
+    if (superAdmin) return true;
     if (role === "CLIENT" && item.href === "/pipeline") return false;
     if ("financeOnly" in item && item.financeOnly && (isClient(role) || !canSeeInternalCost(role))) return false;
     if ("teamOnly" in item && item.teamOnly && !canManageTeam(role)) return false;
