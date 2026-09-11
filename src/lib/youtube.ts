@@ -102,6 +102,11 @@ export function normalizeYoutubeChannelUrl(rawInput: string): string {
   if (handleMatch) return `https://www.youtube.com/${handleMatch[1]!.toLowerCase()}`;
   const legacyMatch = trimmed.match(/youtube\.com\/(c|user)\/([^/?#]+)/i);
   if (legacyMatch) return `https://www.youtube.com/${legacyMatch[1].toLowerCase()}/${legacyMatch[2]}`;
+  // youtube.com/name (no @ prefix, no /c/ or /channel/) — YouTube's modern
+  // shorthand for a handle URL. Normalize to @handle form for a consistent
+  // cache key (so youtube.com/hafiztime and youtube.com/@hafiztime share one row).
+  const bareNameMatch = trimmed.match(/youtube\.com\/([^/?#]+)/i);
+  if (bareNameMatch) return `https://www.youtube.com/@${bareNameMatch[1].toLowerCase()}`;
   return trimmed.toLowerCase();
 }
 
@@ -148,12 +153,21 @@ async function resolveChannel(rawInput: string): Promise<{ channelId: string; up
       json = await apiGet("/channels", { part: "snippet,statistics,contentDetails", id: channelId });
     }
   } else {
-    // Bare handle or unrecognised URL shape.
-    const query = trimmed.replace(/^https?:\/\/(www\.)?youtube\.com\//i, "");
-    const searchJson = await apiGet("/search", { part: "snippet", type: "channel", q: query, maxResults: "1" });
-    const channelId = searchJson.items?.[0]?.snippet?.channelId ?? searchJson.items?.[0]?.id?.channelId;
-    if (!channelId) throw new YoutubeLookupError("NOT_FOUND", `Couldn't find a YouTube channel matching "${trimmed}".`);
-    json = await apiGet("/channels", { part: "snippet,statistics,contentDetails", id: channelId });
+    // youtube.com/name (no @ or /c/ or /channel/) — treat as a handle URL.
+    // Try forHandle:@name first since that's what YouTube uses for these
+    // modern short URLs. Only fall back to keyword search if forHandle
+    // returns nothing, and even then search with the bare name, not a
+    // full-text query, to minimise the chance of the wrong channel winning.
+    const name = trimmed.replace(/^https?:\/\/(www\.)?youtube\.com\//i, "").replace(/^@/, "");
+    const forHandleJson = await apiGet("/channels", { part: "snippet,statistics,contentDetails", forHandle: `@${name}` });
+    if (forHandleJson.items?.length) {
+      json = forHandleJson;
+    } else {
+      const searchJson = await apiGet("/search", { part: "snippet", type: "channel", q: name, maxResults: "1" });
+      const channelId = searchJson.items?.[0]?.snippet?.channelId ?? searchJson.items?.[0]?.id?.channelId;
+      if (!channelId) throw new YoutubeLookupError("NOT_FOUND", `Couldn't find a YouTube channel matching "${trimmed}".`);
+      json = await apiGet("/channels", { part: "snippet,statistics,contentDetails", id: channelId });
+    }
   }
 
   const channel = json.items?.[0];
@@ -223,11 +237,16 @@ export async function fetchYoutubeChannelNiche(rawInput: string): Promise<string
       json = await apiGet("/channels", { part: "topicDetails", id: channelId });
     }
   } else {
-    const query = trimmed.replace(/^https?:\/\/(www\.)?youtube\.com\//i, "");
-    const searchJson = await apiGet("/search", { part: "snippet", type: "channel", q: query, maxResults: "1" });
-    const channelId = searchJson.items?.[0]?.snippet?.channelId ?? searchJson.items?.[0]?.id?.channelId;
-    if (!channelId) return null;
-    json = await apiGet("/channels", { part: "topicDetails", id: channelId });
+    const name = trimmed.replace(/^https?:\/\/(www\.)?youtube\.com\//i, "").replace(/^@/, "");
+    const forHandleJson = await apiGet("/channels", { part: "topicDetails", forHandle: `@${name}` });
+    if (forHandleJson.items?.length) {
+      json = forHandleJson;
+    } else {
+      const searchJson = await apiGet("/search", { part: "snippet", type: "channel", q: name, maxResults: "1" });
+      const channelId = searchJson.items?.[0]?.snippet?.channelId ?? searchJson.items?.[0]?.id?.channelId;
+      if (!channelId) return null;
+      json = await apiGet("/channels", { part: "topicDetails", id: channelId });
+    }
   }
 
   const categories: string[] = json.items?.[0]?.topicDetails?.topicCategories ?? [];
@@ -287,11 +306,16 @@ export async function fetchYoutubeChannelInstagramHandle(rawInput: string): Prom
       json = await apiGet("/channels", { part: "snippet", id: channelId });
     }
   } else {
-    const query = trimmed.replace(/^https?:\/\/(www\.)?youtube\.com\//i, "");
-    const searchJson = await apiGet("/search", { part: "snippet", type: "channel", q: query, maxResults: "1" });
-    const channelId = searchJson.items?.[0]?.snippet?.channelId ?? searchJson.items?.[0]?.id?.channelId;
-    if (!channelId) return null;
-    json = await apiGet("/channels", { part: "snippet", id: channelId });
+    const name = trimmed.replace(/^https?:\/\/(www\.)?youtube\.com\//i, "").replace(/^@/, "");
+    const forHandleJson = await apiGet("/channels", { part: "snippet", forHandle: `@${name}` });
+    if (forHandleJson.items?.length) {
+      json = forHandleJson;
+    } else {
+      const searchJson = await apiGet("/search", { part: "snippet", type: "channel", q: name, maxResults: "1" });
+      const channelId = searchJson.items?.[0]?.snippet?.channelId ?? searchJson.items?.[0]?.id?.channelId;
+      if (!channelId) return null;
+      json = await apiGet("/channels", { part: "snippet", id: channelId });
+    }
   }
 
   const description: string = json.items?.[0]?.snippet?.description ?? "";
