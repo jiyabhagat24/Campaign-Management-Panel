@@ -18,7 +18,13 @@
 // set, lookups fail gracefully and the caller falls back to manual entry.
 
 const API_BASE = "https://www.googleapis.com/youtube/v3";
-const RECENT_VIDEO_SAMPLE_SIZE = 15; // pulled, then split into long-form/Shorts buckets
+// Pulled, then split into long-form/Shorts buckets. 50 is the API's max
+// page size for playlistItems — bumped up from 15 because a channel that
+// posts in bursts (e.g. several long videos in a row) can otherwise have
+// its most recent 15 uploads land entirely in one bucket, leaving the other
+// bucket's Median Views/ER% blank even though the channel clearly posts
+// both. One extra API page, same quota cost either way.
+const RECENT_VIDEO_SAMPLE_SIZE = 50;
 const SHORTS_MAX_SECONDS = 180; // YouTube's current Shorts ceiling (raised from 60s in Oct 2024)
 
 export type YoutubeChannelStats = {
@@ -276,6 +282,52 @@ export function isLikelyIndianChannel(country: string | null): "yes" | "no" | "u
   return country === "IN" ? "yes" : "no";
 }
 
+// YouTube channel IDs are "UC" + 22 chars. Swapping that "UC" prefix for
+// "UU"/"UULF"/"UUSH" resolves to the same auto-generated playlists that
+// back the channel's own Uploads/Videos/Shorts tabs — this is how YouTube
+// itself classifies a video as a Short (aspect ratio + duration + Shorts-
+// shelf placement), not a guess. Undocumented but stable and widely relied
+// on, since the official Data API has no isShort field. Falls back to a
+// duration heuristic (below) for the rare channel where one of these
+// derived playlists 404s.
+function derivedPlaylistId(channelId: string, infix: "" | "LF" | "SH"): string | null {
+  if (!channelId.startsWith("UC")) return null;
+  return `UU${infix}${channelId.slice(2)}`;
+}
+
+// Like apiGet but treats "this playlist doesn't exist" (a channel with zero
+// Shorts has no UUSH playlist at all, same for zero long-form and UULF) as
+// an empty list instead of a hard failure — the other bucket should still
+// come back with real data.
+async function fetchPlaylistVideoIds(playlistId: string, max: number): Promise<string[]> {
+  try {
+    const json = await apiGet("/playlistItems", { part: "contentDetails", playlistId, maxResults: String(max) });
+    return (json.items ?? []).map((i: any) => i.contentDetails?.videoId).filter(Boolean);
+  } catch (err) {
+    if (err instanceof YoutubeLookupError && (err.code === "NOT_FOUND" || err.code === "API_ERROR")) return [];
+    throw err;
+  }
+}
+
+function bucketStats(bucket: Array<{ views: number; likes: number; comments: number }>) {
+  const medianViews = median(bucket.map((v) => v.views));
+  const medianLikes = median(bucket.map((v) => v.likes)) ?? 0;
+  const medianComments = median(bucket.map((v) => v.comments)) ?? 0;
+  const medianER = medianViews && medianViews > 0 ? Math.round(((medianLikes + medianComments) / medianViews) * 1000) / 10 : null;
+  return { medianViews, medianER };
+}
+
+async function statsForVideoIds(videoIds: string[]) {
+  if (videoIds.length === 0) return [] as Array<{ views: number; likes: number; comments: number; seconds: number }>;
+  const videosJson = await apiGet("/videos", { part: "statistics,contentDetails", id: videoIds.join(",") });
+  return (videosJson.items ?? []).map((v: any) => ({
+    views: Number(v.statistics?.viewCount ?? 0),
+    likes: Number(v.statistics?.likeCount ?? 0),
+    comments: Number(v.statistics?.commentCount ?? 0),
+    seconds: parseIsoDurationToSeconds(v.contentDetails?.duration ?? "PT0S"),
+  }));
+}
+
 export async function fetchYoutubeChannelStats(rawInput: string): Promise<YoutubeChannelStats> {
   const { channelId, uploadsPlaylistId, subscribers } = await resolveChannel(rawInput);
 
@@ -283,35 +335,44 @@ export async function fetchYoutubeChannelStats(rawInput: string): Promise<Youtub
     return { channelId, subscribers, longMedianViews: null, longMedianERPercent: null, shortsMedianViews: null, shortsMedianERPercent: null };
   }
 
-  const playlistJson = await apiGet("/playlistItems", {
-    part: "contentDetails",
-    playlistId: uploadsPlaylistId,
-    maxResults: String(RECENT_VIDEO_SAMPLE_SIZE),
-  });
-  const videoIds: string[] = (playlistJson.items ?? []).map((i: any) => i.contentDetails?.videoId).filter(Boolean);
-  if (videoIds.length === 0) {
-    return { channelId, subscribers, longMedianViews: null, longMedianERPercent: null, shortsMedianViews: null, shortsMedianERPercent: null };
+  const longPlaylistId = derivedPlaylistId(channelId, "LF");
+  const shortsPlaylistId = derivedPlaylistId(channelId, "SH");
+
+  let longVideoIds: string[] = [];
+  let shortsVideoIds: string[] = [];
+  if (longPlaylistId && shortsPlaylistId) {
+    [longVideoIds, shortsVideoIds] = await Promise.all([
+      fetchPlaylistVideoIds(longPlaylistId, RECENT_VIDEO_SAMPLE_SIZE),
+      fetchPlaylistVideoIds(shortsPlaylistId, RECENT_VIDEO_SAMPLE_SIZE),
+    ]);
   }
 
-  const videosJson = await apiGet("/videos", { part: "statistics,contentDetails", id: videoIds.join(",") });
-  const videos: Array<{ views: number; likes: number; comments: number; seconds: number }> = (videosJson.items ?? []).map((v: any) => ({
-    views: Number(v.statistics?.viewCount ?? 0),
-    likes: Number(v.statistics?.likeCount ?? 0),
-    comments: Number(v.statistics?.commentCount ?? 0),
-    seconds: parseIsoDurationToSeconds(v.contentDetails?.duration ?? "PT0S"),
-  }));
+  // Fallback path — only used if the derived-playlist trick didn't apply
+  // (non-UC channel id) or both derived playlists came back empty, which
+  // can happen for a freshly-created or very low-upload channel where
+  // YouTube hasn't materialized those auto-playlists yet. Falls back to the
+  // old duration-based split against the general uploads playlist so the
+  // fields still populate with a best-effort classification rather than
+  // going blank.
+  if (longVideoIds.length === 0 && shortsVideoIds.length === 0) {
+    const uploadsIds = await fetchPlaylistVideoIds(uploadsPlaylistId, RECENT_VIDEO_SAMPLE_SIZE);
+    if (uploadsIds.length === 0) {
+      return { channelId, subscribers, longMedianViews: null, longMedianERPercent: null, shortsMedianViews: null, shortsMedianERPercent: null };
+    }
+    const videos = await statsForVideoIds(uploadsIds);
+    const long = bucketStats(videos.filter((v) => v.seconds > SHORTS_MAX_SECONDS));
+    const shorts = bucketStats(videos.filter((v) => v.seconds > 0 && v.seconds <= SHORTS_MAX_SECONDS));
+    return {
+      channelId,
+      subscribers,
+      longMedianViews: long.medianViews,
+      longMedianERPercent: long.medianER,
+      shortsMedianViews: shorts.medianViews,
+      shortsMedianERPercent: shorts.medianER,
+    };
+  }
 
-  const longVideos = videos.filter((v) => v.seconds > SHORTS_MAX_SECONDS);
-  const shortsVideos = videos.filter((v) => v.seconds > 0 && v.seconds <= SHORTS_MAX_SECONDS);
-
-  const bucketStats = (bucket: typeof videos) => {
-    const medianViews = median(bucket.map((v) => v.views));
-    const medianLikes = median(bucket.map((v) => v.likes)) ?? 0;
-    const medianComments = median(bucket.map((v) => v.comments)) ?? 0;
-    const medianER = medianViews && medianViews > 0 ? Math.round(((medianLikes + medianComments) / medianViews) * 1000) / 10 : null;
-    return { medianViews, medianER };
-  };
-
+  const [longVideos, shortsVideos] = await Promise.all([statsForVideoIds(longVideoIds), statsForVideoIds(shortsVideoIds)]);
   const long = bucketStats(longVideos);
   const shorts = bucketStats(shortsVideos);
 
