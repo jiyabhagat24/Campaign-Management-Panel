@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { createTeamUser, updateTeamUserRole, deleteTeamUser } from "@/lib/actions";
+import { createTeamUser, updateTeamUserRole, deleteTeamUser, setTeamUserPassword } from "@/lib/actions";
 import { INTERNAL_ROLES, type Role } from "@/lib/constants";
-import { UserPlus, Trash2 } from "lucide-react";
+import { UserPlus, Trash2, KeyRound } from "lucide-react";
 
 const ROLE_LABEL: Record<Role, string> = {
   CXO: "CXO",
@@ -49,6 +49,84 @@ function RoleSelect({
         </option>
       ))}
     </select>
+  );
+}
+
+// Inline "give this person a password" control — optional, on top of their
+// Google sign-in. See setTeamUserPassword in actions.ts for why handing out
+// a password here is safe (only an account explicitly given one this way
+// can ever use the Credentials login door).
+function PasswordControl({ userId }: { userId: string }) {
+  const [open, setOpen] = useState(false);
+  const [value, setValue] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  function save() {
+    setError(null);
+    startTransition(async () => {
+      try {
+        await setTeamUserPassword(userId, value);
+        setValue("");
+        setOpen(false);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to set password.");
+      }
+    });
+  }
+
+  function clear() {
+    if (!confirm("Remove this person's password? They'll go back to Google sign-in only.")) return;
+    setError(null);
+    startTransition(async () => {
+      try {
+        await setTeamUserPassword(userId, null);
+        setValue("");
+        setOpen(false);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to remove password.");
+      }
+    });
+  }
+
+  if (!open) {
+    return (
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => setOpen(true)}
+          className="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-600 hover:underline dark:text-indigo-400"
+        >
+          <KeyRound className="h-3 w-3" />
+          Set password
+        </button>
+        <button onClick={clear} disabled={pending} className="text-[11px] font-medium text-slate-400 hover:underline disabled:opacity-50">
+          Remove
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <input
+        type="password"
+        autoFocus
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        placeholder="New password"
+        className="w-28 rounded-lg border border-slate-300 px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+      />
+      <button onClick={save} disabled={pending} className="rounded-lg bg-indigo-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-indigo-700 disabled:opacity-60">
+        Save
+      </button>
+      <button
+        onClick={() => { setOpen(false); setValue(""); setError(null); }}
+        className="text-[11px] font-medium text-slate-400 hover:underline"
+      >
+        Cancel
+      </button>
+      {error && <p className="text-[10px] font-medium text-rose-600 dark:text-rose-400">{error}</p>}
+    </div>
   );
 }
 
@@ -138,7 +216,8 @@ function AddTeamMemberForm({ onAdded }: { onAdded: () => void }) {
       </div>
 
       <p className="text-[11px] text-slate-400 dark:text-slate-500">
-        No password needed — this person signs in with their own theboredmonkey.com Google account.
+        Signs in with their own theboredmonkey.com Google account — you can optionally give them a password too
+        after adding them.
       </p>
 
       {error && (
@@ -222,7 +301,7 @@ export default function TeamManagementClient({
           <h2 className="text-sm font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
             Internal team
           </h2>
-          <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">TheBoredMonkey staff — Google sign-in, no password.</p>
+          <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">TheBoredMonkey staff sign in with Google by default — optionally give someone a password too (e.g. for testing a role, or if they can't use Google).</p>
         </div>
 
         <AddTeamMemberForm onAdded={() => window.location.reload()} />
@@ -234,6 +313,7 @@ export default function TeamManagementClient({
                 <th className="px-4 py-2.5">Name</th>
                 <th className="px-4 py-2.5">Email</th>
                 <th className="px-4 py-2.5">Role</th>
+                <th className="px-4 py-2.5">Password</th>
                 <th className="px-4 py-2.5">Added</th>
                 <th className="px-4 py-2.5" />
               </tr>
@@ -248,6 +328,9 @@ export default function TeamManagementClient({
                   <td className="px-4 py-3">
                     <RoleSelect value={u.role} onChange={(role) => handleRoleChange(u.id, role)} />
                     {rowError[u.id] && <p className="mt-1 max-w-[220px] text-[10px] font-medium text-rose-600 dark:text-rose-400">{rowError[u.id]}</p>}
+                  </td>
+                  <td className="px-4 py-3">
+                    <PasswordControl userId={u.id} />
                   </td>
                   <td className="px-4 py-3 text-xs text-slate-400 dark:text-slate-500">
                     {new Date(u.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}

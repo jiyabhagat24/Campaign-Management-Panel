@@ -2148,6 +2148,30 @@ export async function updateTeamUserRole(userId: string, role: string) {
   revalidatePath("/team");
 }
 
+// Lets a CXO give an internal account a real password so that person can
+// sign in with email + password instead of (or in addition to) Google — see
+// the ALLOWED_DOMAIN comment in auth.ts for why this is safe: Credentials
+// login only ever succeeds for an account that was deliberately given a
+// real password here, every other internal account's passwordHash stays the
+// unguessable random one createTeamUser set. Pass password: null to revert
+// the account back to Google-only.
+export async function setTeamUserPassword(userId: string, password: string | null) {
+  const actor = await requireUser();
+  if (!canManageTeam(actor.role)) throw new Error("Only a CXO can set a team member's password.");
+
+  await prisma.user.findUniqueOrThrow({ where: { id: userId } });
+
+  const passwordHash = password
+    ? await (async () => {
+        if (password.length < 8) throw new Error("Password needs to be at least 8 characters.");
+        return bcrypt.hash(password, 10);
+      })()
+    : await bcrypt.hash(crypto.randomUUID(), 10);
+
+  await prisma.user.update({ where: { id: userId }, data: { passwordHash } });
+  revalidatePath("/team");
+}
+
 export async function deleteTeamUser(userId: string) {
   const actor = await requireUser();
   if (!canManageTeam(actor.role)) throw new Error("Only a CXO can remove a team member.");
