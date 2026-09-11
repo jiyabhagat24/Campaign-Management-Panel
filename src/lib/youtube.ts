@@ -347,34 +347,22 @@ export async function fetchYoutubeChannelStats(rawInput: string): Promise<Youtub
     ]);
   }
 
-  // Fallback path — only used if the derived-playlist trick didn't apply
-  // (non-UC channel id) or both derived playlists came back empty, which
-  // can happen for a freshly-created or very low-upload channel where
-  // YouTube hasn't materialized those auto-playlists yet. Falls back to the
-  // old duration-based split against the general uploads playlist so the
-  // fields still populate with a best-effort classification rather than
-  // going blank.
-  if (longVideoIds.length === 0 && shortsVideoIds.length === 0) {
-    const uploadsIds = await fetchPlaylistVideoIds(uploadsPlaylistId, RECENT_VIDEO_SAMPLE_SIZE);
-    if (uploadsIds.length === 0) {
-      return { channelId, subscribers, longMedianViews: null, longMedianERPercent: null, shortsMedianViews: null, shortsMedianERPercent: null };
-    }
-    const videos = await statsForVideoIds(uploadsIds);
-    const long = bucketStats(videos.filter((v) => v.seconds > SHORTS_MAX_SECONDS));
-    const shorts = bucketStats(videos.filter((v) => v.seconds > 0 && v.seconds <= SHORTS_MAX_SECONDS));
-    return {
-      channelId,
-      subscribers,
-      longMedianViews: long.medianViews,
-      longMedianERPercent: long.medianER,
-      shortsMedianViews: shorts.medianViews,
-      shortsMedianERPercent: shorts.medianER,
-    };
-  }
-
   const [longVideos, shortsVideos] = await Promise.all([statsForVideoIds(longVideoIds), statsForVideoIds(shortsVideoIds)]);
-  const long = bucketStats(longVideos);
-  const shorts = bucketStats(shortsVideos);
+  let long = bucketStats(longVideos);
+  let shorts = bucketStats(shortsVideos);
+
+  // Fallback — per bucket, not all-or-nothing. The derived UUSH/UULF
+  // playlists are an undocumented YouTube trick and can miss just one
+  // bucket even when the channel clearly has uploads there (e.g. its Shorts
+  // auto-playlist hasn't materialized yet while long-form's has). Whichever
+  // bucket came back empty gets re-derived from the general uploads
+  // playlist, split by duration, instead of leaving it permanently null.
+  if (longVideoIds.length === 0 || shortsVideoIds.length === 0) {
+    const uploadsIds = await fetchPlaylistVideoIds(uploadsPlaylistId, RECENT_VIDEO_SAMPLE_SIZE);
+    const uploadsVideos = await statsForVideoIds(uploadsIds);
+    if (longVideoIds.length === 0) long = bucketStats(uploadsVideos.filter((v) => v.seconds > SHORTS_MAX_SECONDS));
+    if (shortsVideoIds.length === 0) shorts = bucketStats(uploadsVideos.filter((v) => v.seconds > 0 && v.seconds <= SHORTS_MAX_SECONDS));
+  }
 
   return {
     channelId,
