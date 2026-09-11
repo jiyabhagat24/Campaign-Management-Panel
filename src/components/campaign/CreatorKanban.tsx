@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { Role } from "@/lib/constants";
 import { canSetCommercials, canApproveCommercialEdit, canOperateShortlist, isSuperAdmin } from "@/lib/rbac";
 import {
@@ -172,6 +173,20 @@ export default function CreatorKanban({
 }) {
   const [addingCreator, setAddingCreator] = useState(false);
   const [tab, setTab] = useState<"SHORTLIST" | "ONBOARDING" | "REPORT">("SHORTLIST");
+  const [creatorList, setCreatorList] = useState(creators);
+
+  useEffect(() => {
+    setCreatorList(creators);
+  }, [creators]);
+
+  const handleCreatorAdded = (newCreator: Creator) => {
+    setCreatorList((prev) => [newCreator, ...prev.filter((c) => c.id !== newCreator.id)]);
+  };
+
+  const handleCreatorRemoved = (id: string) => {
+    setCreatorList((prev) => prev.filter((c) => c.id !== id));
+  };
+
   // Build/testing account with every UI gate bypassed too, not just the
   // server actions — see isSuperAdmin in rbac.ts.
   const superAdmin = isSuperAdmin(currentUserId);
@@ -180,10 +195,10 @@ export default function CreatorKanban({
   // (see rejectCreator) — kept in the DB for history, just dropped off
   // this board. CLIENT_REJECTED is left visible since the team may still
   // need to act on/negotiate a client's rejection.
-  const shortlist = creators.filter((c) => creatorKanbanColumn(c.status) === "SHORTLIST" && c.status !== "REJECTED");
+  const shortlist = creatorList.filter((c) => creatorKanbanColumn(c.status) === "SHORTLIST" && c.status !== "REJECTED");
   // BLOCKED (paused-in-execution, Gate G6) stays on the Onboarding tab
   // alongside ONBOARDED — see creatorKanbanColumn in constants.ts.
-  const onboarding = creators.filter((c) => c.status === "ONBOARDED" || c.status === "BLOCKED");
+  const onboarding = creatorList.filter((c) => c.status === "ONBOARDED" || c.status === "BLOCKED");
 
   // Shortlisting Stage sheet tab's own summary strip — only the four
   // cleanly-computable fields (Shared/Shortlisted/Average Quoted Price/
@@ -234,7 +249,11 @@ export default function CreatorKanban({
                     <span>+ Add Influencer to Shortlist</span>
                   </button>
                 ) : (
-                  <AddCreatorForm campaignId={campaignId} onDone={() => setAddingCreator(false)} />
+                  <AddCreatorForm
+                    campaignId={campaignId}
+                    onDone={() => setAddingCreator(false)}
+                    onCreatorAdded={handleCreatorAdded}
+                  />
                 )}
               </div>
             )}
@@ -273,7 +292,15 @@ export default function CreatorKanban({
                   </thead>
                   <tbody className="divide-y divide-slate-100 font-medium dark:divide-slate-800">
                     {shortlist.map((c) => (
-                      <ShortlistCreatorRow key={c.id} creator={c} canSeeCost={canSeeCost} isClientView={isClientView} role={role} superAdmin={superAdmin} />
+                      <ShortlistCreatorRow
+                        key={c.id}
+                        creator={c}
+                        canSeeCost={canSeeCost}
+                        isClientView={isClientView}
+                        role={role}
+                        superAdmin={superAdmin}
+                        onRemove={handleCreatorRemoved}
+                      />
                     ))}
                     {shortlist.length === 0 && (
                       <tr>
@@ -402,7 +429,13 @@ function NumField({
           type="number"
           step={step}
           onChange={onValueChange ? (e) => onValueChange(e.target.value) : undefined}
-          className={`w-full rounded-xl border border-slate-200 py-2 text-xs font-medium focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 ${prefix ? "pl-6 pr-3" : "px-3"}`}
+          onKeyDown={(e) => {
+            // Up/Down would silently increment/decrement the value — block
+            // just those, leave Left/Right (cursor movement) untouched.
+            if (e.key === "ArrowUp" || e.key === "ArrowDown") e.preventDefault();
+          }}
+          onWheel={(e) => e.currentTarget.blur()}
+          className={`w-full rounded-xl border border-slate-200 py-2 text-xs font-medium focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${prefix ? "pl-6 pr-3" : "px-3"}`}
         />
       </div>
     </label>
@@ -415,8 +448,19 @@ function NumField({
 // profile data, so those always stay manual. YouTube channel details live in
 // a separate nested dialog opened via "+ Add YouTube Channel", since a
 // creator may only have one of the two platforms.
-function AddCreatorForm({ campaignId, onDone }: { campaignId: string; onDone: () => void }) {
+function AddCreatorForm({
+  campaignId,
+  onDone,
+  onCreatorAdded,
+}: {
+  campaignId: string;
+  onDone: () => void;
+  onCreatorAdded?: (creator: Creator) => void;
+}) {
+  const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [fetching, setFetching] = useState(false);
   const [fetchMsg, setFetchMsg] = useState<{ type: "error" | "success"; text: string } | null>(null);
   const lastFetchedUrl = useRef<string>("");
@@ -556,14 +600,31 @@ function AddCreatorForm({ campaignId, onDone }: { campaignId: string; onDone: ()
 
         <form
           ref={formRef}
-          action={async (fd) => {
+          onSubmit={async (e) => {
+            e.preventDefault();
+            if (saving) return;
+            const form = formRef.current;
+            if (!form) return;
+            const fd = new FormData(form);
             if (!fd.get("platformPrimary")) {
               const pitchedTypes = fd.getAll("deliverables") as ShortlistDeliverableType[];
               const primaryType = pitchedTypes[0];
               fd.set("platformPrimary", primaryType ? SHORTLIST_TO_EXECUTION_PLATFORM[primaryType] : "INSTAGRAM_REEL");
             }
-            await addCreator(campaignId, fd);
-            onDone();
+            setSaving(true);
+            setSaveError(null);
+            try {
+              const created = await addCreator(campaignId, fd);
+              if (created && onCreatorAdded) {
+                onCreatorAdded(created as unknown as Creator);
+              }
+              router.refresh();
+              onDone();
+            } catch (err: any) {
+              setSaveError(err?.message || "Couldn't save influencer. Please try again.");
+            } finally {
+              setSaving(false);
+            }
           }}
           className="mt-4 space-y-5"
         >
@@ -761,9 +822,33 @@ function AddCreatorForm({ campaignId, onDone }: { campaignId: string; onDone: ()
             </div>
           </div>
 
+          {saveError && (
+            <p className="text-xs text-rose-600 dark:text-rose-400 font-medium">{saveError}</p>
+          )}
+
           <div className="flex items-center gap-2 border-t border-slate-100 pt-4 dark:border-slate-800">
-            <button type="submit" className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-indigo-700">Save Influencer</button>
-            <button type="button" onClick={onDone} className="rounded-xl px-3 py-2 text-xs font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200">Cancel</button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <span>Saving Influencer...</span>
+                </>
+              ) : (
+                <span>Save Influencer</span>
+              )}
+            </button>
+            <button
+              type="button"
+              disabled={saving}
+              onClick={onDone}
+              className="rounded-xl px-3 py-2 text-xs font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 disabled:opacity-50"
+            >
+              Cancel
+            </button>
           </div>
         </form>
       </div>
@@ -838,7 +923,21 @@ function PlatformBadge({ platform, href }: { platform: string; href?: string | n
 // tags in a single cell rather than separate rows — Audience Size/Median
 // Views/Median ER%/costs/client decision are one shared set of numbers per
 // creator, not broken out per deliverable type.
-function ShortlistCreatorRow({ creator, canSeeCost, isClientView, role, superAdmin = false }: { creator: Creator; canSeeCost: boolean; isClientView: boolean; role: Role; superAdmin?: boolean }) {
+function ShortlistCreatorRow({
+  creator,
+  canSeeCost,
+  isClientView,
+  role,
+  superAdmin = false,
+  onRemove,
+}: {
+  creator: Creator;
+  canSeeCost: boolean;
+  isClientView: boolean;
+  role: Role;
+  superAdmin?: boolean;
+  onRemove?: (id: string) => void;
+}) {
   const [showInsights, setShowInsights] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshMsg, setRefreshMsg] = useState<string | null>(null);
@@ -1182,9 +1281,10 @@ function ShortlistCreatorRow({ creator, canSeeCost, isClientView, role, superAdm
         <td className="whitespace-nowrap border-b border-slate-100 px-5 py-4 dark:border-slate-800">
           <button
             type="button"
-            onClick={() => {
+            onClick={async () => {
               if (confirm(`Remove ${creator.name} from the shortlist? This marks them as rejected — they'll drop off the board but their history is kept.`)) {
-                rejectCreator(creator.id, "Removed from shortlist");
+                onRemove?.(creator.id);
+                await rejectCreator(creator.id, "Removed from shortlist");
               }
             }}
             title="Remove from shortlist"

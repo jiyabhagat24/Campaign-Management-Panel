@@ -628,6 +628,12 @@ export async function addCreator(campaignId: string, formData: FormData) {
         create: deliverableTypes.map((type) => ({ deliverableType: type })),
       },
     },
+    include: {
+      negotiationRounds: { orderBy: { roundNumber: "asc" } },
+      deliverables: true,
+      shortlistDeliverables: { orderBy: { createdAt: "asc" } },
+      poc: { select: { id: true, name: true } },
+    },
   });
 
   await logActivity({
@@ -641,6 +647,7 @@ export async function addCreator(campaignId: string, formData: FormData) {
   });
 
   revalidatePath(`/campaigns/${campaignId}`);
+  return creator;
 }
 
 // ---------- Shortlist pitch/negotiation (pre-onboarding) ----------

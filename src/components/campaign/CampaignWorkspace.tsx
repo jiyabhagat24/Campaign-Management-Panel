@@ -133,7 +133,7 @@ function ShortlistTab({
       {!isClientView && (
         <details className="rounded-xl border border-slate-200 bg-white p-4">
           <summary className="cursor-pointer text-sm font-medium text-ink">+ Add creator to shortlist</summary>
-          <form action={(fd) => addCreator(campaignId, fd)} className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3">
+          <form action={async (fd) => { await addCreator(campaignId, fd); }} className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3">
             <input name="name" placeholder="Creator name" required className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
             <input name="channelHandle" placeholder="@handle" required className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
             <select name="platformPrimary" className="rounded-lg border border-slate-300 px-3 py-2 text-sm">

@@ -126,31 +126,28 @@ async function resolveChannel(rawInput: string): Promise<{ channelId: string; up
   } else if (handleMatch) {
     json = await apiGet("/channels", { part: "snippet,statistics,contentDetails", forHandle: handleMatch[1] });
   } else if (legacyMatch) {
-    const [, legacyType, legacyName] = legacyMatch;
-    // Try forHandle first — most /c/ custom URLs are now also valid @handles.
-    // forUsername covers genuine /user/ legacy accounts. Fall back to a
-    // keyword search only when both dedicated lookups come back empty (the
-    // search endpoint costs more quota and can return a wrong channel when
-    // the name is ambiguous).
-    const forHandleJson = await apiGet("/channels", { part: "snippet,statistics,contentDetails", forHandle: `@${legacyName}` });
-    if (forHandleJson.items?.length) {
-      json = forHandleJson;
-    } else if (legacyType.toLowerCase() === "user") {
-      const forUsernameJson = await apiGet("/channels", { part: "snippet,statistics,contentDetails", forUsername: legacyName });
-      if (forUsernameJson.items?.length) {
-        json = forUsernameJson;
+    const [, , legacyName] = legacyMatch;
+    // Resolution order for /c/ and /user/ legacy URLs:
+    //   1. forUsername — the old-style lookup that directly maps legacy
+    //      usernames and most /c/ custom URLs. Most reliable for channels
+    //      that existed before the @handle era.
+    //   2. forHandle:@name — catches channels whose @handle matches their
+    //      custom URL slug but whose legacy username doesn't.
+    //   3. search — last resort only; can return the wrong channel when the
+    //      slug is a common word or a name claimed by multiple channels.
+    const forUsernameJson = await apiGet("/channels", { part: "snippet,statistics,contentDetails", forUsername: legacyName });
+    if (forUsernameJson.items?.length) {
+      json = forUsernameJson;
+    } else {
+      const forHandleJson = await apiGet("/channels", { part: "snippet,statistics,contentDetails", forHandle: `@${legacyName}` });
+      if (forHandleJson.items?.length) {
+        json = forHandleJson;
       } else {
         const searchJson = await apiGet("/search", { part: "snippet", type: "channel", q: legacyName, maxResults: "1" });
         const channelId = searchJson.items?.[0]?.snippet?.channelId ?? searchJson.items?.[0]?.id?.channelId;
         if (!channelId) throw new YoutubeLookupError("NOT_FOUND", `Couldn't find a YouTube channel matching "${trimmed}".`);
         json = await apiGet("/channels", { part: "snippet,statistics,contentDetails", id: channelId });
       }
-    } else {
-      // /c/ URL that forHandle didn't resolve — last resort search.
-      const searchJson = await apiGet("/search", { part: "snippet", type: "channel", q: legacyName, maxResults: "1" });
-      const channelId = searchJson.items?.[0]?.snippet?.channelId ?? searchJson.items?.[0]?.id?.channelId;
-      if (!channelId) throw new YoutubeLookupError("NOT_FOUND", `Couldn't find a YouTube channel matching "${trimmed}".`);
-      json = await apiGet("/channels", { part: "snippet,statistics,contentDetails", id: channelId });
     }
   } else {
     // youtube.com/name (no @ or /c/ or /channel/) — treat as a handle URL.

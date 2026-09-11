@@ -13,10 +13,12 @@ import type { Role } from "@/lib/constants";
 // (see the "Team" admin page) before they can get in.
 //
 // Clients don't have a theboredmonkey.com Google account, so they keep
-// signing in with email + password (CredentialsProvider below). To stop
-// that path from becoming a backdoor around Google-only for staff, the
-// credentials provider only ever succeeds for role CLIENT — an internal
-// account's password (if it even has one) can't be used to log in.
+// signing in with email + password (CredentialsProvider below). Staff
+// created the normal way (createTeamUser) get a random, unguessable
+// passwordHash and so stay Google-only in practice — this door only
+// actually opens for a deliberately-created test/dummy staff account that
+// was given a real password on purpose (for local testing of a role
+// without needing a real @theboredmonkey.com Google account).
 const ALLOWED_DOMAIN = "theboredmonkey.com";
 
 export const authOptions: NextAuthOptions = {
@@ -41,14 +43,23 @@ export const authOptions: NextAuthOptions = {
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
-        // Clients live in their own table now (see the Client model) — this
-        // door only ever checks that table, so an internal account's
-        // password (even if it somehow had one) can never log in here.
-        const client = await prisma.client.findUnique({ where: { email: credentials.email.toLowerCase() } });
-        if (!client) return null;
-        const valid = await bcrypt.compare(credentials.password, client.passwordHash);
+        const email = credentials.email.toLowerCase();
+
+        const client = await prisma.client.findUnique({ where: { email } });
+        if (client) {
+          const valid = await bcrypt.compare(credentials.password, client.passwordHash);
+          if (!valid) return null;
+          return { id: client.id, name: client.name, email: client.email, role: "CLIENT" };
+        }
+
+        // Falls through to internal staff — see the ALLOWED_DOMAIN comment
+        // above for why this is safe: only an account given a real password
+        // on purpose (a test/dummy staff login) can ever match here.
+        const user = await prisma.user.findUnique({ where: { email } });
+        if (!user) return null;
+        const valid = await bcrypt.compare(credentials.password, user.passwordHash);
         if (!valid) return null;
-        return { id: client.id, name: client.name, email: client.email, role: "CLIENT" };
+        return { id: user.id, name: user.name, email: user.email, role: user.role };
       },
     }),
   ],

@@ -75,7 +75,7 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
     : await prisma.activityLog.findMany({
         where: { campaignId: campaign.id },
         orderBy: { createdAt: "desc" },
-        take: 500,
+        take: 50,
       });
 
   const atRisk = isGoLiveAtRisk(campaign.goLiveDeadline);
