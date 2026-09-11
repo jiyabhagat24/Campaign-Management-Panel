@@ -27,6 +27,7 @@ import {
   fetchYoutubeChannelNiche,
   fetchYoutubeChannelInstagramHandle,
   resolveYoutubeChannelCanonicalUrl,
+  normalizeYoutubeChannelUrl,
   searchYoutubeChannels,
   isLikelyIndianChannel,
   YoutubeLookupError,
@@ -861,16 +862,17 @@ export async function lookupYoutubeChannelAction(channelUrl: string) {
 
   const url = channelUrl.trim();
   if (!url) return { ok: false as const, error: "Enter a YouTube channel URL." };
+  const cacheKey = normalizeYoutubeChannelUrl(url);
 
-  const cached = await prisma.youtubeChannelCache.findUnique({ where: { channelUrl: url } });
+  const cached = await prisma.youtubeChannelCache.findUnique({ where: { channelUrl: cacheKey } });
   const isFresh = cached && Date.now() - cached.updatedAt.getTime() < YOUTUBE_CACHE_TTL_MS;
   if (isFresh) return { ok: true as const, data: cached, stale: false };
 
   try {
     const stats = await fetchYoutubeChannelStats(url);
     const saved = await prisma.youtubeChannelCache.upsert({
-      where: { channelUrl: url },
-      create: { channelUrl: url, ...stats },
+      where: { channelUrl: cacheKey },
+      create: { channelUrl: cacheKey, ...stats },
       update: { ...stats },
     });
     return { ok: true as const, data: saved, stale: false };
@@ -923,15 +925,16 @@ async function refreshCreatorStatsCore(creator: CreatorRecord, opts: { forceYout
   let ytStale = false;
   let ytError: string | null = null;
   if (creator.youtubeUrl) {
-    const cached = await prisma.youtubeChannelCache.findUnique({ where: { channelUrl: creator.youtubeUrl } });
+    const cacheKey = normalizeYoutubeChannelUrl(creator.youtubeUrl);
+    const cached = await prisma.youtubeChannelCache.findUnique({ where: { channelUrl: cacheKey } });
     const isFresh = !forceYoutubeRefresh && cached && Date.now() - cached.updatedAt.getTime() < YOUTUBE_CACHE_TTL_MS;
     let stats = isFresh ? cached : null;
     if (!stats) {
       try {
         const fresh = await fetchYoutubeChannelStats(creator.youtubeUrl);
         stats = await prisma.youtubeChannelCache.upsert({
-          where: { channelUrl: creator.youtubeUrl },
-          create: { channelUrl: creator.youtubeUrl, ...fresh },
+          where: { channelUrl: cacheKey },
+          create: { channelUrl: cacheKey, ...fresh },
           update: { ...fresh },
         });
       } catch (err) {

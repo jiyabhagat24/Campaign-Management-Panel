@@ -88,6 +88,23 @@ async function apiGet(path: string, params: Record<string, string>): Promise<any
   return json;
 }
 
+// Collapses the many URL shapes that all point at the same channel
+// (with/without a trailing /shorts or /videos tab, query strings, trailing
+// slash, handle case) into one canonical string — used as the
+// YoutubeChannelCache key so pasting "@handle" and "@handle/shorts" reuse
+// the same cached row instead of each keeping its own (potentially stale)
+// copy of the Shorts numbers. Still a valid input to resolveChannel().
+export function normalizeYoutubeChannelUrl(rawInput: string): string {
+  const trimmed = rawInput.trim();
+  const channelIdMatch = trimmed.match(/youtube\.com\/channel\/([^/?#]+)/i);
+  if (channelIdMatch) return `https://www.youtube.com/channel/${channelIdMatch[1]}`;
+  const handleMatch = trimmed.match(/youtube\.com\/(@[^/?#]+)/i) ?? (trimmed.startsWith("@") ? [null, trimmed] : null);
+  if (handleMatch) return `https://www.youtube.com/${handleMatch[1]!.toLowerCase()}`;
+  const legacyMatch = trimmed.match(/youtube\.com\/(c|user)\/([^/?#]+)/i);
+  if (legacyMatch) return `https://www.youtube.com/${legacyMatch[1].toLowerCase()}/${legacyMatch[2]}`;
+  return trimmed.toLowerCase();
+}
+
 // Accepts /channel/UC..., /@handle, /c/Name, /user/Name, or a bare handle.
 // Resolves whichever form to a channelId + uploads playlist via the API.
 async function resolveChannel(rawInput: string): Promise<{ channelId: string; uploadsPlaylistId: string; subscribers: number | null }> {
@@ -103,11 +120,36 @@ async function resolveChannel(rawInput: string): Promise<{ channelId: string; up
     json = await apiGet("/channels", { part: "snippet,statistics,contentDetails", id: channelIdMatch[1] });
   } else if (handleMatch) {
     json = await apiGet("/channels", { part: "snippet,statistics,contentDetails", forHandle: handleMatch[1] });
+  } else if (legacyMatch) {
+    const [, legacyType, legacyName] = legacyMatch;
+    // Try forHandle first — most /c/ custom URLs are now also valid @handles.
+    // forUsername covers genuine /user/ legacy accounts. Fall back to a
+    // keyword search only when both dedicated lookups come back empty (the
+    // search endpoint costs more quota and can return a wrong channel when
+    // the name is ambiguous).
+    const forHandleJson = await apiGet("/channels", { part: "snippet,statistics,contentDetails", forHandle: `@${legacyName}` });
+    if (forHandleJson.items?.length) {
+      json = forHandleJson;
+    } else if (legacyType.toLowerCase() === "user") {
+      const forUsernameJson = await apiGet("/channels", { part: "snippet,statistics,contentDetails", forUsername: legacyName });
+      if (forUsernameJson.items?.length) {
+        json = forUsernameJson;
+      } else {
+        const searchJson = await apiGet("/search", { part: "snippet", type: "channel", q: legacyName, maxResults: "1" });
+        const channelId = searchJson.items?.[0]?.snippet?.channelId ?? searchJson.items?.[0]?.id?.channelId;
+        if (!channelId) throw new YoutubeLookupError("NOT_FOUND", `Couldn't find a YouTube channel matching "${trimmed}".`);
+        json = await apiGet("/channels", { part: "snippet,statistics,contentDetails", id: channelId });
+      }
+    } else {
+      // /c/ URL that forHandle didn't resolve — last resort search.
+      const searchJson = await apiGet("/search", { part: "snippet", type: "channel", q: legacyName, maxResults: "1" });
+      const channelId = searchJson.items?.[0]?.snippet?.channelId ?? searchJson.items?.[0]?.id?.channelId;
+      if (!channelId) throw new YoutubeLookupError("NOT_FOUND", `Couldn't find a YouTube channel matching "${trimmed}".`);
+      json = await apiGet("/channels", { part: "snippet,statistics,contentDetails", id: channelId });
+    }
   } else {
-    // Custom URL (/c/Name, /user/Name) or a bare name — no direct lookup
-    // param covers these reliably, so fall back to search (costs more quota
-    // but works for any input shape).
-    const query = legacyMatch ? legacyMatch[1] : trimmed.replace(/^https?:\/\/(www\.)?youtube\.com\//i, "");
+    // Bare handle or unrecognised URL shape.
+    const query = trimmed.replace(/^https?:\/\/(www\.)?youtube\.com\//i, "");
     const searchJson = await apiGet("/search", { part: "snippet", type: "channel", q: query, maxResults: "1" });
     const channelId = searchJson.items?.[0]?.snippet?.channelId ?? searchJson.items?.[0]?.id?.channelId;
     if (!channelId) throw new YoutubeLookupError("NOT_FOUND", `Couldn't find a YouTube channel matching "${trimmed}".`);
@@ -120,7 +162,7 @@ async function resolveChannel(rawInput: string): Promise<{ channelId: string; up
   return {
     channelId: channel.id,
     uploadsPlaylistId: channel.contentDetails?.relatedPlaylists?.uploads,
-    subscribers: channel.statistics?.hiddenSubscriberCount ? null : Number(channel.statistics?.subscriberCount ?? 0),
+    subscribers: channel.statistics?.hiddenSubscriberCount ? null : (channel.statistics?.subscriberCount != null ? Number(channel.statistics.subscriberCount) : null),
   };
 }
 
@@ -158,15 +200,30 @@ export async function fetchYoutubeChannelNiche(rawInput: string): Promise<string
 
   const channelIdMatch = trimmed.match(/youtube\.com\/channel\/([^/?#]+)/i);
   const handleMatch = trimmed.match(/youtube\.com\/(@[^/?#]+)/i) ?? (trimmed.startsWith("@") ? [null, trimmed] : null);
-  const legacyMatch = trimmed.match(/youtube\.com\/(?:c|user)\/([^/?#]+)/i);
+  const legacyMatch = trimmed.match(/youtube\.com\/(c|user)\/([^/?#]+)/i);
 
   let json: any;
   if (channelIdMatch) {
     json = await apiGet("/channels", { part: "topicDetails", id: channelIdMatch[1] });
   } else if (handleMatch) {
     json = await apiGet("/channels", { part: "topicDetails", forHandle: handleMatch[1] });
+  } else if (legacyMatch) {
+    const [, legacyType, legacyName] = legacyMatch;
+    const forHandleJson = await apiGet("/channels", { part: "topicDetails", forHandle: `@${legacyName}` });
+    if (forHandleJson.items?.length) {
+      json = forHandleJson;
+    } else if (legacyType.toLowerCase() === "user") {
+      const forUsernameJson = await apiGet("/channels", { part: "topicDetails", forUsername: legacyName });
+      json = forUsernameJson.items?.length ? forUsernameJson : null;
+    }
+    if (!json) {
+      const searchJson = await apiGet("/search", { part: "snippet", type: "channel", q: legacyName, maxResults: "1" });
+      const channelId = searchJson.items?.[0]?.snippet?.channelId ?? searchJson.items?.[0]?.id?.channelId;
+      if (!channelId) return null;
+      json = await apiGet("/channels", { part: "topicDetails", id: channelId });
+    }
   } else {
-    const query = legacyMatch ? legacyMatch[1] : trimmed.replace(/^https?:\/\/(www\.)?youtube\.com\//i, "");
+    const query = trimmed.replace(/^https?:\/\/(www\.)?youtube\.com\//i, "");
     const searchJson = await apiGet("/search", { part: "snippet", type: "channel", q: query, maxResults: "1" });
     const channelId = searchJson.items?.[0]?.snippet?.channelId ?? searchJson.items?.[0]?.id?.channelId;
     if (!channelId) return null;
@@ -207,15 +264,30 @@ export async function fetchYoutubeChannelInstagramHandle(rawInput: string): Prom
 
   const channelIdMatch = trimmed.match(/youtube\.com\/channel\/([^/?#]+)/i);
   const handleMatch = trimmed.match(/youtube\.com\/(@[^/?#]+)/i) ?? (trimmed.startsWith("@") ? [null, trimmed] : null);
-  const legacyMatch = trimmed.match(/youtube\.com\/(?:c|user)\/([^/?#]+)/i);
+  const legacyMatch = trimmed.match(/youtube\.com\/(c|user)\/([^/?#]+)/i);
 
   let json: any;
   if (channelIdMatch) {
     json = await apiGet("/channels", { part: "snippet", id: channelIdMatch[1] });
   } else if (handleMatch) {
     json = await apiGet("/channels", { part: "snippet", forHandle: handleMatch[1] });
+  } else if (legacyMatch) {
+    const [, legacyType, legacyName] = legacyMatch;
+    const forHandleJson = await apiGet("/channels", { part: "snippet", forHandle: `@${legacyName}` });
+    if (forHandleJson.items?.length) {
+      json = forHandleJson;
+    } else if (legacyType.toLowerCase() === "user") {
+      const forUsernameJson = await apiGet("/channels", { part: "snippet", forUsername: legacyName });
+      json = forUsernameJson.items?.length ? forUsernameJson : null;
+    }
+    if (!json) {
+      const searchJson = await apiGet("/search", { part: "snippet", type: "channel", q: legacyName, maxResults: "1" });
+      const channelId = searchJson.items?.[0]?.snippet?.channelId ?? searchJson.items?.[0]?.id?.channelId;
+      if (!channelId) return null;
+      json = await apiGet("/channels", { part: "snippet", id: channelId });
+    }
   } else {
-    const query = legacyMatch ? legacyMatch[1] : trimmed.replace(/^https?:\/\/(www\.)?youtube\.com\//i, "");
+    const query = trimmed.replace(/^https?:\/\/(www\.)?youtube\.com\//i, "");
     const searchJson = await apiGet("/search", { part: "snippet", type: "channel", q: query, maxResults: "1" });
     const channelId = searchJson.items?.[0]?.snippet?.channelId ?? searchJson.items?.[0]?.id?.channelId;
     if (!channelId) return null;
