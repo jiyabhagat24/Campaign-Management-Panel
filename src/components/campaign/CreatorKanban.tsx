@@ -2177,7 +2177,17 @@ function EditableNumberCell({
         type="number"
         step={step}
         defaultValue={value ?? ""}
-        onBlur={(e) => onSave(e.target.value === "" ? null : Number(e.target.value))}
+        onBlur={async (e) => {
+          const next = e.target.value === "" ? null : Number(e.target.value);
+          try {
+            await onSave(next);
+          } catch (err: any) {
+            window.alert(err?.message ?? "Failed to save — value was not stored.");
+            // Revert the visible input to the last known-good value so it
+            // doesn't keep showing a number that never actually saved.
+            e.target.value = value !== null && value !== undefined ? String(value) : "";
+          }
+        }}
         className={`w-28 rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 ${textClassName ?? ""}`}
       />
     </td>
