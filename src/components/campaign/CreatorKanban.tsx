@@ -2158,7 +2158,7 @@ function EditableNumberCell({
 }: {
   value: number | null | undefined;
   editable: boolean;
-  onSave: (value: number | null) => void;
+  onSave: (value: number | null) => void | Promise<any>;
   prefix?: string;
   suffix?: string;
   step?: string;
@@ -2180,7 +2180,11 @@ function EditableNumberCell({
         onBlur={async (e) => {
           const next = e.target.value === "" ? null : Number(e.target.value);
           try {
-            await onSave(next);
+            const result: any = await onSave(next);
+            if (result && typeof result === "object" && result.error) {
+              window.alert(result.error);
+              e.target.value = value !== null && value !== undefined ? String(value) : "";
+            }
           } catch (err: any) {
             window.alert(err?.message ?? "Failed to save — value was not stored.");
             // Revert the visible input to the last known-good value so it

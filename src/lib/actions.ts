@@ -680,24 +680,32 @@ export async function updateCreatorShortlist(
   // Everything else here (internal cost, socials, deliverables, insights,
   // rights of usage) is IR Executive/IR Intern territory — not Brand
   // Solutions, not CXO, not Campaign Manager either.
+  // Returned (not thrown) on purpose: Next.js's production build strips the
+  // .message off errors thrown inside a Server Action before they reach the
+  // client (shows up there as an opaque "Minified React error #441"), so a
+  // validation message like the margin-floor one below would never actually
+  // be visible to whoever tripped it. Returning { error } instead guarantees
+  // the real text reaches the UI. Genuinely unexpected failures (DB down,
+  // etc.) still throw naturally below and are handled as a hard error.
   const COMMERCIAL_FIELDS = ["quotedCost", "finalQuotedCost"] as const;
   const hasCommercialField = COMMERCIAL_FIELDS.some((f) => fields[f] !== undefined);
   const hasGeneralField = Object.keys(fields).some((k) => !(COMMERCIAL_FIELDS as readonly string[]).includes(k));
   if (hasCommercialField && !canSetCommercials(user.role) && !isSuperAdmin(user.id)) {
-    throw new Error("Only a Campaign Manager can change the Quoted Cost or Final Quoted Cost.");
+    return { error: "Only a Campaign Manager can change the Quoted Cost or Final Quoted Cost." };
   }
   if (hasGeneralField && !canOperateShortlist(user.role) && !isSuperAdmin(user.id)) {
-    throw new Error("Not authorized to edit shortlist details.");
+    return { error: "Not authorized to edit shortlist details." };
   }
 
   const creator = await prisma.creator.findUnique({ where: { id: creatorId }, select: { campaignId: true, internalCost: true } });
-  if (!creator) throw new Error("Creator not found");
+  if (!creator) return { error: "Creator not found" };
 
   // Gate G11: block a quoted-cost save that leaves less than 12% margin —
   // uses whatever internal cost this same call sets, else the stored one.
   if (fields.quotedCost !== undefined && fields.quotedCost !== null) {
     const internalCostForCheck = fields.internalCost !== undefined ? fields.internalCost : creator.internalCost;
-    assertMarginFloor(fields.quotedCost, internalCostForCheck);
+    const marginError = checkMarginFloor(fields.quotedCost, internalCostForCheck);
+    if (marginError) return { error: marginError };
   }
 
   const { insightsLinks, ...rest } = fields;
@@ -714,6 +722,7 @@ export async function updateCreatorShortlist(
   });
 
   revalidatePath(`/campaigns/${creator.campaignId}`);
+  return { error: null };
 }
 
 // Adds/removes which deliverable types a creator is tagged for (e.g. IR
@@ -1370,6 +1379,18 @@ export async function updateCreatorDeadline(creatorId: string, newDeadline: stri
 // blocks the direct save with a clear reason rather than silently applying
 // a thin-margin price.
 const MARGIN_FLOOR_PERCENT = 12;
+// Same rule as assertMarginFloor below, but returns the message instead of
+// throwing — for call sites (like updateCreatorShortlist) where a thrown
+// Server Action error's .message gets stripped in production before it
+// reaches the client. Prefer this in any new UI-facing save path.
+function checkMarginFloor(quotedCost: number, internalCost: number | null): string | null {
+  if (internalCost === null || internalCost <= 0 || quotedCost <= 0) return null;
+  const marginPercent = ((quotedCost - internalCost) / quotedCost) * 100;
+  if (marginPercent < MARGIN_FLOOR_PERCENT) {
+    return `This price leaves only ${marginPercent.toFixed(1)}% margin, below the ${MARGIN_FLOOR_PERCENT}% floor. Get Brand Solutions sign-off before pricing this low.`;
+  }
+  return null;
+}
 function assertMarginFloor(quotedCost: number, internalCost: number | null) {
   if (internalCost === null || internalCost <= 0 || quotedCost <= 0) return;
   const marginPercent = ((quotedCost - internalCost) / quotedCost) * 100;
