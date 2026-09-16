@@ -65,6 +65,20 @@ function xFor(i: number, n: number) {
   return n === 1 ? PAD_L + plotW / 2 : PAD_L + (i * plotW) / (n - 1);
 }
 
+// A line needs 2+ points to draw an actual segment — with only one month of
+// data (a single onboard-a-few-creators campaign, say), the "line" chart
+// otherwise degenerates to a single lonely "M x y" with nothing to connect,
+// which renders as nothing at all. Draw a short flat dash centered on the
+// lone point instead, so there's still a visible line, not just a dot.
+function linePathFor(points: { x: number; y: number }[]): string {
+  if (points.length === 0) return "";
+  if (points.length === 1) {
+    const { x, y } = points[0];
+    return `M ${(x - 28).toFixed(1)} ${y.toFixed(1)} L ${(x + 28).toFixed(1)} ${y.toFixed(1)}`;
+  }
+  return points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
+}
+
 // For a whole-number axis (a count, like creators onboarded) gridlines
 // have to land on real integers — dividing the axis max into even
 // fractions and rounding the label text for display (the old approach)
@@ -164,7 +178,7 @@ function FinancialPerformanceChart({ months }: { months: MonthRow[] }) {
   const hasNegative = minVal < 0;
 
   const linePath = (field: "revenue" | "marginValue") =>
-    months.map((m, i) => `${i === 0 ? "M" : "L"} ${xFor(i, months.length).toFixed(1)} ${yFor(m[field]).toFixed(1)}`).join(" ");
+    linePathFor(months.map((m, i) => ({ x: xFor(i, months.length), y: yFor(m[field]) })));
   const areaPath = (field: "revenue" | "marginValue") =>
     `${linePath(field)} L ${xFor(months.length - 1, months.length).toFixed(1)} ${yFor(0).toFixed(1)} L ${xFor(0, months.length).toFixed(1)} ${yFor(0).toFixed(1)} Z`;
 
@@ -247,9 +261,7 @@ function OnboardingEconomicsChart({ months }: { months: MonthRow[] }) {
   const xBand = (i: number) => PAD_L + bandW * (i + 0.5);
   const barW = Math.max(18, Math.min(46, bandW * 0.42));
 
-  const linePath = months
-    .map((m, i) => `${i === 0 ? "M" : "L"} ${xBand(i).toFixed(1)} ${yForCost(m.avgCostPerCreator).toFixed(1)}`)
-    .join(" ");
+  const linePath = linePathFor(months.map((m, i) => ({ x: xBand(i), y: yForCost(m.avgCostPerCreator) })));
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-[300px]">
