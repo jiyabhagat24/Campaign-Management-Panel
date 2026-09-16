@@ -428,6 +428,7 @@ function NumField({
           name={name}
           type="number"
           step={step}
+          min={0}
           onChange={onValueChange ? (e) => onValueChange(e.target.value) : undefined}
           onKeyDown={(e) => {
             // Up/Down would silently increment/decrement the value — block
@@ -941,6 +942,19 @@ function ShortlistCreatorRow({
   const [showInsights, setShowInsights] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshMsg, setRefreshMsg] = useState<string | null>(null);
+  const router = useRouter();
+
+  // Every inline edit below saves via a server action directly (not a <form
+  // action>), so Next.js won't auto-refresh this page's data on its own even
+  // though the action revalidates the path server-side — wrap every save so
+  // the row reflects the change immediately instead of needing a manual
+  // browser refresh. Preserves the resolved value (callers check .error).
+  function withRefresh<T>(p: Promise<T>): Promise<T> {
+    return p.then((r) => {
+      router.refresh();
+      return r;
+    });
+  }
 
   async function handleRefreshStats() {
     setRefreshing(true);
@@ -959,6 +973,7 @@ function ShortlistCreatorRow({
       })
       .join(", ");
     setRefreshMsg(summary);
+    router.refresh();
   }
 
   // Only show the social that's actually relevant — i.e. the creator has at
@@ -1119,7 +1134,7 @@ function ShortlistCreatorRow({
             <div className="flex items-center gap-1.5">
               <select
                 defaultValue={creator.rightsOfUsage ? "YES" : "NO"}
-                onChange={(e) => updateCreatorShortlist(creator.id, { rightsOfUsage: e.target.value === "YES" })}
+                onChange={(e) => withRefresh(updateCreatorShortlist(creator.id, { rightsOfUsage: e.target.value === "YES" }))}
                 className="w-28 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-medium dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
               >
                 <option value="NO">No</option>
@@ -1130,7 +1145,7 @@ function ShortlistCreatorRow({
                   type="number"
                   defaultValue={creator.usageDurationDays ?? ""}
                   placeholder="days"
-                  onBlur={(e) => updateCreatorShortlist(creator.id, { usageDurationDays: e.target.value === "" ? null : Number(e.target.value) })}
+                  onBlur={(e) => withRefresh(updateCreatorShortlist(creator.id, { usageDurationDays: e.target.value === "" ? null : Number(e.target.value) }))}
                   className="w-28 rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
                 />
               )}
@@ -1187,7 +1202,7 @@ function ShortlistCreatorRow({
             links={links}
             editable={!isClientView}
             onClose={() => setShowInsights(false)}
-            onSave={(newLinks) => updateCreatorShortlist(creator.id, { insightsLinks: newLinks })}
+            onSave={(newLinks) => withRefresh(updateCreatorShortlist(creator.id, { insightsLinks: newLinks }))}
           />
         )}
       </td>
@@ -1196,7 +1211,7 @@ function ShortlistCreatorRow({
           value={creator.internalCost ?? null}
           prefix="₹"
           editable={canOperateShortlist(role) || superAdmin}
-          onSave={(v) => updateCreatorShortlist(creator.id, { internalCost: v })}
+          onSave={(v) => withRefresh(updateCreatorShortlist(creator.id, { internalCost: v }))}
           textClassName="text-indigo-600 dark:text-indigo-400"
         />
       )}
@@ -1205,7 +1220,7 @@ function ShortlistCreatorRow({
           value={creator.quotedCost}
           prefix="₹"
           editable={role === "CAMPAIGN_MANAGER" || superAdmin}
-          onSave={(v) => updateCreatorShortlist(creator.id, { quotedCost: v })}
+          onSave={(v) => withRefresh(updateCreatorShortlist(creator.id, { quotedCost: v }))}
           textClassName="font-bold text-slate-900 dark:text-white"
         />
       )}
@@ -1213,7 +1228,7 @@ function ShortlistCreatorRow({
         {isClientView ? (
           <select
             defaultValue={creator.clientIntent ?? ""}
-            onChange={(e) => setCreatorClientDecision(creator.id, { clientIntent: e.target.value || null })}
+            onChange={(e) => withRefresh(setCreatorClientDecision(creator.id, { clientIntent: e.target.value || null }))}
             className="w-28 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
           >
             <option value="">—</option>
@@ -1231,9 +1246,18 @@ function ShortlistCreatorRow({
         {isClientView ? (
           <input
             type="number"
+            min={0}
             defaultValue={creator.clientCounterCost ?? ""}
             placeholder="₹"
-            onBlur={(e) => setCreatorClientDecision(creator.id, { clientCounterCost: e.target.value === "" ? null : Number(e.target.value) })}
+            onBlur={async (e) => {
+              const next = e.target.value === "" ? null : Number(e.target.value);
+              try {
+                await withRefresh(setCreatorClientDecision(creator.id, { clientCounterCost: next }));
+              } catch (err: any) {
+                window.alert(err?.message ?? "Failed to save — value was not stored.");
+                e.target.value = creator.clientCounterCost != null ? String(creator.clientCounterCost) : "";
+              }
+            }}
             className="w-28 rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
           />
         ) : (
@@ -1245,7 +1269,7 @@ function ShortlistCreatorRow({
           <input
             defaultValue={creator.clientRemark ?? ""}
             placeholder="Remark"
-            onBlur={(e) => setCreatorClientDecision(creator.id, { clientRemark: e.target.value || null })}
+            onBlur={(e) => withRefresh(setCreatorClientDecision(creator.id, { clientRemark: e.target.value || null }))}
             className="w-28 rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
           />
         ) : (
@@ -1256,14 +1280,14 @@ function ShortlistCreatorRow({
         value={creator.finalQuotedCost}
         prefix="₹"
         editable={!isClientView}
-        onSave={(v) => updateCreatorShortlist(creator.id, { finalQuotedCost: v })}
+        onSave={(v) => withRefresh(updateCreatorShortlist(creator.id, { finalQuotedCost: v }))}
         textClassName="font-bold text-slate-900 dark:text-white"
       />
       <td className="whitespace-nowrap border-b border-slate-100 px-5 py-4 dark:border-slate-800">
         {isClientView ? (
           <select
             defaultValue={creator.clientFinalIntent ?? ""}
-            onChange={(e) => setCreatorClientDecision(creator.id, { clientFinalIntent: e.target.value || null })}
+            onChange={(e) => withRefresh(setCreatorClientDecision(creator.id, { clientFinalIntent: e.target.value || null }))}
             className="w-28 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
           >
             <option value="">—</option>
@@ -1468,6 +1492,19 @@ function OnboardingCreatorRow({
   const [refreshing, setRefreshing] = useState(false);
   const [refreshMsg, setRefreshMsg] = useState<string | null>(null);
   const [pauseBusy, setPauseBusy] = useState(false);
+  const router = useRouter();
+
+  // Every inline edit below saves via a server action directly (not a <form
+  // action>), so Next.js won't auto-refresh this page's data on its own even
+  // though the action revalidates the path server-side — wrap every save so
+  // the row reflects the change immediately instead of needing a manual
+  // browser refresh. Preserves the resolved value (callers check .error).
+  function withRefresh<T>(p: Promise<T>): Promise<T> {
+    return p.then((r) => {
+      router.refresh();
+      return r;
+    });
+  }
 
   // Two-person pause (spec Gate G6): an IR role triggers it with a reason,
   // the Campaign Manager confirms before the row actually goes Blocked, and
@@ -1480,6 +1517,7 @@ function OnboardingCreatorRow({
     setPauseBusy(true);
     try {
       await triggerPause(creator.id, reason.trim());
+      router.refresh();
     } catch (err) {
       window.alert(err instanceof Error ? err.message : "Couldn't request a pause.");
     } finally {
@@ -1491,6 +1529,7 @@ function OnboardingCreatorRow({
     setPauseBusy(true);
     try {
       await confirmPause(creator.id);
+      router.refresh();
     } catch (err) {
       window.alert(err instanceof Error ? err.message : "Couldn't confirm the pause.");
     } finally {
@@ -1502,6 +1541,7 @@ function OnboardingCreatorRow({
     setPauseBusy(true);
     try {
       await resumeFromPause(creator.id);
+      router.refresh();
     } catch (err) {
       window.alert(err instanceof Error ? err.message : "Couldn't resume this creator.");
     } finally {
@@ -1619,6 +1659,7 @@ function OnboardingCreatorRow({
     if (!deadlineDraft || !deadlineReason.trim()) return;
     await updateCreatorDeadline(creator.id, deadlineDraft, deadlineReason.trim());
     setEditingDeadline(false);
+    router.refresh();
   }
 
   function openCostEditor() {
@@ -1629,9 +1670,15 @@ function OnboardingCreatorRow({
 
   async function saveCost() {
     const value = Number(costDraft);
-    if (!costDraft || Number.isNaN(value) || !costReason.trim()) return;
-    await requestFinalCostEdit(creator.id, value, costReason.trim());
-    setEditingCost(false);
+    if (!costDraft || Number.isNaN(value) || value < 0 || !costReason.trim()) return;
+    try {
+      const result = await requestFinalCostEdit(creator.id, value, costReason.trim());
+      setEditingCost(false);
+      router.refresh();
+      if (result?.warning) window.alert(result.warning);
+    } catch (err: any) {
+      window.alert(err?.message ?? "Failed to save — value was not stored.");
+    }
   }
 
   return (
@@ -1744,7 +1791,7 @@ function OnboardingCreatorRow({
                   defaultValue={d.title ?? ""}
                   placeholder={PLATFORM_LABELS[d.platform as keyof typeof PLATFORM_LABELS] ?? d.platform}
                   onBlur={(e) => {
-                    if (e.target.value !== (d.title ?? "")) updateDeliverableTitle(d.id, e.target.value);
+                    if (e.target.value !== (d.title ?? "")) withRefresh(updateDeliverableTitle(d.id, e.target.value));
                   }}
                   className="min-w-0 flex-1 border-none bg-transparent p-0 text-[11px] font-semibold text-slate-700 placeholder:text-slate-500 focus:outline-none dark:text-slate-300 dark:placeholder:text-slate-400"
                 />
@@ -1753,7 +1800,7 @@ function OnboardingCreatorRow({
                 <button
                   type="button"
                   onClick={() => {
-                    if (confirm("Delete this deliverable? This can't be undone.")) deleteDeliverable(d.id);
+                    if (confirm("Delete this deliverable? This can't be undone.")) withRefresh(deleteDeliverable(d.id));
                   }}
                   className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400"
                 >
@@ -1771,7 +1818,7 @@ function OnboardingCreatorRow({
                 if (!platform) return;
                 const fd = new FormData();
                 fd.set("platform", platform);
-                addDeliverable(creator.id, fd);
+                withRefresh(addDeliverable(creator.id, fd));
                 e.target.value = "";
               }}
               className="w-full rounded-lg border border-dashed border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-500 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-400"
@@ -1834,7 +1881,7 @@ function OnboardingCreatorRow({
             links={links}
             editable={!isClientView}
             onClose={() => setShowInsights(false)}
-            onSave={(newLinks) => updateCreatorShortlist(creator.id, { insightsLinks: newLinks })}
+            onSave={(newLinks) => withRefresh(updateCreatorShortlist(creator.id, { insightsLinks: newLinks }))}
           />
         )}
       </td>
@@ -1858,6 +1905,7 @@ function OnboardingCreatorRow({
           <div className="flex flex-col gap-1">
             <input
               type="number"
+              min={0}
               value={costDraft}
               onChange={(e) => setCostDraft(e.target.value)}
               placeholder="New cost"
@@ -1889,7 +1937,7 @@ function OnboardingCreatorRow({
         ) : (
           <select
             defaultValue={creator.pocUserId ?? ""}
-            onChange={(e) => assignCreatorPOC(creator.id, e.target.value || null)}
+            onChange={(e) => withRefresh(assignCreatorPOC(creator.id, e.target.value || null))}
             className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-medium dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
           >
             <option value="">Unassigned</option>
@@ -1916,7 +1964,7 @@ function OnboardingCreatorRow({
                 ) : (
                   <select
                     defaultValue={d.productStatus ?? ""}
-                    onChange={(e) => updateProductStatus(d.id, e.target.value)}
+                    onChange={(e) => withRefresh(updateProductStatus(d.id, e.target.value))}
                     className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
                   >
                     <option value="">—</option>
@@ -1949,7 +1997,7 @@ function OnboardingCreatorRow({
                 ) : (
                   <select
                     defaultValue={d.scriptStatus ?? ""}
-                    onChange={(e) => updateScriptStatus(d.id, e.target.value, d.scriptDocUrl ?? undefined)}
+                    onChange={(e) => withRefresh(updateScriptStatus(d.id, e.target.value, d.scriptDocUrl ?? undefined))}
                     className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
                   >
                     <option value="">—</option>
@@ -1989,10 +2037,17 @@ function OnboardingCreatorRow({
               ) : (
                 <input
                   key={d.id}
+                  type="url"
                   defaultValue={d.scriptDocUrl ?? ""}
                   placeholder="Drive link"
-                  onBlur={(e) => {
-                    if (e.target.value !== (d.scriptDocUrl ?? "")) updateScriptStatus(d.id, d.scriptStatus ?? "", e.target.value);
+                  onBlur={async (e) => {
+                    if (e.target.value === (d.scriptDocUrl ?? "")) return;
+                    try {
+                      await withRefresh(updateScriptStatus(d.id, d.scriptStatus ?? "", e.target.value));
+                    } catch (err: any) {
+                      window.alert(err?.message ?? "Failed to save — value was not stored.");
+                      e.target.value = d.scriptDocUrl ?? "";
+                    }
                   }}
                   className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
                 />
@@ -2018,7 +2073,7 @@ function OnboardingCreatorRow({
                 ) : (
                   <select
                     defaultValue={d.contentStatus ?? ""}
-                    onChange={(e) => updateContentStatus(d.id, e.target.value)}
+                    onChange={(e) => withRefresh(updateContentStatus(d.id, e.target.value))}
                     className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
                   >
                     <option value="">—</option>
@@ -2056,9 +2111,17 @@ function OnboardingCreatorRow({
               ) : (
                 <input
                   key={d.id}
+                  type="url"
                   placeholder="Paste live URL"
-                  onBlur={(e) => {
-                    if (e.target.value.trim()) addLiveLink(d.id, e.target.value.trim());
+                  onBlur={async (e) => {
+                    const next = e.target.value.trim();
+                    if (!next) return;
+                    try {
+                      await withRefresh(addLiveLink(d.id, next));
+                    } catch (err: any) {
+                      window.alert(err?.message ?? "Failed to save — value was not stored.");
+                      e.target.value = "";
+                    }
                   }}
                   className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
                 />
@@ -2176,6 +2239,7 @@ function EditableNumberCell({
       <input
         type="number"
         step={step}
+        min={0}
         defaultValue={value ?? ""}
         onBlur={async (e) => {
           const next = e.target.value === "" ? null : Number(e.target.value);
@@ -2184,6 +2248,10 @@ function EditableNumberCell({
             if (result && typeof result === "object" && result.error) {
               window.alert(result.error);
               e.target.value = value !== null && value !== undefined ? String(value) : "";
+            } else if (result && typeof result === "object" && result.warning) {
+              // Saved fine — just a heads-up (e.g. Gate G11 margin floor),
+              // so the value stays as typed rather than reverting.
+              window.alert(result.warning);
             }
           } catch (err: any) {
             window.alert(err?.message ?? "Failed to save — value was not stored.");

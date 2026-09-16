@@ -47,3 +47,14 @@ export function isValidName(name: string): boolean {
 export function isValidBrandName(name: string): boolean {
   return BRAND_NAME_REGEX.test(name.trim());
 }
+
+// A "link" field (profile URL, script doc, live video link, etc.) — must be
+// a real http(s) URL, not arbitrary text.
+export function isValidUrl(value: string): boolean {
+  try {
+    const u = new URL(value.trim());
+    return u.protocol === "http:" || u.protocol === "https:";
+  } catch {
+    return false;
+  }
+}

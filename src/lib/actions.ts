@@ -33,7 +33,7 @@ import {
   YoutubeLookupError,
 } from "@/lib/youtube";
 import { appendInstagramHandleToSheet } from "@/lib/googleSheets";
-import { isValidEmail, isValidName, isValidBrandName, isValidPhone, normalizePhone } from "@/lib/validation";
+import { isValidEmail, isValidName, isValidBrandName, isValidPhone, normalizePhone, isValidUrl } from "@/lib/validation";
 
 // Prisma's unique-constraint-violation error code — checked structurally
 // (not via `instanceof Prisma.PrismaClientKnownRequestError`) to avoid
@@ -588,6 +588,10 @@ export async function addCreator(campaignId: string, formData: FormData) {
   const youtubeShortsMedianViews = Number(formData.get("youtubeShortsMedianViews") ?? 0) || null;
   const youtubeShortsMedianERPercent = Number(formData.get("youtubeShortsMedianERPercent") ?? 0) || null;
   if (!name || !channelHandle) throw new Error("Name and handle are required");
+  if (profileUrl && !isValidUrl(profileUrl)) throw new Error("Instagram profile must be a valid URL.");
+  if (youtubeUrl && !isValidUrl(youtubeUrl)) throw new Error("YouTube channel must be a valid URL.");
+  const negativeError = negativeCostError(internalCost, "Internal cost");
+  if (negativeError) throw new Error(negativeError);
 
   // Which deliverable types this creator is being pitched for — one
   // ShortlistDeliverable row gets created per selection (checkbox group on
@@ -700,12 +704,20 @@ export async function updateCreatorShortlist(
   const creator = await prisma.creator.findUnique({ where: { id: creatorId }, select: { campaignId: true, internalCost: true } });
   if (!creator) return { error: "Creator not found" };
 
-  // Gate G11: block a quoted-cost save that leaves less than 12% margin —
-  // uses whatever internal cost this same call sets, else the stored one.
+  // No cost field can go negative — checked before anything else.
+  const negativeError =
+    negativeCostError(fields.internalCost, "Internal cost") ||
+    negativeCostError(fields.quotedCost, "Quoted cost") ||
+    negativeCostError(fields.finalQuotedCost, "Final quoted cost");
+  if (negativeError) return { error: negativeError };
+
+  // Gate G11: a quoted-cost save under 12% margin is flagged as a warning —
+  // uses whatever internal cost this same call sets, else the stored one —
+  // but still saves (see checkMarginFloor).
+  let warning: string | null = null;
   if (fields.quotedCost !== undefined && fields.quotedCost !== null) {
     const internalCostForCheck = fields.internalCost !== undefined ? fields.internalCost : creator.internalCost;
-    const marginError = checkMarginFloor(fields.quotedCost, internalCostForCheck);
-    if (marginError) return { error: marginError };
+    warning = checkMarginFloor(fields.quotedCost, internalCostForCheck);
   }
 
   const { insightsLinks, ...rest } = fields;
@@ -722,7 +734,7 @@ export async function updateCreatorShortlist(
   });
 
   revalidatePath(`/campaigns/${creator.campaignId}`);
-  return { error: null };
+  return { error: null, warning };
 }
 
 // Adds/removes which deliverable types a creator is tagged for (e.g. IR
@@ -766,6 +778,9 @@ export async function setCreatorClientDecision(
 ) {
   const user = await requireUser();
   if (!isClient(user.role) && !isSuperAdmin(user.id)) throw new Error("Only the client can set these fields");
+
+  const negativeError = negativeCostError(fields.clientCounterCost, "Counter cost");
+  if (negativeError) throw new Error(negativeError);
 
   const creator = await prisma.creator.findUnique({ where: { id: creatorId }, include: { shortlistDeliverables: true } });
   if (!creator) throw new Error("Creator not found");
@@ -1141,12 +1156,14 @@ export async function proposeNegotiationRound(creatorId: string, proposedCost: n
     );
   }
 
+  const negativeError = negativeCostError(proposedCost, "Proposed cost");
+  if (negativeError) throw new Error(negativeError);
+
   // Same "Campaign Manager exclusively moves Quoted Cost" rule as every
   // other write path (see updateCreatorShortlist) — only applies to TBM's
   // own proposal below, not the client's counter-offer.
   if (!isClient(user.role)) {
     if (!canSetCommercials(user.role) && !isSuperAdmin(user.id)) throw new Error("Only a Campaign Manager can propose a negotiation round.");
-    assertMarginFloor(proposedCost, creator.internalCost);
   }
 
   await prisma.negotiationRound.create({
@@ -1373,16 +1390,10 @@ export async function updateCreatorDeadline(creatorId: string, newDeadline: stri
 
 // Commercial edit after lock requires a logged reason + dual approval
 // (Campaign Manager + Brand Solutions) per brief slide 11.
-// Gate G11: quoted cost can't be saved if it leaves less than a 12% margin
-// over internal cost — that needs Brand Solutions sign-off outside the
-// system today (no separate approval-queue object exists yet), so this
-// blocks the direct save with a clear reason rather than silently applying
-// a thin-margin price.
+// Gate G11: a quoted cost under a 12% margin over internal cost is flagged —
+// surfaced as a warning (Brand Solutions sign-off recommended), not a hard
+// block, so the save always goes through.
 const MARGIN_FLOOR_PERCENT = 12;
-// Same rule as assertMarginFloor below, but returns the message instead of
-// throwing — for call sites (like updateCreatorShortlist) where a thrown
-// Server Action error's .message gets stripped in production before it
-// reaches the client. Prefer this in any new UI-facing save path.
 function checkMarginFloor(quotedCost: number, internalCost: number | null): string | null {
   if (internalCost === null || internalCost <= 0 || quotedCost <= 0) return null;
   const marginPercent = ((quotedCost - internalCost) / quotedCost) * 100;
@@ -1391,22 +1402,22 @@ function checkMarginFloor(quotedCost: number, internalCost: number | null): stri
   }
   return null;
 }
-function assertMarginFloor(quotedCost: number, internalCost: number | null) {
-  if (internalCost === null || internalCost <= 0 || quotedCost <= 0) return;
-  const marginPercent = ((quotedCost - internalCost) / quotedCost) * 100;
-  if (marginPercent < MARGIN_FLOOR_PERCENT) {
-    throw new Error(
-      `This price leaves only ${marginPercent.toFixed(1)}% margin, below the ${MARGIN_FLOOR_PERCENT}% floor. Get Brand Solutions sign-off before pricing this low.`
-    );
-  }
+
+// A cost field can never be negative — checked at every write path that
+// accepts a raw number from a form/input, not just the ones with a UI
+// min="0" hint (that's easily bypassed by typing "-" directly).
+function negativeCostError(value: number | null | undefined, label: string): string | null {
+  if (value !== null && value !== undefined && value < 0) return `${label} can't be negative.`;
+  return null;
 }
 
 export async function requestCommercialEdit(creatorId: string, newQuotedCost: number, reason: string) {
   const user = await requireUser();
   if (!canSetCommercials(user.role) && !isSuperAdmin(user.id)) throw new Error("Not authorized to edit commercials");
+  const negativeError = negativeCostError(newQuotedCost, "Quoted cost");
+  if (negativeError) throw new Error(negativeError);
 
   const creator = await prisma.creator.findUniqueOrThrow({ where: { id: creatorId } });
-  assertMarginFloor(newQuotedCost, creator.internalCost);
   await logActivity({
     campaignId: creator.campaignId,
     actorId: user.id,
@@ -1433,9 +1444,12 @@ export async function requestFinalCostEdit(creatorId: string, newFinalQuotedCost
   const user = await requireUser();
   if (!canSetCommercials(user.role) && !isSuperAdmin(user.id)) throw new Error("Not authorized to edit commercials");
   if (!reason.trim()) throw new Error("A reason is required to change a locked final cost");
+  const negativeError = negativeCostError(newFinalQuotedCost, "Final quoted cost");
+  if (negativeError) throw new Error(negativeError);
 
   const creator = await prisma.creator.findUniqueOrThrow({ where: { id: creatorId } });
-  assertMarginFloor(newFinalQuotedCost, creator.internalCost);
+  // Gate G11: flagged as a warning, not a block — see checkMarginFloor.
+  const warning = checkMarginFloor(newFinalQuotedCost, creator.internalCost);
   await logActivity({
     campaignId: creator.campaignId,
     actorId: user.id,
@@ -1443,12 +1457,13 @@ export async function requestFinalCostEdit(creatorId: string, newFinalQuotedCost
     action: "FINAL_COST_EDIT_REQUESTED",
     entityType: "Creator",
     entityId: creator.id,
-    meta: { newFinalQuotedCost, reason, requestedBy: user.name },
+    meta: { newFinalQuotedCost, reason, requestedBy: user.name, marginWarning: warning },
   });
   if (canApproveCommercialEdit(user.role)) {
     await prisma.creator.update({ where: { id: creatorId }, data: { finalQuotedCost: newFinalQuotedCost } });
   }
   revalidatePath(`/campaigns/${creator.campaignId}`);
+  return { warning };
 }
 
 // ---------- Deliverables / Product / Script / Content / Go-live ----------
@@ -1526,6 +1541,7 @@ export async function updateProductStatus(deliverableId: string, productStatus: 
 
 export async function updateScriptStatus(deliverableId: string, scriptStatus: string, scriptDocUrl?: string) {
   const user = await requireUser();
+  if (scriptDocUrl && !isValidUrl(scriptDocUrl)) throw new Error("Script link must be a valid URL.");
   const isApproving = scriptStatus === "APPROVED";
   const deliverable = await prisma.deliverable.update({
     where: { id: deliverableId },
@@ -1593,6 +1609,7 @@ export async function updateContentStatus(deliverableId: string, contentStatus: 
 export async function addLiveLink(deliverableId: string, liveLink: string) {
   const user = await requireUser();
   if (isClient(user.role)) throw new Error("Clients cannot add live links");
+  if (!isValidUrl(liveLink)) throw new Error("Live link must be a valid URL.");
 
   const deliverable = await prisma.deliverable.update({
     where: { id: deliverableId },
