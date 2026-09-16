@@ -24,6 +24,10 @@ const money = (n: number) =>
     : Math.abs(n) >= 1000
     ? `₹${(n / 1000).toFixed(1)}K`
     : `₹${Math.round(n)}`;
+// Exact figure for hover tooltips — money() above rounds to 1-2 decimal
+// places of L/Cr/K for on-chart labels where space is tight, which isn't
+// what you want when you're deliberately hovering for the precise number.
+const exactMoney = (n: number) => `₹${Math.round(n).toLocaleString("en-IN")}`;
 const monthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 const monthLabel = (key: string) => {
   const [y, m] = key.split("-").map(Number);
@@ -68,13 +72,14 @@ function xFor(i: number, n: number) {
 // A line needs 2+ points to draw an actual segment — with only one month of
 // data (a single onboard-a-few-creators campaign, say), the "line" chart
 // otherwise degenerates to a single lonely "M x y" with nothing to connect,
-// which renders as nothing at all. Draw a short flat dash centered on the
-// lone point instead, so there's still a visible line, not just a dot.
+// which renders as nothing at all. Draw a flat line across the full plot
+// width at that value instead, so there's a real visible line, not just a
+// dot (or a barely-there dash).
 function linePathFor(points: { x: number; y: number }[]): string {
   if (points.length === 0) return "";
   if (points.length === 1) {
-    const { x, y } = points[0];
-    return `M ${(x - 28).toFixed(1)} ${y.toFixed(1)} L ${(x + 28).toFixed(1)} ${y.toFixed(1)}`;
+    const { y } = points[0];
+    return `M ${PAD_L.toFixed(1)} ${y.toFixed(1)} L ${(W - PAD_R).toFixed(1)} ${y.toFixed(1)}`;
   }
   return points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
 }
@@ -179,8 +184,15 @@ function FinancialPerformanceChart({ months }: { months: MonthRow[] }) {
 
   const linePath = (field: "revenue" | "marginValue") =>
     linePathFor(months.map((m, i) => ({ x: xFor(i, months.length), y: yFor(m[field]) })));
-  const areaPath = (field: "revenue" | "marginValue") =>
-    `${linePath(field)} L ${xFor(months.length - 1, months.length).toFixed(1)} ${yFor(0).toFixed(1)} L ${xFor(0, months.length).toFixed(1)} ${yFor(0).toFixed(1)} Z`;
+  // Closing corners match the line's own endpoints (full plot width for a
+  // single month, per-month x positions otherwise) rather than always using
+  // xFor, which collapses to the same center point for a single month and
+  // would pinch the area into a sliver instead of spanning the full line.
+  const areaPath = (field: "revenue" | "marginValue") => {
+    const rightX = months.length === 1 ? W - PAD_R : xFor(months.length - 1, months.length);
+    const leftX = months.length === 1 ? PAD_L : xFor(0, months.length);
+    return `${linePath(field)} L ${rightX.toFixed(1)} ${yFor(0).toFixed(1)} L ${leftX.toFixed(1)} ${yFor(0).toFixed(1)} Z`;
+  };
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-[300px]">
@@ -227,14 +239,21 @@ function FinancialPerformanceChart({ months }: { months: MonthRow[] }) {
       <path d={linePath("marginValue")} fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
       {months.map((m, i) => (
         <g key={m.key}>
-          <circle cx={xFor(i, months.length)} cy={yFor(m.revenue)} r="5" fill="#fff" stroke="#C68E00" strokeWidth="2.5" />
-          <circle cx={xFor(i, months.length)} cy={yFor(m.revenue)} r="2" fill="#C68E00">
-            <title>{`${m.label} Revenue: ${money(m.revenue)}`}</title>
-          </circle>
-          <circle cx={xFor(i, months.length)} cy={yFor(m.marginValue)} r="5" fill="#fff" stroke="#10b981" strokeWidth="2.5" />
-          <circle cx={xFor(i, months.length)} cy={yFor(m.marginValue)} r="2" fill="#10b981">
-            <title>{`${m.label} Margin: ${money(m.marginValue)}`}</title>
-          </circle>
+          {/* title on an invisible oversized hit circle, not just the tiny
+              2px center dot — that made the tooltip only fire on a
+              pixel-perfect hover, missing most of the visible marker. */}
+          <g>
+            <title>{`${m.label} Revenue: ${exactMoney(m.revenue)}`}</title>
+            <circle cx={xFor(i, months.length)} cy={yFor(m.revenue)} r="10" fill="transparent" />
+            <circle cx={xFor(i, months.length)} cy={yFor(m.revenue)} r="5" fill="#fff" stroke="#C68E00" strokeWidth="2.5" />
+            <circle cx={xFor(i, months.length)} cy={yFor(m.revenue)} r="2" fill="#C68E00" />
+          </g>
+          <g>
+            <title>{`${m.label} Margin: ${exactMoney(m.marginValue)}`}</title>
+            <circle cx={xFor(i, months.length)} cy={yFor(m.marginValue)} r="10" fill="transparent" />
+            <circle cx={xFor(i, months.length)} cy={yFor(m.marginValue)} r="5" fill="#fff" stroke="#10b981" strokeWidth="2.5" />
+            <circle cx={xFor(i, months.length)} cy={yFor(m.marginValue)} r="2" fill="#10b981" />
+          </g>
         </g>
       ))}
     </svg>
@@ -323,10 +342,10 @@ function OnboardingEconomicsChart({ months }: { months: MonthRow[] }) {
       <path d={linePath} fill="none" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
       {months.map((m, i) => (
         <g key={m.key}>
+          <title>{`${m.label} Avg cost/creator: ${exactMoney(m.avgCostPerCreator)}`}</title>
+          <circle cx={xBand(i)} cy={yForCost(m.avgCostPerCreator)} r="10" fill="transparent" />
           <circle cx={xBand(i)} cy={yForCost(m.avgCostPerCreator)} r="5" fill="#fff" stroke="#f59e0b" strokeWidth="2.5" />
-          <circle cx={xBand(i)} cy={yForCost(m.avgCostPerCreator)} r="2" fill="#f59e0b">
-            <title>{`${m.label} Avg cost/creator: ${money(m.avgCostPerCreator)}`}</title>
-          </circle>
+          <circle cx={xBand(i)} cy={yForCost(m.avgCostPerCreator)} r="2" fill="#f59e0b" />
         </g>
       ))}
     </svg>
@@ -433,7 +452,7 @@ function ClientRevenueStackChart({ rows }: { rows: RevenueDataRow[] }) {
                       stroke="#fff"
                       strokeWidth="1"
                     >
-                      <title>{`${brand} — ${monthLabel(mk)}: ${money(v)}`}</title>
+                      <title>{`${brand} — ${monthLabel(mk)}: ${exactMoney(v)}`}</title>
                     </rect>
                   );
                 })}
