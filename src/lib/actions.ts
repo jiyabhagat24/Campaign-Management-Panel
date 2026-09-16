@@ -711,15 +711,6 @@ export async function updateCreatorShortlist(
     negativeCostError(fields.finalQuotedCost, "Final quoted cost");
   if (negativeError) return { error: negativeError };
 
-  // Gate G11: a quoted-cost save under 12% margin is flagged as a warning —
-  // uses whatever internal cost this same call sets, else the stored one —
-  // but still saves (see checkMarginFloor).
-  let warning: string | null = null;
-  if (fields.quotedCost !== undefined && fields.quotedCost !== null) {
-    const internalCostForCheck = fields.internalCost !== undefined ? fields.internalCost : creator.internalCost;
-    warning = checkMarginFloor(fields.quotedCost, internalCostForCheck);
-  }
-
   const { insightsLinks, ...rest } = fields;
   await prisma.creator.update({
     where: { id: creatorId },
@@ -734,7 +725,7 @@ export async function updateCreatorShortlist(
   });
 
   revalidatePath(`/campaigns/${creator.campaignId}`);
-  return { error: null, warning };
+  return { error: null };
 }
 
 // Adds/removes which deliverable types a creator is tagged for (e.g. IR
@@ -1390,18 +1381,6 @@ export async function updateCreatorDeadline(creatorId: string, newDeadline: stri
 
 // Commercial edit after lock requires a logged reason + dual approval
 // (Campaign Manager + Brand Solutions) per brief slide 11.
-// Gate G11: a quoted cost under a 12% margin over internal cost is flagged —
-// surfaced as a warning (Brand Solutions sign-off recommended), not a hard
-// block, so the save always goes through.
-const MARGIN_FLOOR_PERCENT = 12;
-function checkMarginFloor(quotedCost: number, internalCost: number | null): string | null {
-  if (internalCost === null || internalCost <= 0 || quotedCost <= 0) return null;
-  const marginPercent = ((quotedCost - internalCost) / quotedCost) * 100;
-  if (marginPercent < MARGIN_FLOOR_PERCENT) {
-    return `This price leaves only ${marginPercent.toFixed(1)}% margin, below the ${MARGIN_FLOOR_PERCENT}% floor. Get Brand Solutions sign-off before pricing this low.`;
-  }
-  return null;
-}
 
 // A cost field can never be negative — checked at every write path that
 // accepts a raw number from a form/input, not just the ones with a UI
@@ -1448,8 +1427,6 @@ export async function requestFinalCostEdit(creatorId: string, newFinalQuotedCost
   if (negativeError) throw new Error(negativeError);
 
   const creator = await prisma.creator.findUniqueOrThrow({ where: { id: creatorId } });
-  // Gate G11: flagged as a warning, not a block — see checkMarginFloor.
-  const warning = checkMarginFloor(newFinalQuotedCost, creator.internalCost);
   await logActivity({
     campaignId: creator.campaignId,
     actorId: user.id,
@@ -1457,13 +1434,12 @@ export async function requestFinalCostEdit(creatorId: string, newFinalQuotedCost
     action: "FINAL_COST_EDIT_REQUESTED",
     entityType: "Creator",
     entityId: creator.id,
-    meta: { newFinalQuotedCost, reason, requestedBy: user.name, marginWarning: warning },
+    meta: { newFinalQuotedCost, reason, requestedBy: user.name },
   });
   if (canApproveCommercialEdit(user.role)) {
     await prisma.creator.update({ where: { id: creatorId }, data: { finalQuotedCost: newFinalQuotedCost } });
   }
   revalidatePath(`/campaigns/${creator.campaignId}`);
-  return { warning };
 }
 
 // ---------- Deliverables / Product / Script / Content / Go-live ----------

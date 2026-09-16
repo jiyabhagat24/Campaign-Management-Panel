@@ -1672,10 +1672,9 @@ function OnboardingCreatorRow({
     const value = Number(costDraft);
     if (!costDraft || Number.isNaN(value) || value < 0 || !costReason.trim()) return;
     try {
-      const result = await requestFinalCostEdit(creator.id, value, costReason.trim());
+      await requestFinalCostEdit(creator.id, value, costReason.trim());
       setEditingCost(false);
       router.refresh();
-      if (result?.warning) window.alert(result.warning);
     } catch (err: any) {
       window.alert(err?.message ?? "Failed to save — value was not stored.");
     }
@@ -2248,10 +2247,6 @@ function EditableNumberCell({
             if (result && typeof result === "object" && result.error) {
               window.alert(result.error);
               e.target.value = value !== null && value !== undefined ? String(value) : "";
-            } else if (result && typeof result === "object" && result.warning) {
-              // Saved fine — just a heads-up (e.g. Gate G11 margin floor),
-              // so the value stays as typed rather than reverting.
-              window.alert(result.warning);
             }
           } catch (err: any) {
             window.alert(err?.message ?? "Failed to save — value was not stored.");
