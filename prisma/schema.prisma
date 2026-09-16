@@ -118,6 +118,7 @@ model CampaignTeamMember {
   createdAt     DateTime @default(now())
 
   @@unique([campaignId, userId, roleOnCampaign])
+  @@index([userId])
 }
 
 // Links a Client account to the campaign(s) they're allowed to see. Every
@@ -132,6 +133,7 @@ model CampaignClientAccess {
   createdAt  DateTime @default(now())
 
   @@unique([campaignId, clientId])
+  @@index([clientId])
 }
 
 // ---------- Campaign (the central record) ----------
@@ -222,6 +224,7 @@ model Campaign {
   @@index([status])
   @@index([brand])
   @@index([createdAt])
+  @@index([createdById])
 }
 
 // Deprecated — the v1 single-brief-per-campaign shape. Superseded by
@@ -391,6 +394,10 @@ model Creator {
   @@index([status])
   @@index([sourcedByUserId])
   @@index([ballOwner])
+  @@index([campaignId])
+  @@index([pauseConfirmedByUserId])
+  @@index([pauseRequestedByUserId])
+  @@index([pocUserId])
 }
 
 // ---------- Shortlist deliverable tag (pre-onboarding pitch types) ----------
@@ -410,6 +417,8 @@ model ShortlistDeliverable {
   executionDeliverableId String? // set once promoted — soft link to the real Deliverable created for execution tracking
 
   createdAt DateTime @default(now())
+
+  @@index([creatorId])
 }
 
 // Escalation object (spec State Machine: Open -> Owned -> Closed). Raised by
@@ -448,6 +457,10 @@ model Escalation {
   @@index([campaignId])
   @@index([creatorId])
   @@index([status])
+  @@index([ownerId])
+  @@index([proposedOwnerId])
+  @@index([raisedByClientId])
+  @@index([raisedByUserId])
 }
 
 // Month lock object (spec State Machine: Provisional -> Locked). Finance
@@ -467,6 +480,7 @@ model Month {
   createdAt DateTime @default(now())
 
   @@index([month])
+  @@index([lockedByUserId])
 }
 
 // Action Tracker: every client-chase touchpoint logged (spec Gate — 7-day
@@ -488,6 +502,7 @@ model ChaseLog {
 
   @@index([creatorId])
   @@index([campaignId])
+  @@index([loggedByUserId])
 }
 
 // Every negotiation round is logged, never overwritten (brief slide 10).
@@ -502,6 +517,9 @@ model NegotiationRound {
   proposedByUser   User? @relation(fields: [proposedByUserId], references: [id], onDelete: SetNull)
   note         String?
   createdAt    DateTime @default(now())
+
+  @@index([creatorId])
+  @@index([proposedByUserId])
 }
 
 // ---------- Deliverable (metrics live here — brief slide 06) ----------
@@ -542,6 +560,7 @@ model Deliverable {
   updatedAt DateTime @updatedAt
 
   @@index([status])
+  @@index([creatorId])
 }
 
 // ---------- Communication (in-panel only — brief slide 03) ----------
@@ -568,6 +587,11 @@ model Remark {
   visibility String @default("INTERNAL") // INTERNAL | CLIENT — client-visibility remarks render on client view
 
   createdAt DateTime @default(now())
+
+  @@index([campaignId])
+  @@index([creatorId])
+  @@index([authorId])
+  @@index([authorClientId])
 }
 
 // ---------- Files ----------
@@ -585,6 +609,9 @@ model FileAsset {
   uploadedById String
   uploadedBy   User     @relation(fields: [uploadedById], references: [id], onDelete: Restrict)
   createdAt    DateTime @default(now())
+
+  @@index([campaignId])
+  @@index([uploadedById])
 }
 
 // ---------- Audit log (every action, timestamped — brief non-negotiable #4) ----------
@@ -612,6 +639,9 @@ model ActivityLog {
   // the first N (dashboard feed, campaign audit trail) — without this index
   // that's a full-table sort as the log grows into the thousands of rows.
   @@index([createdAt])
+  @@index([campaignId])
+  @@index([actorId])
+  @@index([actorClientId])
 }
 
 // ---------- Notifications (instant vs digest — brief slide 16) ----------

@@ -76,3 +76,19 @@ body {
      so this stays invisible against it — was the old purple-tinted #211a3e. */
   background: #141414 !important;
 }
+
+/* Remove the browser's built-in up/down spinner on every number input
+   app-wide (cost fields, followers, engagement rate, etc.) — applied
+   globally here rather than per-input so it covers every cost/number field
+   without touching each component. */
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  appearance: none;
+  margin: 0;
+}

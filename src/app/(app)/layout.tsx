@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { currentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import Sidebar from "@/components/Sidebar";
+import AutoRefresh from "@/components/AutoRefresh";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await currentUser();
@@ -15,6 +16,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex">
+      <AutoRefresh />
       <Sidebar role={user.role} name={user.name} notifications={notifications} userId={user.id} />
       <main className="min-h-screen flex-1 overflow-y-auto bg-panel dark:bg-slate-950">{children}</main>
     </div>
