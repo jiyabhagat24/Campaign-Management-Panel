@@ -32,6 +32,8 @@ export default async function FinancePage() {
           status: true,
           onboardedAt: true,
           internalCost: true,
+          quotedCost: true,
+          finalQuotedCost: true,
           payoutInvoiceRaised: true,
           payoutInvoiceReceived: true,
           payoutPaymentStatus: true,
@@ -68,16 +70,22 @@ export default async function FinancePage() {
       }))
   );
 
-  // Finance & Invoicing — Section B, Client side. budgetQuoted doubles as
-  // "Final Closed Cost" (same number, no separate field — see schema
-  // comment on financeInvoiced).
-  const invoicingRows: ClientInvoicingRow[] = campaigns.map((c) => ({
-    id: c.id,
-    brand: c.brand,
-    name: c.name,
-    finalClosedCost: c.budgetQuoted,
-    invoiced: c.financeInvoiced,
-  }));
+  // Finance & Invoicing — Section B, Client side. "Final Closed Cost" is the
+  // sum of each onboarded creator's own Final Quoted Cost (falling back to
+  // Quoted Cost) — not Campaign.budgetQuoted, an optional top-level estimate
+  // that's frequently left unset and was silently showing "—"/₹0 here even
+  // when real per-creator costing existed.
+  const invoicingRows: ClientInvoicingRow[] = campaigns.map((c) => {
+    const onboarded = c.creators.filter((cr) => cr.status === "ONBOARDED");
+    const finalClosedCost = onboarded.length > 0 ? onboarded.reduce((s, cr) => s + (cr.finalQuotedCost ?? cr.quotedCost ?? 0), 0) : null;
+    return {
+      id: c.id,
+      brand: c.brand,
+      name: c.name,
+      finalClosedCost,
+      invoiced: c.financeInvoiced,
+    };
+  });
 
   return (
     <div className="p-8 space-y-10 max-w-7xl mx-auto">

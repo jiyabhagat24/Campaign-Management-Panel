@@ -17,6 +17,10 @@ export type DashboardCampaignRow = {
   brandLogoUrl: string | null;
   status: string;
   budgetQuoted: number | null;
+  // Sum of each onboarded creator's own Final Quoted Cost (falling back to
+  // Quoted Cost) — the real committed revenue figure, as opposed to
+  // budgetQuoted, an optional top-level estimate frequently left unset.
+  quotedValue: number;
   goLiveDeadline: string | null; // ISO
   createdAt: string; // ISO
   brandSolutionsPoc: string | null;
@@ -144,7 +148,7 @@ export default function PortfolioDashboardClient({
   const creatorsOnboarded = filtered.reduce((s, c) => s + c.onboardedCount, 0);
   const deliverablesLive = filtered.reduce((s, c) => s + c.deliverablesLive, 0);
   const deliverablesTotal = filtered.reduce((s, c) => s + c.deliverablesTotal, 0);
-  const totalActiveCampaignValue = financeVisible.reduce((s, c) => s + (c.budgetQuoted ?? 0), 0);
+  const totalActiveCampaignValue = financeVisible.reduce((s, c) => s + c.quotedValue, 0);
   const totalInternalCampaignValue = financeVisible.reduce((s, c) => s + c.internalValue, 0);
   const marginPercent =
     totalActiveCampaignValue > 0
@@ -438,7 +442,7 @@ export default function PortfolioDashboardClient({
             </thead>
             <tbody className="font-medium">
               {filtered.map((c) => {
-                const quotedValue = c.budgetQuoted ?? 0;
+                const quotedValue = c.quotedValue;
                 const margin = quotedValue > 0 ? ((quotedValue - c.internalValue) / quotedValue) * 100 : null;
                 const deadline = c.goLiveDeadline ? new Date(c.goLiveDeadline) : null;
                 const breached = isGoLiveBreached(deadline);

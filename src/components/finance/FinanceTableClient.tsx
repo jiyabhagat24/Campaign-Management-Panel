@@ -13,6 +13,10 @@ export type FinanceCampaignRow = {
   brandLogoUrl: string | null;
   brandSolutionsPoc: string | null;
   budgetQuoted: number | null;
+  // Sum of each onboarded creator's own Final Quoted Cost (falling back to
+  // Quoted Cost) — the real committed revenue figure, as opposed to
+  // budgetQuoted, an optional top-level estimate frequently left unset.
+  quotedValue: number;
   internalValue: number;
   financeAgencyFee: number | null;
   financeAgencyFeePercent: number | null;
@@ -132,7 +136,7 @@ export default function FinanceTableClient({ campaigns }: { campaigns: FinanceCa
             </thead>
             <tbody className="font-medium">
               {rows.map((c) => {
-                const quotedValue = c.budgetQuoted ?? 0;
+                const quotedValue = c.quotedValue;
                 const margin = quotedValue > 0 ? ((quotedValue - c.internalValue) / quotedValue) * 100 : null;
 
                 return (

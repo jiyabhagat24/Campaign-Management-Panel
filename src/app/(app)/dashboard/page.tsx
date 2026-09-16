@@ -106,6 +106,15 @@ export default async function DashboardPage() {
       // same mistake the Finance Table row below used to make. Matches
       // the ONBOARDED-only filter the campaign report CSV already uses.
       internalValue: c.creators.filter((cr) => cr.status === "ONBOARDED").reduce((s, cr) => s + (cr.internalCost ?? 0), 0),
+      // "Quoted value" for Total Active Value / margin — each onboarded
+      // creator's own Final Quoted Cost (falling back to Quoted Cost), same
+      // convention as the Revenue Breakdown Chart. NOT Campaign.budgetQuoted:
+      // that's an optional top-level estimate that's frequently left unset,
+      // which was silently zeroing out Total Active Value and Margin %
+      // whenever it was null even though real per-creator costing existed.
+      quotedValue: c.creators
+        .filter((cr) => cr.status === "ONBOARDED")
+        .reduce((s, cr) => s + (cr.finalQuotedCost ?? cr.quotedCost ?? 0), 0),
       openFlags,
       financeYetToBeInvoiced: c.financeYetToBeInvoiced,
       financeYetToBeReceived: c.financeYetToBeReceived,
@@ -135,6 +144,11 @@ export default async function DashboardPage() {
       budgetQuoted: c.budgetQuoted,
       // Same ONBOARDED-only fix as the dashboard rows above.
       internalValue: c.creators.filter((cr) => cr.status === "ONBOARDED").reduce((s, cr) => s + (cr.internalCost ?? 0), 0),
+      // Same real-quoted-cost fix as the dashboard rows above (not
+      // budgetQuoted, which is an optional, often-unset top-level estimate).
+      quotedValue: c.creators
+        .filter((cr) => cr.status === "ONBOARDED")
+        .reduce((s, cr) => s + (cr.finalQuotedCost ?? cr.quotedCost ?? 0), 0),
       financeAgencyFee: c.financeAgencyFee,
       financeAgencyFeePercent: c.financeAgencyFeePercent,
       financeClientInvoiceStatus: c.financeClientInvoiceStatus,
