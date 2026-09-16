@@ -208,13 +208,24 @@ export default function CreatorKanban({
 
   // Shortlisting Stage sheet tab's own summary strip.
   const creatorsShared = shortlist.length;
-  // "Shortlisted" = the client has responded positively (Onboard or still
-  // Negotiating, not Rejected/pending) — read off clientIntent, not status.
-  // This panel never transitions status to CLIENT_LIKED/CLIENT_NEGOTIATING
-  // (that only happens via the unused clientReviewCreator action); the
-  // live client-decision flow is setCreatorClientDecision writing
-  // clientIntent instead, so that's the field this actually has to check.
-  const creatorsShortlisted = shortlist.filter((c) => c.clientIntent === "ONBOARD" || c.clientIntent === "NEGOTIATING").length;
+  // "Shortlisted" = every creator the client has ever leaned positive on —
+  // cumulative, so it still counts a creator once they've converted to
+  // Onboarded and left the shortlist pool (an onboarded creator's
+  // clientIntent stays whatever it was mid-negotiation, e.g. "NEGOTIATING",
+  // since only clientFinalIntent actually triggers the ONBOARD transition —
+  // so both fields are checked, plus status directly as the clearest signal
+  // once they've converted). Computed over creatorList (not `shortlist`,
+  // which excludes onboarded creators) so nobody drops out of the count on
+  // conversion; internally REJECTED rows are excluded either way.
+  const creatorsShortlisted = creatorList.filter(
+    (c) =>
+      c.status !== "REJECTED" &&
+      (c.status === "ONBOARDED" ||
+        c.status === "BLOCKED" ||
+        c.clientIntent === "ONBOARD" ||
+        c.clientIntent === "NEGOTIATING" ||
+        c.clientFinalIntent === "ONBOARD")
+  ).length;
   const quotedPrices = shortlist.map((c) => c.quotedCost).filter((n): n is number => n != null);
   const averageQuotedPrice = quotedPrices.length > 0 ? quotedPrices.reduce((s, n) => s + n, 0) / quotedPrices.length : null;
   const onboardedFromList = onboarding.length;

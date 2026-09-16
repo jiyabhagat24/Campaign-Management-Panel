@@ -149,17 +149,20 @@ export default async function DashboardPage() {
   const showFinance = !isClient(user.role) && canSeeInternalCost(user.role);
 
   // Revenue Breakdown Chart — one row per ONBOARDED creator with a real
-  // onboarding date, quoted value split evenly across that campaign's
-  // onboarded creators (no per-creator quoted value exists in the schema).
+  // onboarding date. Revenue is that creator's own Final Quoted Cost (the
+  // actual closed price, same figure the Onboarding tab's "Total Quoted
+  // Cost" sums) falling back to Quoted Cost if final costing was somehow
+  // skipped — NOT an even split of Campaign.budgetQuoted, which is an
+  // optional top-level estimate that's frequently left unset (and was
+  // silently producing ₹0 revenue for every creator whenever it was null).
   // Same closure-date convention as the Finance Table above.
   const revenueRows: RevenueDataRow[] = campaigns.flatMap((c) => {
     const onboarded = c.creators.filter((cr) => cr.status === "ONBOARDED" && cr.onboardedAt);
-    const perCreatorQuoted = onboarded.length > 0 ? (c.budgetQuoted ?? 0) / onboarded.length : 0;
     return onboarded.map((cr) => ({
       brand: c.brand,
       onboardedAt: cr.onboardedAt!.toISOString(),
       internalCost: cr.internalCost ?? 0,
-      revenue: perCreatorQuoted,
+      revenue: cr.finalQuotedCost ?? cr.quotedCost ?? 0,
     }));
   });
 

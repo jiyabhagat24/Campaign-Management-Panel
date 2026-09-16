@@ -3,11 +3,9 @@
 import { useMemo, useState } from "react";
 
 // One row per ONBOARDED creator with a real onboarding ("closure") date —
-// same closure-date convention the Finance Table uses. Revenue is the
-// campaign's quoted value split evenly across that campaign's onboarded
-// creators (no per-creator quoted value exists in the schema, so an even
-// split is the least-arbitrary apportionment available), attributed to the
-// month the creator closed.
+// same closure-date convention the Finance Table uses. Revenue is that
+// creator's own Final Quoted Cost (falling back to Quoted Cost), attributed
+// to the month the creator closed.
 export type RevenueDataRow = {
   brand: string;
   onboardedAt: string; // ISO
