@@ -18,13 +18,11 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
 
   const isClientView = isClient(user.role);
 
-  // Independent of each other — run together instead of one-after-another
-  // (each router.refresh() after a panel edit re-runs this whole page, so a
-  // sequential waterfall here directly adds to how long a save takes to show
-  // up). internalUsers/activityLogs are cheap to fetch unconditionally and
-  // just not used for a client view, rather than serializing the query
-  // behind knowing isClientView first.
-  const [campaign, internalUsers, activityLogs] = await Promise.all([
+  // campaign/internalUsers are independent — run together instead of one-
+  // after-another (each router.refresh() after a panel edit re-runs this
+  // whole page, so a sequential waterfall here directly adds to how long a
+  // save takes to show up).
+  const [campaign, internalUsers] = await Promise.all([
     prisma.campaign.findUnique({
       where: { id },
       include: {
@@ -48,12 +46,31 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
     // The User table is internal-staff-only now (clients live in their own
     // Client table), so no role filter is needed here anymore.
     isClientView ? Promise.resolve([]) : prisma.user.findMany({ select: { id: true, name: true, role: true }, orderBy: { name: "asc" } }),
-    // Onboarding tab derives "Last Action" / status-history / overdue-dormant
-    // flags entirely from the audit trail — client view doesn't need any of
-    // this internal operational detail.
-    isClientView ? Promise.resolve([]) : prisma.activityLog.findMany({ where: { campaignId: id }, orderBy: { createdAt: "desc" }, take: 50 }),
   ]);
   if (!campaign) notFound();
+
+  // Onboarding tab derives "Last Action" / status-history / overdue-dormant
+  // flags entirely from the audit trail — client view doesn't need any of
+  // this internal operational detail. Scoped to onboarded/blocked creators
+  // and their deliverables specifically (not just "the 50 most recent
+  // campaign-wide"): a campaign-wide cap was getting swamped by shortlist-
+  // stage churn (creator adds, negotiation rounds, etc. across every
+  // shortlisted creator, not just onboarded ones), silently starving older
+  // onboarded creators out of the window and making them look dormant-free/
+  // flag-free when they actually just had no *recent* logged activity.
+  const onboardingCreators = campaign.creators.filter((c) => c.status === "ONBOARDED" || c.status === "BLOCKED");
+  const onboardingEntityIds = [
+    ...onboardingCreators.map((c) => c.id),
+    ...onboardingCreators.flatMap((c) => c.deliverables.map((d) => d.id)),
+  ];
+  const activityLogs =
+    isClientView || onboardingEntityIds.length === 0
+      ? []
+      : await prisma.activityLog.findMany({
+          where: { campaignId: campaign.id, entityId: { in: onboardingEntityIds } },
+          orderBy: { createdAt: "desc" },
+          take: 300,
+        });
 
   // Clients need clientAccess; CXO sees every campaign; every other
   // internal role needs to be a team member on this specific campaign.

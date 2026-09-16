@@ -208,7 +208,13 @@ export default function CreatorKanban({
 
   // Shortlisting Stage sheet tab's own summary strip.
   const creatorsShared = shortlist.length;
-  const creatorsShortlisted = shortlist.filter((c) => c.status === "CLIENT_LIKED" || c.status === "CLIENT_NEGOTIATING").length;
+  // "Shortlisted" = the client has responded positively (Onboard or still
+  // Negotiating, not Rejected/pending) — read off clientIntent, not status.
+  // This panel never transitions status to CLIENT_LIKED/CLIENT_NEGOTIATING
+  // (that only happens via the unused clientReviewCreator action); the
+  // live client-decision flow is setCreatorClientDecision writing
+  // clientIntent instead, so that's the field this actually has to check.
+  const creatorsShortlisted = shortlist.filter((c) => c.clientIntent === "ONBOARD" || c.clientIntent === "NEGOTIATING").length;
   const quotedPrices = shortlist.map((c) => c.quotedCost).filter((n): n is number => n != null);
   const averageQuotedPrice = quotedPrices.length > 0 ? quotedPrices.reduce((s, n) => s + n, 0) / quotedPrices.length : null;
   const onboardedFromList = onboarding.length;
