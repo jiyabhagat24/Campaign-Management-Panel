@@ -3,6 +3,7 @@ import { currentUser } from "@/lib/auth";
 import { isClient } from "@/lib/rbac";
 import { getStaleChaseCandidates, logChase } from "@/lib/actions";
 import { PhoneCall } from "lucide-react";
+import ActionForm from "@/components/ActionForm";
 
 // Task #16 — Action Tracker: every client-chase touchpoint logged, and rows
 // with no contact in 7+ days surfaced here (the spec's escalation trigger —
@@ -46,11 +47,17 @@ export default async function ActionTrackerPage() {
                 <span className="font-semibold text-rose-600 dark:text-rose-400">{daysSinceChase} days since last chase</span>
               </p>
             </div>
-            <form
+            <ActionForm
               action={async (formData: FormData) => {
                 "use server";
-                await logChase(creator.id, String(formData.get("channel") ?? "EMAIL"), String(formData.get("note") ?? "") || undefined);
+                try {
+                  await logChase(creator.id, String(formData.get("channel") ?? "EMAIL"), String(formData.get("note") ?? "") || undefined);
+                  return { error: null };
+                } catch (err: any) {
+                  return { error: err?.message ?? "Failed to log chase." };
+                }
               }}
+              resetOnSuccess
               className="flex flex-wrap items-center gap-2"
             >
               <select
@@ -69,7 +76,7 @@ export default async function ActionTrackerPage() {
               <button className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700">
                 Log chase
               </button>
-            </form>
+            </ActionForm>
           </div>
         ))}
       </div>

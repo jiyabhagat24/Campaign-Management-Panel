@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { isClient, campaignVisibilityWhere } from "@/lib/rbac";
 import { raiseEscalation, claimEscalation, closeEscalation, listEscalations } from "@/lib/actions";
 import { AlertTriangle } from "lucide-react";
+import ActionForm from "@/components/ActionForm";
 
 // Task #14 — Escalation object, spec State Machine: Open -> Owned -> Closed.
 // Raised by any internal role or the Client, claimed by its proposed owner
@@ -43,18 +44,28 @@ export default async function EscalationsPage() {
         </p>
       </div>
 
-      <form
+      <ActionForm
         action={async (formData: FormData) => {
           "use server";
-          await raiseEscalation({
-            campaignId: String(formData.get("campaignId")),
-            title: String(formData.get("title") ?? ""),
-            description: String(formData.get("description") ?? "") || undefined,
-            sitsAt: String(formData.get("sitsAt") ?? "GENERAL"),
-            severity: String(formData.get("severity") ?? "MEDIUM"),
-            proposedOwnerId: String(formData.get("proposedOwnerId") ?? "") || undefined,
-          });
+          // Caught here (not left to throw across the client/server action
+          // boundary) so the real message survives — Next.js production
+          // builds strip a thrown Error's .message before it reaches the
+          // browser, replacing it with an opaque "Minified React error #441".
+          try {
+            await raiseEscalation({
+              campaignId: String(formData.get("campaignId")),
+              title: String(formData.get("title") ?? ""),
+              description: String(formData.get("description") ?? "") || undefined,
+              sitsAt: String(formData.get("sitsAt") ?? "GENERAL"),
+              severity: String(formData.get("severity") ?? "MEDIUM"),
+              proposedOwnerId: String(formData.get("proposedOwnerId") ?? "") || undefined,
+            });
+            return { error: null };
+          } catch (err: any) {
+            return { error: err?.message ?? "Failed to raise escalation." };
+          }
         }}
+        resetOnSuccess
         className="grid grid-cols-1 gap-3 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card dark:bg-slate-900 dark:border-slate-800 sm:grid-cols-2"
       >
         <select name="campaignId" required className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:bg-slate-800 dark:border-slate-700 dark:text-white">
@@ -103,7 +114,7 @@ export default async function EscalationsPage() {
         >
           Raise Escalation
         </button>
-      </form>
+      </ActionForm>
 
       {[
         { label: "Open", rows: open },
@@ -140,26 +151,36 @@ export default async function EscalationsPage() {
                   </div>
                   <div className="flex flex-shrink-0 gap-2">
                     {e.status === "OPEN" && (
-                      <form
+                      <ActionForm
                         action={async () => {
                           "use server";
-                          await claimEscalation(e.id);
+                          try {
+                            await claimEscalation(e.id);
+                            return { error: null };
+                          } catch (err: any) {
+                            return { error: err?.message ?? "Failed to claim escalation." };
+                          }
                         }}
                       >
                         <button className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 dark:bg-slate-800 dark:text-slate-300">
                           Claim
                         </button>
-                      </form>
+                      </ActionForm>
                     )}
                     {e.status === "OWNED" && (
-                      <form
+                      <ActionForm
                         action={async (formData: FormData) => {
                           "use server";
-                          await closeEscalation(
-                            e.id,
-                            String(formData.get("resolutionNote") ?? ""),
-                            String(formData.get("rootCauseCategory") ?? "OTHER")
-                          );
+                          try {
+                            await closeEscalation(
+                              e.id,
+                              String(formData.get("resolutionNote") ?? ""),
+                              String(formData.get("rootCauseCategory") ?? "OTHER")
+                            );
+                            return { error: null };
+                          } catch (err: any) {
+                            return { error: err?.message ?? "Failed to close escalation." };
+                          }
                         }}
                         className="flex flex-col items-end gap-1"
                       >
@@ -182,7 +203,7 @@ export default async function EscalationsPage() {
                         <button className="rounded-lg bg-emerald-600 px-3 py-1 text-xs font-semibold text-white hover:bg-emerald-700">
                           Close
                         </button>
-                      </form>
+                      </ActionForm>
                     )}
                   </div>
                 </div>

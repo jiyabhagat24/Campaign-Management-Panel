@@ -6,7 +6,7 @@ import bcrypt from "bcryptjs";
 import { requireUser } from "@/lib/auth";
 import { logActivity } from "@/lib/activity";
 import { notify } from "@/lib/notify";
-import { canApproveCommercialEdit, canSetCommercials, canSeeInternalCost, canManageTeam, canCreateCampaign, canOperateShortlist, isClient, isSuperAdmin } from "@/lib/rbac";
+import { canApproveCommercialEdit, canSetCommercials, canApproveMarginOverride, canSeeInternalCost, canManageTeam, canCreateCampaign, canOperateShortlist, isClient, isSuperAdmin } from "@/lib/rbac";
 import {
   DEFAULT_SLA,
   type Stage,
@@ -711,6 +711,24 @@ export async function updateCreatorShortlist(
     negativeCostError(fields.finalQuotedCost, "Final quoted cost");
   if (negativeError) return { error: negativeError };
 
+  // Gate G11: block a quoted-cost save that leaves less than 12% margin —
+  // uses whatever internal cost this same call sets, else the stored one.
+  // Brand Solutions/CXO (canApproveMarginOverride) and the superadmin can
+  // save through this anyway — that's the actual "Brand Solutions sign-off"
+  // the error message below points people to; a Campaign Manager alone
+  // cannot.
+  let marginOverridden = false;
+  if (fields.quotedCost !== undefined && fields.quotedCost !== null) {
+    const internalCostForCheck = fields.internalCost !== undefined ? fields.internalCost : creator.internalCost;
+    const marginError = checkMarginFloor(fields.quotedCost, internalCostForCheck);
+    if (marginError) {
+      if (!canApproveMarginOverride(user.role) && !isSuperAdmin(user.id)) {
+        return { error: marginError };
+      }
+      marginOverridden = true;
+    }
+  }
+
   const { insightsLinks, ...rest } = fields;
   await prisma.creator.update({
     where: { id: creatorId },
@@ -723,6 +741,18 @@ export async function updateCreatorShortlist(
       ...(fields.quotedCost !== undefined && fields.quotedCost !== null ? { ballOwner: "CLIENT" } : {}),
     },
   });
+
+  if (marginOverridden) {
+    await logActivity({
+      campaignId: creator.campaignId,
+      actorId: user.id,
+      actorName: user.name,
+      action: "MARGIN_FLOOR_OVERRIDDEN",
+      entityType: "Creator",
+      entityId: creatorId,
+      meta: { quotedCost: fields.quotedCost, internalCost: fields.internalCost ?? creator.internalCost },
+    });
+  }
 
   revalidatePath(`/campaigns/${creator.campaignId}`);
   return { error: null };

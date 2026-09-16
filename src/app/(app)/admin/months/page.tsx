@@ -3,6 +3,7 @@ import { currentUser } from "@/lib/auth";
 import { canManageTeam } from "@/lib/rbac";
 import { listMonths, lockMonth, getOrCreateMonth } from "@/lib/actions";
 import { CalendarCheck, Lock } from "lucide-react";
+import ActionForm from "@/components/ActionForm";
 
 // Task #17 — Month lock (Gate G12): finance figures stay provisional/
 // editable all month; only a CXO locks a month once the accounts audit is
@@ -51,11 +52,17 @@ export default async function MonthsAdminPage() {
               </p>
             </div>
             {m.status === "PROVISIONAL" ? (
-              <form
+              <ActionForm
                 action={async (formData: FormData) => {
                   "use server";
-                  await lockMonth(m.month, String(formData.get("auditCorrectionNotes") ?? "") || undefined);
+                  try {
+                    await lockMonth(m.month, String(formData.get("auditCorrectionNotes") ?? "") || undefined);
+                    return { error: null };
+                  } catch (err: any) {
+                    return { error: err?.message ?? "Failed to lock month." };
+                  }
                 }}
+                confirmMessage={`Lock ${m.month}? There's no unlock action — a later correction goes through a fresh lock call with audit notes, not by reopening this one.`}
                 className="flex items-center gap-2"
               >
                 <input
@@ -67,7 +74,7 @@ export default async function MonthsAdminPage() {
                   <Lock className="h-3 w-3" />
                   Lock month
                 </button>
-              </form>
+              </ActionForm>
             ) : (
               <span className="rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
                 Locked

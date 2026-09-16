@@ -50,6 +50,16 @@ export function canSetCommercials(role: Role) {
   return role === "CAMPAIGN_MANAGER";
 }
 
+// Gate G11's margin-floor error tells a Campaign Manager to "get Brand
+// Solutions sign-off before pricing this low" — but until now there was no
+// actual way to do that; the floor just hard-blocked everyone with no
+// override path. Brand Solutions (and CXO, org-wide) are the sign-off here:
+// updateCreatorShortlist lets them save a price under the 12% floor where it
+// would otherwise reject a Campaign Manager's save.
+export function canApproveMarginOverride(role: Role) {
+  return role === "BRAND_SOLUTIONS" || role === "CXO";
+}
+
 // IR Intern: works shortlisting/onboarding rows like an IR Executive, and
 // sees full cost/margin same as everyone internal, but never approves or
 // sets commercials.

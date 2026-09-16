@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Role } from "@/lib/constants";
-import { canSetCommercials, canApproveCommercialEdit, canOperateShortlist, isSuperAdmin } from "@/lib/rbac";
+import { canSetCommercials, canApproveCommercialEdit, canApproveMarginOverride, canOperateShortlist, isSuperAdmin } from "@/lib/rbac";
 import {
   PLATFORM_LABELS,
   creatorKanbanColumn,
@@ -976,10 +976,24 @@ function ShortlistCreatorRow({
   // the row reflects the change immediately instead of needing a manual
   // browser refresh. Preserves the resolved value (callers check .error).
   function withRefresh<T>(p: Promise<T>): Promise<T> {
-    return p.then((r) => {
-      router.refresh();
-      return r;
-    });
+    return p
+      .then((r: any) => {
+        if (r && typeof r === "object" && r.error) {
+          window.alert(r.error);
+        } else {
+          router.refresh();
+        }
+        return r;
+      })
+      .catch((err: any) => {
+        // Most withRefresh(...) call sites are fire-and-forget (an onChange
+        // handler that doesn't await/catch), so a rejected promise here
+        // would otherwise vanish silently. Alerting inside withRefresh
+        // itself guarantees it's seen regardless of whether the caller
+        // bothers to catch it too.
+        window.alert(err?.message ?? "Something went wrong — that didn't save.");
+        throw err;
+      });
   }
 
   async function handleRefreshStats() {
@@ -1113,8 +1127,13 @@ function ShortlistCreatorRow({
               {SHORTLIST_DELIVERABLE_LABELS[line.deliverableType as keyof typeof SHORTLIST_DELIVERABLE_LABELS] ?? line.deliverableType}
               {!isClientView && (
                 <button
-                  onClick={() => {
-                    if (confirm("Remove this deliverable?")) deleteShortlistDeliverable(line.id);
+                  onClick={async () => {
+                    if (!confirm("Remove this deliverable?")) return;
+                    try {
+                      await withRefresh(deleteShortlistDeliverable(line.id));
+                    } catch (err: any) {
+                      window.alert(err?.message ?? "Failed to remove this deliverable.");
+                    }
                   }}
                   className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400"
                 >
@@ -1127,11 +1146,15 @@ function ShortlistCreatorRow({
           {!isClientView && (
             <select
               defaultValue=""
-              onChange={(e) => {
+              onChange={async (e) => {
                 const value = e.target.value;
                 if (!value) return;
-                addShortlistDeliverable(creator.id, value as (typeof SHORTLIST_DELIVERABLE_TYPES)[number]);
                 e.target.value = "";
+                try {
+                  await withRefresh(addShortlistDeliverable(creator.id, value as (typeof SHORTLIST_DELIVERABLE_TYPES)[number]));
+                } catch (err: any) {
+                  window.alert(err?.message ?? "Failed to add this deliverable.");
+                }
               }}
               className="rounded-lg border border-dashed border-slate-300 bg-white px-1.5 py-1 text-xs font-semibold text-indigo-600 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-indigo-400"
             >
@@ -1245,7 +1268,11 @@ function ShortlistCreatorRow({
         <EditableNumberCell
           value={creator.quotedCost}
           prefix="₹"
-          editable={role === "CAMPAIGN_MANAGER" || superAdmin}
+          // Brand Solutions/CXO can also touch this cell — not to set prices
+          // day-to-day, but so they can actually be the "Brand Solutions
+          // sign-off" the margin-floor error message below points a Campaign
+          // Manager to (see canApproveMarginOverride in rbac.ts).
+          editable={role === "CAMPAIGN_MANAGER" || canApproveMarginOverride(role) || superAdmin}
           onSave={(v) => withRefresh(updateCreatorShortlist(creator.id, { quotedCost: v }))}
           textClassName="font-bold text-slate-900 dark:text-white"
         />
@@ -1333,8 +1360,17 @@ function ShortlistCreatorRow({
             type="button"
             onClick={async () => {
               if (confirm(`Remove ${creator.name} from the shortlist? This marks them as rejected — they'll drop off the board but their history is kept.`)) {
-                onRemove?.(creator.id);
-                await rejectCreator(creator.id, "Removed from shortlist");
+                // Only remove it from the visible list after the server
+                // confirms — doing it optimistically (old behavior) made a
+                // failed removal (e.g. an auth error) look like it worked,
+                // since the row vanished from screen regardless of whether
+                // the actual rejectCreator call succeeded.
+                try {
+                  await rejectCreator(creator.id, "Removed from shortlist");
+                  onRemove?.(creator.id);
+                } catch (err: any) {
+                  window.alert(err?.message ?? "Failed to remove this creator.");
+                }
               }
             }}
             title="Remove from shortlist"
@@ -1529,10 +1565,19 @@ function OnboardingCreatorRow({
   // the row reflects the change immediately instead of needing a manual
   // browser refresh. Preserves the resolved value (callers check .error).
   function withRefresh<T>(p: Promise<T>): Promise<T> {
-    return p.then((r) => {
-      router.refresh();
-      return r;
-    });
+    return p
+      .then((r: any) => {
+        if (r && typeof r === "object" && r.error) {
+          window.alert(r.error);
+        } else {
+          router.refresh();
+        }
+        return r;
+      })
+      .catch((err: any) => {
+        window.alert(err?.message ?? "Something went wrong — that didn't save.");
+        throw err;
+      });
   }
 
   // Two-person pause (spec Gate G6): an IR role triggers it with a reason,
@@ -1686,9 +1731,13 @@ function OnboardingCreatorRow({
 
   async function saveDeadline() {
     if (!deadlineDraft || !deadlineReason.trim()) return;
-    await updateCreatorDeadline(creator.id, deadlineDraft, deadlineReason.trim());
-    setEditingDeadline(false);
-    router.refresh();
+    try {
+      await updateCreatorDeadline(creator.id, deadlineDraft, deadlineReason.trim());
+      setEditingDeadline(false);
+      router.refresh();
+    } catch (err: any) {
+      window.alert(err?.message ?? "Failed to save the deadline change.");
+    }
   }
 
   function openCostEditor() {
@@ -2255,6 +2304,7 @@ function EditableNumberCell({
   step?: string;
   textClassName?: string;
 }) {
+  const router = useRouter();
   if (!editable) {
     return (
       <td className={`whitespace-nowrap border-b border-slate-100 px-5 py-4 text-xs font-semibold text-slate-700 dark:border-slate-800 dark:text-slate-300 ${textClassName ?? ""}`}>
@@ -2276,6 +2326,12 @@ function EditableNumberCell({
             if (result && typeof result === "object" && result.error) {
               window.alert(result.error);
               e.target.value = value !== null && value !== undefined ? String(value) : "";
+            } else {
+              // Match the refresh-on-success behavior every other editable
+              // field in this file already has (withRefresh) — without this,
+              // Quoted/Internal/Final Cost saves sat there until the next
+              // AutoRefresh tick or a manual page reload.
+              router.refresh();
             }
           } catch (err: any) {
             window.alert(err?.message ?? "Failed to save — value was not stored.");
