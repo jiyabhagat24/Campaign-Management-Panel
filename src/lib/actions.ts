@@ -1420,6 +1420,23 @@ function negativeCostError(value: number | null | undefined, label: string): str
   return null;
 }
 
+// Gate G11: quoted cost can't be saved if it leaves less than a 12% margin
+// over internal cost — that needs Brand Solutions/CXO sign-off
+// (canApproveMarginOverride in rbac.ts) rather than silently applying a
+// thin-margin price. Returns the message instead of throwing: a thrown
+// Server Action error has its .message stripped by Next.js in production
+// before it reaches the client, so a validation message like this one would
+// never actually be visible to whoever tripped it (see updateCreatorShortlist).
+const MARGIN_FLOOR_PERCENT = 12;
+function checkMarginFloor(quotedCost: number, internalCost: number | null): string | null {
+  if (internalCost === null || internalCost <= 0 || quotedCost <= 0) return null;
+  const marginPercent = ((quotedCost - internalCost) / quotedCost) * 100;
+  if (marginPercent < MARGIN_FLOOR_PERCENT) {
+    return `This price leaves only ${marginPercent.toFixed(1)}% margin, below the ${MARGIN_FLOOR_PERCENT}% floor. Get Brand Solutions sign-off before pricing this low.`;
+  }
+  return null;
+}
+
 export async function requestCommercialEdit(creatorId: string, newQuotedCost: number, reason: string) {
   const user = await requireUser();
   if (!canSetCommercials(user.role) && !isSuperAdmin(user.id)) throw new Error("Not authorized to edit commercials");
