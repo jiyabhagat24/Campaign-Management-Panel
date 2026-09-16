@@ -139,6 +139,12 @@ export type Creator = {
   goLiveDeadline: string | Date | null;
   pocUserId: string | null;
   poc: { id: string; name: string } | null;
+  // Whose move it is next — "CLIENT" while TBM waits on a client intent
+  // decision, "TBM" while the client waits on TBM's team (see ballOwner
+  // writes in actions.ts: set to CLIENT when a Quoted Cost is published,
+  // back to TBM the moment the client sets any decision). Drives the
+  // Shortlist summary strip's pending-on counts below.
+  ballOwner?: string | null;
   pauseRequestedAt?: string | Date | null;
   pauseConfirmedAt?: string | Date | null;
   negotiationRounds: NegotiationRound[];
@@ -200,15 +206,16 @@ export default function CreatorKanban({
   // alongside ONBOARDED — see creatorKanbanColumn in constants.ts.
   const onboarding = creatorList.filter((c) => c.status === "ONBOARDED" || c.status === "BLOCKED");
 
-  // Shortlisting Stage sheet tab's own summary strip — only the four
-  // cleanly-computable fields (Shared/Shortlisted/Average Quoted Price/
-  // Onboarded from the list). "Client Intent Pending on" and "TBM's Team
-  // input pending on" are left out until their exact rule is defined.
+  // Shortlisting Stage sheet tab's own summary strip.
   const creatorsShared = shortlist.length;
   const creatorsShortlisted = shortlist.filter((c) => c.status === "CLIENT_LIKED" || c.status === "CLIENT_NEGOTIATING").length;
   const quotedPrices = shortlist.map((c) => c.quotedCost).filter((n): n is number => n != null);
   const averageQuotedPrice = quotedPrices.length > 0 ? quotedPrices.reduce((s, n) => s + n, 0) / quotedPrices.length : null;
   const onboardedFromList = onboarding.length;
+  // ballOwner is TBM's own bookkeeping of whose move it is next — reuse it
+  // rather than re-deriving a second "who's waiting" rule from clientIntent.
+  const clientIntentPending = shortlist.filter((c) => c.ballOwner === "CLIENT").length;
+  const tbmInputPending = shortlist.filter((c) => c.ballOwner === "TBM").length;
 
   return (
     <div className="mt-8 space-y-6">
@@ -222,12 +229,14 @@ export default function CreatorKanban({
       <div className="py-2">
         {tab === "SHORTLIST" && (
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800 dark:bg-slate-900 sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800 dark:bg-slate-900 sm:grid-cols-3 lg:grid-cols-6">
               {[
                 { label: "Creators Shortlisting Shared", value: String(creatorsShared) },
                 { label: "Creators Shortlisted", value: String(creatorsShortlisted) },
                 { label: "Average Quoted Price", value: averageQuotedPrice != null ? `₹${Math.round(averageQuotedPrice).toLocaleString("en-IN")}` : "—" },
                 { label: "Onboarded from the list", value: String(onboardedFromList) },
+                { label: "Client Intent Pending on", value: String(clientIntentPending) },
+                { label: "TBM's Team input pending on", value: String(tbmInputPending) },
               ].map((s) => (
                 <div key={s.label}>
                   <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">{s.label}</p>
@@ -1382,7 +1391,8 @@ function creatorEffectiveDeadline(creator: Creator): Date | null {
 // the creator table: Onboarded Creators, Deliverables Live/Total, Action
 // needed at TBM / at Client (deliverable-level), Creator level action
 // (creator-level, any pending deliverable), Flagged Rows, Deadline this
-// week, and Project Deadline (the latest effective deadline across every
+// week, Total Quoted Cost (sum of Final Quoted Cost across every onboarded
+// creator), and Project Deadline (the latest effective deadline across every
 // onboarded creator — same value Campaign.goLiveDeadline is kept in sync
 // with elsewhere).
 function OnboardingSummaryStrip({ creators, activityLogs }: { creators: Creator[]; activityLogs: ActivityLogEntry[] }) {
@@ -1398,6 +1408,7 @@ function OnboardingSummaryStrip({ creators, activityLogs }: { creators: Creator[
   const deadlines = creators.map(creatorEffectiveDeadline).filter((d): d is Date => d !== null);
   const deadlineThisWeek = deadlines.filter((d) => d.getTime() >= now && d.getTime() - now <= sevenDaysMs).length;
   const projectDeadline = deadlines.length > 0 ? new Date(Math.max(...deadlines.map((d) => d.getTime()))) : null;
+  const totalQuotedCost = creators.reduce((sum, c) => sum + (c.finalQuotedCost ?? 0), 0);
 
   const stats: { label: string; value: string }[] = [
     { label: "Onboarded Creators", value: String(creators.length) },
@@ -1407,6 +1418,7 @@ function OnboardingSummaryStrip({ creators, activityLogs }: { creators: Creator[
     { label: "Creator level action", value: String(creatorLevelAction) },
     { label: "Flagged Rows", value: String(flaggedRows) },
     { label: "Deadline this week", value: String(deadlineThisWeek) },
+    { label: "Total Quoted Cost", value: `₹${Math.round(totalQuotedCost).toLocaleString("en-IN")}` },
     {
       label: "Project Deadline",
       value: projectDeadline ? projectDeadline.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—",
@@ -1414,7 +1426,7 @@ function OnboardingSummaryStrip({ creators, activityLogs }: { creators: Creator[
   ];
 
   return (
-    <div className="grid grid-cols-2 gap-3 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800 dark:bg-slate-900 sm:grid-cols-4 lg:grid-cols-8">
+    <div className="grid grid-cols-2 gap-3 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800 dark:bg-slate-900 sm:grid-cols-3 lg:grid-cols-9">
       {stats.map((s) => (
         <div key={s.label}>
           <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">{s.label}</p>

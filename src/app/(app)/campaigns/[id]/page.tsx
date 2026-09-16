@@ -16,26 +16,43 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
   const user = await currentUser();
   if (!user) redirect("/login");
 
-  const campaign = await prisma.campaign.findUnique({
-    where: { id },
-    include: {
-      creators: {
-        include: {
-          negotiationRounds: { orderBy: { roundNumber: "asc" } },
-          deliverables: true,
-          shortlistDeliverables: { orderBy: { createdAt: "asc" } },
-          poc: { select: { id: true, name: true } },
+  const isClientView = isClient(user.role);
+
+  // Independent of each other — run together instead of one-after-another
+  // (each router.refresh() after a panel edit re-runs this whole page, so a
+  // sequential waterfall here directly adds to how long a save takes to show
+  // up). internalUsers/activityLogs are cheap to fetch unconditionally and
+  // just not used for a client view, rather than serializing the query
+  // behind knowing isClientView first.
+  const [campaign, internalUsers, activityLogs] = await Promise.all([
+    prisma.campaign.findUnique({
+      where: { id },
+      include: {
+        creators: {
+          include: {
+            negotiationRounds: { orderBy: { roundNumber: "asc" } },
+            deliverables: true,
+            shortlistDeliverables: { orderBy: { createdAt: "asc" } },
+            poc: { select: { id: true, name: true } },
+          },
+          orderBy: { createdAt: "desc" },
         },
-        orderBy: { createdAt: "desc" },
+        clientAccess: { include: { client: { select: { id: true, name: true } } }, orderBy: { createdAt: "asc" } },
+        teamMembers: { include: { user: { select: { id: true, name: true } } }, orderBy: { createdAt: "asc" } },
+        platformBriefs: {
+          include: { languageRequirements: { orderBy: { createdAt: "asc" } } },
+          orderBy: { createdAt: "asc" },
+        },
       },
-      clientAccess: { include: { client: { select: { id: true, name: true } } }, orderBy: { createdAt: "asc" } },
-      teamMembers: { include: { user: { select: { id: true, name: true } } }, orderBy: { createdAt: "asc" } },
-      platformBriefs: {
-        include: { languageRequirements: { orderBy: { createdAt: "asc" } } },
-        orderBy: { createdAt: "asc" },
-      },
-    },
-  });
+    }),
+    // The User table is internal-staff-only now (clients live in their own
+    // Client table), so no role filter is needed here anymore.
+    isClientView ? Promise.resolve([]) : prisma.user.findMany({ select: { id: true, name: true, role: true }, orderBy: { name: "asc" } }),
+    // Onboarding tab derives "Last Action" / status-history / overdue-dormant
+    // flags entirely from the audit trail — client view doesn't need any of
+    // this internal operational detail.
+    isClientView ? Promise.resolve([]) : prisma.activityLog.findMany({ where: { campaignId: id }, orderBy: { createdAt: "desc" }, take: 50 }),
+  ]);
   if (!campaign) notFound();
 
   // Clients need clientAccess; CXO sees every campaign; every other
@@ -45,17 +62,7 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
   // that hitting the URL directly should look like a broken link/error.
   if (!canViewCampaign(user, campaign)) redirect("/campaigns");
 
-  // The User table is internal-staff-only now (clients live in their own
-  // Client table), so no role filter is needed here anymore.
-  const internalUsers = isClient(user.role)
-    ? []
-    : await prisma.user.findMany({
-        select: { id: true, name: true, role: true },
-        orderBy: { name: "asc" },
-      });
-
   const canSeeCost = canSeeInternalCost(user.role);
-  const isClientView = isClient(user.role);
 
   // serializeCreatorsForClient itself now filters out un-priced/rejected
   // rows (Gate G1) — see rbac.ts. Task #19: row-level Shortlisting scope for
@@ -66,17 +73,6 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
   const creators = isClientView
     ? serializeCreatorsForClient(campaign.creators)
     : filterCreatorsForShortlistScope(user, campaign.creators, campaignInternUserIds);
-
-  // Onboarding tab derives "Last Action" / status-history / overdue-dormant
-  // flags entirely from the audit trail — no separate columns needed for
-  // that. Client view doesn't need any of this internal operational detail.
-  const activityLogs = isClientView
-    ? []
-    : await prisma.activityLog.findMany({
-        where: { campaignId: campaign.id },
-        orderBy: { createdAt: "desc" },
-        take: 50,
-      });
 
   const atRisk = isGoLiveAtRisk(campaign.goLiveDeadline);
   const breached = isGoLiveBreached(campaign.goLiveDeadline);
