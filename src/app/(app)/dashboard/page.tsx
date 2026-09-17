@@ -84,6 +84,21 @@ export default async function DashboardPage() {
       return deadlineBreached || dormant;
     }).length;
 
+    const onboardedCreators = c.creators.filter((cr) => cr.status === "ONBOARDED");
+    // "Quoted value" for Total Active Value / margin — each onboarded
+    // creator's own Final Quoted Cost (falling back to Quoted Cost), same
+    // convention as the Revenue Breakdown Chart. NOT Campaign.budgetQuoted:
+    // that's an optional top-level estimate that's frequently left unset,
+    // which was silently zeroing out Total Active Value and Margin %
+    // whenever it was null even though real per-creator costing existed.
+    const quotedValue = onboardedCreators.reduce((s, cr) => s + (cr.finalQuotedCost ?? cr.quotedCost ?? 0), 0);
+    // Yet to be Invoiced / Yet to be Received / Value of Cleared Due used to
+    // be typed in by hand. They're derivable from data already tracked
+    // elsewhere: financeClientInvoiceStatus (set via FinanceRow) says which
+    // bucket a campaign's quotedValue sits in right now, so no separate
+    // number needs re-entering in sync with it.
+    const invoiceStatus = c.financeClientInvoiceStatus ?? "NOT_INVOICED";
+
     return {
       id: c.id,
       name: c.name,
@@ -95,7 +110,7 @@ export default async function DashboardPage() {
       createdAt: c.createdAt.toISOString(),
       brandSolutionsPoc,
       campaignManager,
-      onboardedCount: c.creators.filter((cr) => cr.status === "ONBOARDED").length,
+      onboardedCount: onboardedCreators.length,
       deliverablesLive: deliverables.filter((d) => d.liveLink).length,
       deliverablesTotal: deliverables.length,
       // Only ONBOARDED creators are actually committed spend — a creator
@@ -105,21 +120,17 @@ export default async function DashboardPage() {
       // this into a number way bigger than what's actually locked in,
       // same mistake the Finance Table row below used to make. Matches
       // the ONBOARDED-only filter the campaign report CSV already uses.
-      internalValue: c.creators.filter((cr) => cr.status === "ONBOARDED").reduce((s, cr) => s + (cr.internalCost ?? 0), 0),
-      // "Quoted value" for Total Active Value / margin — each onboarded
-      // creator's own Final Quoted Cost (falling back to Quoted Cost), same
-      // convention as the Revenue Breakdown Chart. NOT Campaign.budgetQuoted:
-      // that's an optional top-level estimate that's frequently left unset,
-      // which was silently zeroing out Total Active Value and Margin %
-      // whenever it was null even though real per-creator costing existed.
-      quotedValue: c.creators
-        .filter((cr) => cr.status === "ONBOARDED")
-        .reduce((s, cr) => s + (cr.finalQuotedCost ?? cr.quotedCost ?? 0), 0),
+      internalValue: onboardedCreators.reduce((s, cr) => s + (cr.internalCost ?? 0), 0),
+      quotedValue,
       openFlags,
-      financeYetToBeInvoiced: c.financeYetToBeInvoiced,
-      financeYetToBeReceived: c.financeYetToBeReceived,
-      financeValueOfClearedDue: c.financeValueOfClearedDue,
-      financeCreatorPayablePending: c.financeCreatorPayablePending,
+      financeYetToBeInvoiced: invoiceStatus === "NOT_INVOICED" ? quotedValue : 0,
+      financeYetToBeReceived: invoiceStatus === "INVOICED" ? quotedValue : 0,
+      financeValueOfClearedDue: invoiceStatus === "PAID" ? quotedValue : 0,
+      // What TBM still owes onboarded creators — their own Payout Amount
+      // (internalCost) wherever payoutPaymentStatus hasn't reached PAID yet.
+      financeCreatorPayablePending: onboardedCreators
+        .filter((cr) => cr.payoutPaymentStatus !== "PAID")
+        .reduce((s, cr) => s + (cr.internalCost ?? 0), 0),
       financeAgencyFee: c.financeAgencyFee,
     };
   });

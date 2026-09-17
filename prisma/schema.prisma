@@ -170,12 +170,14 @@ model Campaign {
   totalCreatorsRequired       Int? // deprecated — see CampaignPlatformBrief.totalCreatorsRequired
 
   // ---------- Finance (manual entry, phase 1) ----------
-  // No invoicing/payment system exists yet, so these four numbers — pulled
-  // straight from the ops team's Portfolio Dashboard sheet ("Yet to be
-  // invoiced", "Yet to be Received", "Value of cleared due", "Creator
-  // Payable pending") — are entered by hand via FinanceRow on the campaign
-  // page, same manual-for-now pattern as Instagram creator stats. Once real
-  // invoicing exists, these get computed instead of typed in.
+  // Deprecated — the ops team's Portfolio Dashboard sheet's "Yet to be
+  // invoiced" / "Yet to be Received" / "Value of cleared due" / "Creator
+  // Payable pending" numbers used to be typed in by hand here. They're now
+  // computed on the dashboard instead (dashboard/page.tsx) from
+  // financeClientInvoiceStatus below plus each onboarded creator's own
+  // finalQuotedCost/internalCost and payoutPaymentStatus, so they never
+  // drift out of sync with those. Columns kept, unused, only so any old
+  // data isn't lost; no code reads or writes them anymore.
   financeYetToBeInvoiced      Float?
   financeYetToBeReceived      Float?
   financeValueOfClearedDue    Float?

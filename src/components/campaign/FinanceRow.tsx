@@ -4,19 +4,17 @@ import { useState } from "react";
 import { updateCampaignFinance } from "@/lib/actions";
 import { INVOICE_STATUSES, INVOICE_STATUS_LABELS, type InvoiceStatus } from "@/lib/constants";
 
-// Manual entry for the Finance numbers the dashboard's Summary row and the
-// Finance Table report both roll up (Yet to be Invoiced / Yet to be
-// Received / Value of Cleared Due / Creator Payable Pending / Agency Fee /
-// Agency Fee % / Client Invoice status) — no invoicing system exists yet,
-// so these are typed in by whoever's tracking finance, same "manual for
-// now, goes straight to the database" pattern as Instagram creator stats
-// elsewhere in this app. canEdit follows canSeeInternalCost — clients never
+// Manual entry for the Finance numbers that can't be derived from data
+// tracked elsewhere (Agency Fee / Agency Fee % / Client Invoice status) — no
+// invoicing system exists yet, so these are typed in by whoever's tracking
+// finance, same "manual for now, goes straight to the database" pattern as
+// Instagram creator stats elsewhere in this app. Yet to be Invoiced / Yet to
+// be Received / Value of Cleared Due / Creator Payable Pending used to live
+// here too, but are now computed automatically on the dashboard from this
+// row's own Client Invoice status plus each creator's payout status — see
+// dashboard/page.tsx. canEdit follows canSeeInternalCost — clients never
 // see this row.
 type FinanceValues = {
-  financeYetToBeInvoiced: number | null;
-  financeYetToBeReceived: number | null;
-  financeValueOfClearedDue: number | null;
-  financeCreatorPayablePending: number | null;
   financeAgencyFee: number | null;
   financeAgencyFeePercent: number | null;
   financeClientInvoiceStatus: string | null;
@@ -35,10 +33,6 @@ type Props = {
 type MoneyFieldKey = Exclude<keyof FinanceValues, "financeClientInvoiceStatus">;
 
 const MONEY_FIELDS: { key: MoneyFieldKey; label: string }[] = [
-  { key: "financeYetToBeInvoiced", label: "Yet to be Invoiced" },
-  { key: "financeYetToBeReceived", label: "Yet to be Received" },
-  { key: "financeValueOfClearedDue", label: "Value of Cleared Due" },
-  { key: "financeCreatorPayablePending", label: "Creator Payable Pending" },
   { key: "financeAgencyFee", label: "Agency Fee" },
 ];
 

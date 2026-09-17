@@ -333,18 +333,16 @@ export async function updateCampaignDetails(
   revalidatePath("/dashboard");
 }
 
-// Manual entry for the four Finance numbers the dashboard's Summary row
-// needs (Yet to be Invoiced / Yet to be Received / Value of Cleared Due /
-// Creator Payable Pending) — see the schema comment on Campaign. Gated the
-// same way internal cost fields are elsewhere (canSeeInternalCost), since
-// these are finance-sensitive and clients must never see or set them.
+// Manual entry for the Finance fields that aren't derivable from data
+// tracked elsewhere — Agency Fee (₹ and %) and Client Invoice status. Yet to
+// be Invoiced / Yet to be Received / Value of Cleared Due / Creator Payable
+// Pending are computed automatically on the dashboard instead (see
+// dashboard/page.tsx) from this status plus each creator's payout status.
+// Gated the same way internal cost fields are elsewhere (canSeeInternalCost),
+// since these are finance-sensitive and clients must never see or set them.
 export async function updateCampaignFinance(
   campaignId: string,
   fields: {
-    financeYetToBeInvoiced?: number | null;
-    financeYetToBeReceived?: number | null;
-    financeValueOfClearedDue?: number | null;
-    financeCreatorPayablePending?: number | null;
     financeAgencyFee?: number | null;
     financeAgencyFeePercent?: number | null;
     financeClientInvoiceStatus?: string | null;
