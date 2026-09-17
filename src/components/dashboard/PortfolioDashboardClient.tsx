@@ -348,6 +348,7 @@ export default function PortfolioDashboardClient({
             <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
             <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Yet to be Invoiced</p>
             <p className="mt-3 text-3xl font-extrabold text-slate-900 dark:text-white">{money(yetToBeInvoiced)}</p>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 font-medium">Quoted value not yet invoiced to the client</p>
           </div>
         )}
 
@@ -356,6 +357,7 @@ export default function PortfolioDashboardClient({
             <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
             <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Yet to be Received</p>
             <p className="mt-3 text-3xl font-extrabold text-slate-900 dark:text-white">{money(yetToBeReceived)}</p>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 font-medium">Invoiced to the client, payment not yet received</p>
           </div>
         )}
 
@@ -364,6 +366,7 @@ export default function PortfolioDashboardClient({
             <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
             <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Value of Cleared Due</p>
             <p className="mt-3 text-3xl font-extrabold text-slate-900 dark:text-white">{money(valueOfClearedDue)}</p>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 font-medium">Invoiced and payment received from the client</p>
           </div>
         )}
 
@@ -372,6 +375,7 @@ export default function PortfolioDashboardClient({
             <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
             <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Creator Payable Pending</p>
             <p className="mt-3 text-3xl font-extrabold text-slate-900 dark:text-white">{money(creatorPayablePending)}</p>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 font-medium">Owed to onboarded creators, payout not yet completed</p>
           </div>
         )}
       </div>
