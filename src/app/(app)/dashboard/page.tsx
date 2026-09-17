@@ -180,8 +180,14 @@ export default async function DashboardPage() {
   // skipped — NOT an even split of Campaign.budgetQuoted, which is an
   // optional top-level estimate that's frequently left unset (and was
   // silently producing ₹0 revenue for every creator whenever it was null).
-  // Same closure-date convention as the Finance Table above.
-  const revenueRows: RevenueDataRow[] = campaigns.flatMap((c) => {
+  // Same closure-date convention as the Finance Table above, and same
+  // FINANCE_VISIBLE_STATUSES filter — a campaign that's paused/cancelled
+  // after some creators already onboarded shouldn't keep inflating this
+  // chart's revenue/margin, same reasoning that already applies to the
+  // Finance Table and the four summary cards above.
+  const revenueRows: RevenueDataRow[] = campaigns
+    .filter((c) => (FINANCE_VISIBLE_STATUSES as string[]).includes(c.status))
+    .flatMap((c) => {
     const onboarded = c.creators.filter((cr) => cr.status === "ONBOARDED" && cr.onboardedAt);
     return onboarded.map((cr) => ({
       brand: c.brand,
