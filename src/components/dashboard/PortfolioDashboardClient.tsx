@@ -339,15 +339,15 @@ export default function PortfolioDashboardClient({
           </div>
         )}
 
-        {/* Finance figures — manually entered per campaign via FinanceRow on
-            the campaign page (no invoicing system yet, see schema comment).
-            TBM-internal money movement, never shown to a client. */}
+        {/* Finance figures — computed per campaign from its Client Invoice
+            status and each onboarded creator's payout status (see
+            dashboard/page.tsx). TBM-internal money movement, never shown to
+            a client. */}
         {!isClientView && (
           <div className="stat-card group dark:bg-slate-900 dark:border-slate-800">
             <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
             <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Yet to be Invoiced</p>
             <p className="mt-3 text-3xl font-extrabold text-slate-900 dark:text-white">{money(yetToBeInvoiced)}</p>
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 font-medium">Manually entered</p>
           </div>
         )}
 
@@ -356,7 +356,6 @@ export default function PortfolioDashboardClient({
             <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
             <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Yet to be Received</p>
             <p className="mt-3 text-3xl font-extrabold text-slate-900 dark:text-white">{money(yetToBeReceived)}</p>
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 font-medium">Manually entered</p>
           </div>
         )}
 
@@ -365,7 +364,6 @@ export default function PortfolioDashboardClient({
             <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
             <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Value of Cleared Due</p>
             <p className="mt-3 text-3xl font-extrabold text-slate-900 dark:text-white">{money(valueOfClearedDue)}</p>
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 font-medium">Manually entered</p>
           </div>
         )}
 
@@ -374,7 +372,6 @@ export default function PortfolioDashboardClient({
             <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
             <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Creator Payable Pending</p>
             <p className="mt-3 text-3xl font-extrabold text-slate-900 dark:text-white">{money(creatorPayablePending)}</p>
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 font-medium">Manually entered</p>
           </div>
         )}
       </div>
