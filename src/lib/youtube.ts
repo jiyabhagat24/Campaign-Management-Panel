@@ -319,6 +319,37 @@ export async function fetchYoutubeChannelInstagramHandle(rawInput: string): Prom
   return extractInstagramHandleFromText(description);
 }
 
+// Pulls the actual video ID out of any live-link shape a creator/IR might
+// paste — watch?v=, youtu.be/, /shorts/, /embed/ — used by the daily
+// deliverable-metrics sync (refreshLiveYoutubeDeliverableMetrics in
+// actions.ts) to know which video to ask the API about.
+export function parseYoutubeVideoId(url: string): string | null {
+  const patterns = [/[?&]v=([a-zA-Z0-9_-]{6,})/, /youtu\.be\/([a-zA-Z0-9_-]{6,})/, /\/shorts\/([a-zA-Z0-9_-]{6,})/, /\/embed\/([a-zA-Z0-9_-]{6,})/];
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match) return match[1];
+  }
+  return null;
+}
+
+// Batched view/like/comment lookup for the daily deliverable tracking sync —
+// up to 50 video IDs per call (the API's own per-request cap), 1 quota unit
+// regardless of how many ids are in the batch. Missing ids (deleted/private
+// videos) are just absent from the returned map; callers decide what to do.
+export async function fetchYoutubeVideoStatsBatch(videoIds: string[]): Promise<Map<string, { views: number; likes: number; comments: number }>> {
+  const stats = new Map<string, { views: number; likes: number; comments: number }>();
+  if (videoIds.length === 0) return stats;
+  const json = await apiGet("/videos", { part: "statistics", id: videoIds.join(",") });
+  for (const item of json.items ?? []) {
+    stats.set(item.id, {
+      views: Number(item.statistics?.viewCount ?? 0),
+      likes: Number(item.statistics?.likeCount ?? 0),
+      comments: Number(item.statistics?.commentCount ?? 0),
+    });
+  }
+  return stats;
+}
+
 export type YoutubeChannelSearchResult = {
   channelId: string;
   handle: string | null;

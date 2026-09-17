@@ -31,6 +31,8 @@ import {
   searchYoutubeChannels,
   isLikelyIndianChannel,
   YoutubeLookupError,
+  parseYoutubeVideoId,
+  fetchYoutubeVideoStatsBatch,
 } from "@/lib/youtube";
 import { appendInstagramHandleToSheet } from "@/lib/googleSheets";
 import { isValidEmail, isValidName, isValidBrandName, isValidPhone, normalizePhone, isValidUrl } from "@/lib/validation";
@@ -1680,6 +1682,65 @@ export async function refreshDeliverableMetrics(
     include: { creator: true },
   });
   revalidatePath(`/campaigns/${deliverable.creator.campaignId}`);
+}
+
+// Daily automated version of refreshDeliverableMetrics above, scoped to
+// YouTube only — the official Data API can look up any public video's
+// views/likes/comments with no per-creator auth, unlike Instagram (see
+// src/lib/tracking.ts for why that side stays manual). Meant to be hit once
+// a day by a scheduler (Vercel Cron, n8n's Schedule Trigger + HTTP Request,
+// cron-job.org — see /api/cron/refresh-youtube-metrics), so the Campaign
+// Report's views/ER% actually move day to day instead of sitting frozen at
+// whatever was last typed in.
+export async function refreshLiveYoutubeDeliverableMetrics() {
+  const deliverables = await prisma.deliverable.findMany({
+    where: { liveLink: { not: null }, platform: { in: ["YOUTUBE_LONG", "YOUTUBE_SHORTS"] } },
+    include: { creator: { select: { campaignId: true } } },
+  });
+
+  const targets = deliverables
+    .map((d) => ({ deliverable: d, videoId: d.liveLink ? parseYoutubeVideoId(d.liveLink) : null }))
+    .filter((t): t is { deliverable: (typeof deliverables)[number]; videoId: string } => Boolean(t.videoId));
+
+  const campaignIdsToRevalidate = new Set<string>();
+  let updated = 0;
+  const failedDetails: { deliverableId: string; error: string }[] = [];
+
+  // ponytail: no time-based cutoff on how long a deliverable keeps getting
+  // polled — a videos.list call costs 1 quota unit per up-to-50 ids either
+  // way, so tracking a long-closed campaign's videos forever is cheap, not
+  // wrong. Add a "stop after N days past liveDate" filter here if quota
+  // ever actually becomes tight.
+  for (let i = 0; i < targets.length; i += 50) {
+    const chunk = targets.slice(i, i + 50);
+    try {
+      const statsByVideoId = await fetchYoutubeVideoStatsBatch(chunk.map((t) => t.videoId));
+      for (const { deliverable, videoId } of chunk) {
+        const stats = statsByVideoId.get(videoId);
+        if (!stats) continue; // video deleted/private since last check — leave last-known numbers in place
+        const engagementRate = stats.views > 0 ? ((stats.likes + stats.comments) / stats.views) * 100 : null;
+        await prisma.deliverable.update({
+          where: { id: deliverable.id },
+          data: { views: stats.views, likes: stats.likes, comments: stats.comments, engagementRate: engagementRate ?? undefined, lastTrackedAt: new Date(), status: "TRACKING" },
+        });
+        updated += 1;
+        campaignIdsToRevalidate.add(deliverable.creator.campaignId);
+      }
+    } catch (err) {
+      const error = err instanceof Error ? err.message : "Unknown error";
+      for (const { deliverable } of chunk) failedDetails.push({ deliverableId: deliverable.id, error });
+    }
+  }
+
+  for (const campaignId of campaignIdsToRevalidate) revalidatePath(`/campaigns/${campaignId}`);
+
+  return {
+    ok: true as const,
+    totalTracked: targets.length,
+    updated,
+    failed: failedDetails.length,
+    failedDetails: failedDetails.length > 0 ? failedDetails : undefined,
+  };
 }
 
 // ---------- Communications ----------
