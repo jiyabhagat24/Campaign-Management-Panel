@@ -157,7 +157,6 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
               campaignId={campaign.id}
               canEdit={canSeeCost}
               initial={{
-                financeAgencyFee: campaign.financeAgencyFee,
                 financeAgencyFeePercent: campaign.financeAgencyFeePercent,
                 financeClientInvoiceStatus: campaign.financeClientInvoiceStatus,
                 financeFeeType: campaign.financeFeeType,

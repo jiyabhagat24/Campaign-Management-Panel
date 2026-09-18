@@ -5,17 +5,16 @@ import { updateCampaignFinance } from "@/lib/actions";
 import { INVOICE_STATUSES, INVOICE_STATUS_LABELS, type InvoiceStatus, FEE_TYPES, FEE_TYPE_LABELS, type FeeType } from "@/lib/constants";
 
 // Manual entry for the Finance numbers that can't be derived from data
-// tracked elsewhere (Agency Fee / Agency Fee % / Client Invoice status) — no
-// invoicing system exists yet, so these are typed in by whoever's tracking
-// finance, same "manual for now, goes straight to the database" pattern as
-// Instagram creator stats elsewhere in this app. Yet to be Invoiced / Yet to
-// be Received / Value of Cleared Due / Creator Payable Pending used to live
-// here too, but are now computed automatically on the dashboard from this
-// row's own Client Invoice status plus each creator's payout status — see
-// dashboard/page.tsx. canEdit follows canSeeInternalCost — clients never
-// see this row.
+// tracked elsewhere (Fee type — Agency Fee % or a flat Retainer Fee, never
+// both — plus Client Invoice status) — no invoicing system exists yet, so
+// these are typed in by whoever's tracking finance, same "manual for now,
+// goes straight to the database" pattern as Instagram creator stats
+// elsewhere in this app. Yet to be Invoiced / Yet to be Received / Value of
+// Cleared Due / Creator Payable Pending used to live here too, but are now
+// computed automatically on the dashboard from this row's own Client
+// Invoice status plus each creator's payout status — see dashboard/page.tsx.
+// canEdit follows canSeeInternalCost — clients never see this row.
 type FinanceValues = {
-  financeAgencyFee: number | null;
   financeAgencyFeePercent: number | null;
   financeClientInvoiceStatus: string | null;
   financeFeeType: string | null;
@@ -27,16 +26,6 @@ type Props = {
   canEdit: boolean;
   initial: FinanceValues;
 };
-
-// Narrower than `keyof FinanceValues` on purpose: financeClientInvoiceStatus
-// is a string, not a number, and money() below only accepts number | null —
-// widening this to the full keyof union made values[f.key] infer as
-// string | number | null, which is what broke the production type-check.
-type MoneyFieldKey = Exclude<keyof FinanceValues, "financeClientInvoiceStatus" | "financeFeeType">;
-
-const MONEY_FIELDS: { key: MoneyFieldKey; label: string }[] = [
-  { key: "financeAgencyFee", label: "Agency Fee" },
-];
 
 export default function FinanceRow({ campaignId, canEdit, initial }: Props) {
   const [editing, setEditing] = useState(false);
@@ -54,15 +43,6 @@ export default function FinanceRow({ campaignId, canEdit, initial }: Props) {
   if (!editing) {
     return (
       <div className="flex flex-wrap items-center gap-2">
-        {MONEY_FIELDS.map((f) => (
-          <span
-            key={f.key}
-            className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs dark:border-slate-700 dark:bg-slate-900"
-          >
-            <span className="text-slate-400 dark:text-slate-500">{f.label}:</span>
-            <span className="font-medium text-ink dark:text-white">{money(values[f.key])}</span>
-          </span>
-        ))}
         <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs dark:border-slate-700 dark:bg-slate-900">
           <span className="text-slate-400 dark:text-slate-500">{FEE_TYPE_LABELS[feeType]}:</span>
           <span className="font-medium text-ink dark:text-white">
@@ -99,22 +79,6 @@ export default function FinanceRow({ campaignId, canEdit, initial }: Props) {
       }}
       className="flex flex-wrap items-end gap-3"
     >
-      {MONEY_FIELDS.map((f) => (
-        <label key={f.key} className="flex flex-col gap-1">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">{f.label}</span>
-          <input
-            type="number"
-            step="0.01"
-            value={values[f.key] ?? ""}
-            onChange={(e) =>
-              setValues((v) => ({ ...v, [f.key]: e.target.value === "" ? null : Number(e.target.value) }))
-            }
-            className="w-36 rounded-lg border border-slate-300 px-2 py-1.5 text-xs dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
-            placeholder="₹0"
-          />
-        </label>
-      ))}
-
       <label className="flex flex-col gap-1">
         <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Fee type</span>
         <select
