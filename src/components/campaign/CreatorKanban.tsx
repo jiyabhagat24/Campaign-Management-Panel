@@ -674,6 +674,19 @@ function AddCreatorForm({
               const primaryType = pitchedTypes[0];
               fd.set("platformPrimary", primaryType ? SHORTLIST_TO_EXECUTION_PLATFORM[primaryType] : "INSTAGRAM_REEL");
             }
+            // No more manual @handle box — derive it instead of asking for
+            // it twice. The Instagram auto-fill lookup already writes a
+            // real handle into the hidden field on success; if that never
+            // ran (no Instagram URL, or the paste didn't match a known
+            // pattern), fall back to pulling it straight out of whichever
+            // profile URL was pasted, and only as a last resort — no URL
+            // entered at all — slugify the creator's name.
+            if (!String(fd.get("channelHandle") ?? "").trim()) {
+              const igHandle = String(fd.get("profileUrl") ?? "").match(/instagram\.com\/([^/?#]+)/i)?.[1];
+              const ytHandle = String(fd.get("youtubeUrl") ?? "").match(/youtube\.com\/@([^/?#]+)/i)?.[1];
+              const nameSlug = String(fd.get("name") ?? "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
+              fd.set("channelHandle", igHandle ? `@${igHandle}` : ytHandle ? `@${ytHandle}` : nameSlug ? `@${nameSlug}` : "");
+            }
             lastFormData.current = fd;
             setSaving(true);
             setSaveError(null);
@@ -697,10 +710,13 @@ function AddCreatorForm({
           }}
           className="mt-4 space-y-5"
         >
-          <div className="grid grid-cols-2 gap-3">
-            <input name="name" placeholder="Creator Name" required className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-medium focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:placeholder:text-slate-500" />
-            <input name="channelHandle" placeholder="@handle" required className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-medium focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:placeholder:text-slate-500" />
+          <div>
+            <input name="name" placeholder="Creator Name" required className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-medium focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:placeholder:text-slate-500" />
           </div>
+          {/* No manual @handle box — derived at submit time from the
+              Instagram/YouTube URL pasted below (or the name, as a last
+              resort). See the onSubmit handler above. */}
+          <input type="hidden" name="channelHandle" />
 
           {/* Budget given (quotedCost) removed from this form on purpose —
               that's the cost the Campaign Manager quotes to the client, so
