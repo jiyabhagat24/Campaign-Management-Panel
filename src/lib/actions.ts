@@ -1746,6 +1746,34 @@ export async function updateProductStatus(deliverableId: string, productStatus: 
   revalidatePath(`/campaigns/${deliverable.creator.campaignId}`);
 }
 
+// Product Status/Date of Delivery are a creator-level concept (one physical
+// product being shipped to one creator), not a per-deliverable one — a
+// creator pitched on both a YT Dedicated and YT Shorts video still only has
+// ONE product order. Applies the same value to every deliverable under this
+// creator (still stored per-Deliverable row under the hood — no schema
+// change — just always kept in sync) so the UI can show a single dropdown
+// instead of one repeated per deliverable.
+export async function updateCreatorProductStatus(creatorId: string, productStatus: string, productEta?: string) {
+  const user = await requireUser();
+  const creator = await prisma.creator.findUnique({ where: { id: creatorId }, select: { campaignId: true } });
+  if (!creator) throw new Error("Creator not found");
+
+  await prisma.deliverable.updateMany({
+    where: { creatorId },
+    data: { productStatus, ...(productEta ? { productEta: new Date(productEta) } : {}) },
+  });
+  await logActivity({
+    campaignId: creator.campaignId,
+    actorId: user.id,
+    actorName: user.name,
+    action: "PRODUCT_STATUS_UPDATED",
+    entityType: "Creator",
+    entityId: creatorId,
+    meta: { productStatus },
+  });
+  revalidatePath(`/campaigns/${creator.campaignId}`);
+}
+
 export async function updateScriptStatus(deliverableId: string, scriptStatus: string, scriptDocUrl?: string) {
   const user = await requireUser();
   if (scriptDocUrl && !isValidUrl(scriptDocUrl)) throw new Error("Script link must be a valid URL.");
@@ -1775,35 +1803,41 @@ export async function updateScriptStatus(deliverableId: string, scriptStatus: st
   revalidatePath(`/campaigns/${deliverable.creator.campaignId}`);
 }
 
-// Target date for script sign-off — a plain manual date, kept as its own
-// setter (not bundled into updateScriptStatus) so editing it never
-// re-triggers the "just approved" side effects (scriptApprovedAt/snapshot)
-// on a deliverable whose script was already approved earlier.
-export async function updateScriptApprovalDeadline(deliverableId: string, deadline: string) {
+// Target date for script sign-off — creator level, same reasoning as
+// updateCreatorProductStatus above (one date per creator, applied to every
+// deliverable underneath, not one per deliverable). Kept as its own setter
+// (not bundled into updateScriptStatus) so editing it never re-triggers the
+// "just approved" side effects (scriptApprovedAt/snapshot) on a deliverable
+// whose script was already approved earlier.
+export async function updateScriptApprovalDeadline(creatorId: string, deadline: string) {
   const user = await requireUser();
   if (isClient(user.role)) throw new Error("Clients cannot set this deadline");
 
-  const deliverable = await prisma.deliverable.update({
-    where: { id: deliverableId },
+  const creator = await prisma.creator.findUnique({ where: { id: creatorId }, select: { campaignId: true } });
+  if (!creator) throw new Error("Creator not found");
+
+  await prisma.deliverable.updateMany({
+    where: { creatorId },
     data: { scriptApprovalDeadline: deadline ? new Date(deadline) : null },
-    include: { creator: true },
   });
-  revalidatePath(`/campaigns/${deliverable.creator.campaignId}`);
+  revalidatePath(`/campaigns/${creator.campaignId}`);
 }
 
-// Target date for the video draft — same standalone-setter reasoning as
+// Target date for the video draft — creator level, same reasoning as
 // updateScriptApprovalDeadline above (updateContentStatus re-approving/
 // re-stamping is a side effect editing a date shouldn't trigger).
-export async function updateVideoDraftDeadline(deliverableId: string, deadline: string) {
+export async function updateVideoDraftDeadline(creatorId: string, deadline: string) {
   const user = await requireUser();
   if (isClient(user.role)) throw new Error("Clients cannot set this deadline");
 
-  const deliverable = await prisma.deliverable.update({
-    where: { id: deliverableId },
+  const creator = await prisma.creator.findUnique({ where: { id: creatorId }, select: { campaignId: true } });
+  if (!creator) throw new Error("Creator not found");
+
+  await prisma.deliverable.updateMany({
+    where: { creatorId },
     data: { videoDraftDeadline: deadline ? new Date(deadline) : null },
-    include: { creator: true },
   });
-  revalidatePath(`/campaigns/${deliverable.creator.campaignId}`);
+  revalidatePath(`/campaigns/${creator.campaignId}`);
 }
 
 export async function updateContentStatus(deliverableId: string, contentStatus: string) {

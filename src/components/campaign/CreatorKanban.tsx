@@ -20,7 +20,7 @@ import {
   addCreator,
   addDeliverable,
   updateDeliverableTitle,
-  updateProductStatus,
+  updateCreatorProductStatus,
   updateScriptStatus,
   updateScriptApprovalDeadline,
   updateContentStatus,
@@ -395,10 +395,10 @@ export default function CreatorKanban({
                     <th className="sticky top-0 z-30 w-[150px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Date of Delivery</th>
                     <th className="sticky top-0 z-30 w-[170px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Script Status</th>
                     <th className="sticky top-0 z-30 w-[140px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Script Link</th>
-                    <th className="sticky top-0 z-30 w-[180px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Deadline for Script Approval</th>
+                    <th className="sticky top-0 z-30 w-[230px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Deadline for Script Approval</th>
                     <th className="sticky top-0 z-30 w-[170px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Video Status</th>
                     <th className="sticky top-0 z-30 w-[140px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Video Link</th>
-                    <th className="sticky top-0 z-30 w-[180px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Deadline for Video Draft</th>
+                    <th className="sticky top-0 z-30 w-[220px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Deadline for Video Draft</th>
                     <th className="sticky top-0 z-30 w-[170px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Deadline</th>
                     <th className="sticky top-0 z-30 w-[150px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Time Remaining</th>
                     <th className="sticky top-0 z-30 w-[190px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Last Action</th>
@@ -2234,63 +2234,48 @@ function OnboardingCreatorRow({
         )}
       </td>
 
-      {/* Product Status — per deliverable */}
+      {/* Product Status — creator level, one dropdown regardless of how
+          many deliverables this creator has (a creator on both YT Dedicated
+          and YT Shorts still only has one product order). The first
+          deliverable's value represents the creator; changing it applies to
+          every deliverable underneath via updateCreatorProductStatus. */}
       <td className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
         {creator.deliverables.length === 0 ? (
           <span className="text-xs text-slate-400 dark:text-slate-500">—</span>
+        ) : isClientView ? (
+          <StatusBadge status={creator.deliverables[0].productStatus ?? "—"} />
         ) : (
-          <div className="flex flex-col gap-1">
-            {creator.deliverables.map((d) => (
-              <div key={d.id} className="flex items-center gap-1">
-                {creator.deliverables.length > 1 && (
-                  <span className="w-7 shrink-0 text-[10px] font-bold uppercase text-slate-400 dark:text-slate-500">{platformShortLabel(d.platform)}</span>
-                )}
-                {isClientView ? (
-                  <StatusBadge status={d.productStatus ?? "—"} />
-                ) : (
-                  <select
-                    defaultValue={d.productStatus ?? ""}
-                    onChange={(e) => withRefresh(updateProductStatus(d.id, e.target.value))}
-                    className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
-                  >
-                    <option value="">—</option>
-                    <option value="ORDERED">Order placed</option>
-                    <option value="IN_TRANSIT">In transit</option>
-                    <option value="DELIVERED">Delivered</option>
-                    <option value="INSTALLATION_PENDING">Installation pending</option>
-                    <option value="INSTALLED">Installed</option>
-                  </select>
-                )}
-              </div>
-            ))}
-          </div>
+          <select
+            defaultValue={creator.deliverables[0].productStatus ?? ""}
+            onChange={(e) => withRefresh(updateCreatorProductStatus(creator.id, e.target.value))}
+            className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+          >
+            <option value="">—</option>
+            <option value="ORDERED">Order placed</option>
+            <option value="IN_TRANSIT">In transit</option>
+            <option value="DELIVERED">Delivered</option>
+            <option value="INSTALLATION_PENDING">Installation pending</option>
+            <option value="INSTALLED">Installed</option>
+          </select>
         )}
       </td>
 
-      {/* Date of Delivery — per deliverable, paired with Product Status
-          above. Reuses updateProductStatus (no side effects on other
-          fields — it only ever touches productStatus/productEta). */}
+      {/* Date of Delivery — creator level, paired with Product Status
+          above. */}
       <td className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
         {creator.deliverables.length === 0 ? (
           <span className="text-xs text-slate-400 dark:text-slate-500">—</span>
+        ) : isClientView ? (
+          <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+            {creator.deliverables[0].productEta ? new Date(creator.deliverables[0].productEta).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—"}
+          </span>
         ) : (
-          <div className="flex flex-col gap-1">
-            {creator.deliverables.map((d) =>
-              isClientView ? (
-                <span key={d.id} className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  {d.productEta ? new Date(d.productEta).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—"}
-                </span>
-              ) : (
-                <input
-                  key={d.id}
-                  type="date"
-                  defaultValue={d.productEta ? new Date(d.productEta).toISOString().slice(0, 10) : ""}
-                  onChange={(e) => withRefresh(updateProductStatus(d.id, d.productStatus ?? "", e.target.value || undefined))}
-                  className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
-                />
-              )
-            )}
-          </div>
+          <input
+            type="date"
+            defaultValue={creator.deliverables[0].productEta ? new Date(creator.deliverables[0].productEta).toISOString().slice(0, 10) : ""}
+            onChange={(e) => withRefresh(updateCreatorProductStatus(creator.id, creator.deliverables[0].productStatus ?? "", e.target.value || undefined))}
+            className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+          />
         )}
       </td>
 
@@ -2370,29 +2355,23 @@ function OnboardingCreatorRow({
         )}
       </td>
 
-      {/* Deadline for Script Approval — per deliverable, own setter so
-          editing it never re-triggers the approval snapshot/timestamp. */}
+      {/* Deadline for Script Approval — creator level, one date regardless
+          of how many deliverables this creator has. Own setter so editing
+          it never re-triggers the approval snapshot/timestamp. */}
       <td className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
         {creator.deliverables.length === 0 ? (
           <span className="text-xs text-slate-400 dark:text-slate-500">—</span>
+        ) : isClientView ? (
+          <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+            {creator.deliverables[0].scriptApprovalDeadline ? new Date(creator.deliverables[0].scriptApprovalDeadline).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—"}
+          </span>
         ) : (
-          <div className="flex flex-col gap-1">
-            {creator.deliverables.map((d) =>
-              isClientView ? (
-                <span key={d.id} className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  {d.scriptApprovalDeadline ? new Date(d.scriptApprovalDeadline).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—"}
-                </span>
-              ) : (
-                <input
-                  key={d.id}
-                  type="date"
-                  defaultValue={d.scriptApprovalDeadline ? new Date(d.scriptApprovalDeadline).toISOString().slice(0, 10) : ""}
-                  onChange={(e) => withRefresh(updateScriptApprovalDeadline(d.id, e.target.value))}
-                  className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
-                />
-              )
-            )}
-          </div>
+          <input
+            type="date"
+            defaultValue={creator.deliverables[0].scriptApprovalDeadline ? new Date(creator.deliverables[0].scriptApprovalDeadline).toISOString().slice(0, 10) : ""}
+            onChange={(e) => withRefresh(updateScriptApprovalDeadline(creator.id, e.target.value))}
+            className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+          />
         )}
       </td>
 
@@ -2489,29 +2468,23 @@ function OnboardingCreatorRow({
         )}
       </td>
 
-      {/* Deadline for Video Draft — per deliverable, own setter so editing
-          it never re-triggers the content-approval side effects. */}
+      {/* Deadline for Video Draft — creator level, one date regardless of
+          how many deliverables this creator has. Own setter so editing it
+          never re-triggers the content-approval side effects. */}
       <td className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
         {creator.deliverables.length === 0 ? (
           <span className="text-xs text-slate-400 dark:text-slate-500">—</span>
+        ) : isClientView ? (
+          <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+            {creator.deliverables[0].videoDraftDeadline ? new Date(creator.deliverables[0].videoDraftDeadline).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—"}
+          </span>
         ) : (
-          <div className="flex flex-col gap-1">
-            {creator.deliverables.map((d) =>
-              isClientView ? (
-                <span key={d.id} className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  {d.videoDraftDeadline ? new Date(d.videoDraftDeadline).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—"}
-                </span>
-              ) : (
-                <input
-                  key={d.id}
-                  type="date"
-                  defaultValue={d.videoDraftDeadline ? new Date(d.videoDraftDeadline).toISOString().slice(0, 10) : ""}
-                  onChange={(e) => withRefresh(updateVideoDraftDeadline(d.id, e.target.value))}
-                  className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
-                />
-              )
-            )}
-          </div>
+          <input
+            type="date"
+            defaultValue={creator.deliverables[0].videoDraftDeadline ? new Date(creator.deliverables[0].videoDraftDeadline).toISOString().slice(0, 10) : ""}
+            onChange={(e) => withRefresh(updateVideoDraftDeadline(creator.id, e.target.value))}
+            className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+          />
         )}
       </td>
 
