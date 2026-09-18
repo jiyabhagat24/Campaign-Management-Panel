@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { currentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { campaignVisibilityWhere, canCreateCampaign, isClient, isSuperAdmin } from "@/lib/rbac";
+import { campaignVisibilityWhere, canCreateCampaign, canDeleteCampaign, isClient, isSuperAdmin } from "@/lib/rbac";
 import { campaignColumnLabel } from "@/lib/kanban";
 import BrandAvatar from "@/components/campaign/BrandAvatar";
 import CampaignStatusSelect from "@/components/campaign/CampaignStatusSelect";
+import DeleteCampaignButton from "@/components/campaign/DeleteCampaignButton";
 import { isGoLiveAtRisk, isGoLiveBreached } from "@/lib/sla";
 import { FolderKanban, Plus, Users, ArrowUpRight } from "lucide-react";
 
@@ -110,6 +111,9 @@ export default async function CampaignsPage() {
                           <span>Manage</span>
                           <ArrowUpRight className="h-3.5 w-3.5" />
                         </Link>
+                        {(canDeleteCampaign(user.role) || isSuperAdmin(user.id)) && (
+                          <DeleteCampaignButton campaignId={c.id} campaignName={c.name} />
+                        )}
                       </div>
                     </td>
                   </tr>

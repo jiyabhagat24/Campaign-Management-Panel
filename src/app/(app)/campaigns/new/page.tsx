@@ -4,6 +4,7 @@ import { canCreateCampaign, isSuperAdmin } from "@/lib/rbac";
 import { createCampaign } from "@/lib/actions";
 import BackLink from "@/components/BackLink";
 import { PlatformBriefsFormField } from "@/components/campaign/PlatformBriefsEditor";
+import CreateCampaignButton from "@/components/campaign/CreateCampaignButton";
 
 async function create(formData: FormData) {
   "use server";
@@ -84,9 +85,7 @@ export default async function NewCampaignPage() {
           <input name="budgetQuoted" type="number" placeholder="Overall campaign budget, if set separately from per-creator" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:placeholder:text-slate-500" />
         </div>
 
-        <button type="submit" className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
-          Create campaign
-        </button>
+        <CreateCampaignButton />
       </form>
     </div>
   );

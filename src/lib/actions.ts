@@ -6,7 +6,7 @@ import bcrypt from "bcryptjs";
 import { requireUser } from "@/lib/auth";
 import { logActivity } from "@/lib/activity";
 import { notify } from "@/lib/notify";
-import { canApproveCommercialEdit, canSetCommercials, canApproveMarginOverride, canSeeInternalCost, canManageTeam, canManageClients, canCreateCampaign, canOperateShortlist, isClient, isSuperAdmin } from "@/lib/rbac";
+import { canApproveCommercialEdit, canSetCommercials, canApproveMarginOverride, canSeeInternalCost, canManageTeam, canManageClients, canCreateCampaign, canDeleteCampaign, canOperateShortlist, isClient, isSuperAdmin } from "@/lib/rbac";
 import {
   DEFAULT_SLA,
   type Stage,
@@ -365,6 +365,29 @@ export async function updateCampaignDetails(
   revalidatePath(`/campaigns/${campaignId}`);
   revalidatePath("/campaigns");
   revalidatePath("/dashboard");
+}
+
+// Hard delete, from the Campaigns Directory — cascades to every Creator/
+// deliverable/finance figure/activity log under this campaign (see
+// prisma/schema.prisma's onDelete: Cascade chain off Campaign). There's no
+// undo; a campaign that just needs to go away without losing its history
+// should be set to Cancelled instead (updateCampaignStatus). Deliberately
+// leaves InstagramProfileCache/YoutubeChannelCache alone — those are keyed
+// by handle/URL, not campaignId, so a creator's reusable profile data still
+// auto-fills next time they're added to a different campaign. No
+// logActivity here either: the log rows would just cascade-delete along
+// with everything else, so there's nothing for it to usefully record.
+export async function deleteCampaign(campaignId: string) {
+  const user = await requireUser();
+  if (!canDeleteCampaign(user.role) && !isSuperAdmin(user.id)) {
+    return { error: "Only a CXO or Brand Solutions can delete a campaign." };
+  }
+
+  await prisma.campaign.delete({ where: { id: campaignId } });
+
+  revalidatePath("/campaigns");
+  revalidatePath("/dashboard");
+  return { error: null };
 }
 
 // Manual entry for the Finance fields that aren't derivable from data

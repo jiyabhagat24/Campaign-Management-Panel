@@ -129,6 +129,14 @@ export function canCreateCampaign(role: Role) {
   return role === "BRAND_SOLUTIONS";
 }
 
+// Hard-deleting a campaign is far more destructive than creating one — it
+// cascades to every creator, deliverable, and activity log under it, with
+// no "Cancelled" undo — so it's opened up to CXO as well as Brand
+// Solutions, not narrowed further than canCreateCampaign.
+export function canDeleteCampaign(role: Role) {
+  return role === "BRAND_SOLUTIONS" || role === "CXO";
+}
+
 // Task #19 / Page Permissions: within the Shortlisting page itself, IR
 // Intern only sees rows they personally sourced ("Create and edit, own
 // rows"), IR Executive sees their own rows plus any sourced by an IR Intern
