@@ -1073,6 +1073,31 @@ function ShortlistCreatorRow({
     setLocalDeliverables(creator.shortlistDeliverables);
   }, [creator.shortlistDeliverables]);
 
+  // Same optimistic-first pattern as the deliverable stepper above — clicking
+  // Publish should flip to the "Published" badge immediately, not after a
+  // full-page router.refresh() round trip. Resets once the server's own
+  // quotedCostPublished value actually changes, so it never gets stuck
+  // showing a stale optimistic state.
+  const [publishedOverride, setPublishedOverride] = useState<boolean | null>(null);
+  useEffect(() => {
+    setPublishedOverride(null);
+  }, [creator.quotedCostPublished]);
+  const isPublished = publishedOverride ?? creator.quotedCostPublished;
+
+  async function handlePublish() {
+    setPublishedOverride(true);
+    try {
+      const result: any = await publishQuotedCost(creator.id);
+      if (result?.error) {
+        window.alert(result.error);
+        setPublishedOverride(null);
+      }
+    } catch (err: any) {
+      window.alert(err?.message ?? "Failed to publish this cost.");
+      setPublishedOverride(null);
+    }
+  }
+
   // Every inline edit below saves via a server action directly (not a <form
   // action>), so Next.js won't auto-refresh this page's data on its own even
   // though the action revalidates the path server-side — wrap every save so
@@ -1418,7 +1443,7 @@ function ShortlistCreatorRow({
       )}
       {!isClientView && role !== "IR_INTERN" && (
         <td className="whitespace-nowrap border-b border-slate-100 px-5 py-4 dark:border-slate-800">
-          {creator.quotedCostPublished ? (
+          {isPublished ? (
             <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2 py-1 text-[11px] font-bold text-emerald-700 dark:bg-emerald-950/50 dark:border-emerald-800 dark:text-emerald-300">
               Published
             </span>
@@ -1426,7 +1451,7 @@ function ShortlistCreatorRow({
             <button
               type="button"
               disabled={creator.quotedCost === null}
-              onClick={() => withRefresh(publishQuotedCost(creator.id))}
+              onClick={handlePublish}
               title={creator.quotedCost === null ? "Set a Quoted Cost first" : "Show this Quoted Cost to the client"}
               className="rounded-lg bg-brand px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
             >
