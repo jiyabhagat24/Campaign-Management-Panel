@@ -142,7 +142,7 @@ function toPlatformBriefCreateInput(p: ParsedPlatformBrief) {
 
 export async function createCampaign(formData: FormData) {
   const user = await requireUser();
-  if (!canCreateCampaign(user.role) && !isSuperAdmin(user.id)) throw new Error("Only Brand Solutions can create a campaign.");
+  if (!canCreateCampaign(user.role) && !isSuperAdmin(user.id)) throw new Error("Only an admin can create a campaign.");
 
   const name = String(formData.get("name") ?? "").trim();
   const brand = String(formData.get("brand") ?? "").trim();

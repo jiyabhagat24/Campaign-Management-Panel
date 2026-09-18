@@ -11,6 +11,53 @@ import { Plus, X } from "lucide-react";
 // block below (category / deliverables / budget-per-creator / languages).
 export const PLATFORM_OPTIONS = ["Instagram", "YouTube"];
 
+// Major Indian languages content creators are typically briefed in —
+// covers the big regional ones plus English/Hindi. Not exhaustive by
+// design (there's no free-text escape hatch here, only what's listed).
+export const INDIAN_LANGUAGES = [
+  "English",
+  "Hindi",
+  "Tamil",
+  "Telugu",
+  "Malayalam",
+  "Kannada",
+  "Marathi",
+  "Bengali",
+  "Gujarati",
+  "Punjabi",
+  "Odia",
+  "Assamese",
+  "Urdu",
+  "Bhojpuri",
+  "Rajasthani",
+  "Haryanvi",
+];
+
+// Common content categories for shortlisting creators — plus a free-text
+// "Others" escape hatch (CategoryField below) for anything not listed.
+export const CONTENT_CATEGORIES = [
+  "Beauty",
+  "Fashion",
+  "Lifestyle",
+  "Tech",
+  "Gadgets",
+  "Food",
+  "Travel",
+  "Fitness",
+  "Comedy / Entertainment",
+  "Finance",
+  "Education",
+  "Parenting / Family",
+  "Gaming",
+  "Automobile",
+  "Health & Wellness",
+  "Home & Decor",
+  "Sports",
+  "Music / Dance",
+  "Vlogging",
+  "Business / Startup",
+];
+
 export type PlatformBriefValue = {
   platform: string;
   category: string;
@@ -33,6 +80,94 @@ export const emptyPlatformBrief = (platform: string): PlatformBriefValue => ({
   budgetPerCreatorMax: "",
   languageRequirements: emptyLanguageRows(),
 });
+
+// Category dropdown with a free-text "Others" escape hatch. Its own
+// component (not inlined) so it can hold local state for "is Others
+// currently selected" — needed because the underlying value is just a
+// plain string; without this, typing into the Others box while the value
+// doesn't yet match anything in CONTENT_CATEGORIES would make the <select>
+// keep snapping back to the placeholder instead of staying on "Others".
+function CategoryField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const isKnown = CONTENT_CATEGORIES.includes(value);
+  const [otherMode, setOtherMode] = useState(!isKnown && value !== "");
+
+  return (
+    <div>
+      <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Category</label>
+      <select
+        value={otherMode ? "Others" : value}
+        onChange={(e) => {
+          if (e.target.value === "Others") {
+            setOtherMode(true);
+            onChange("");
+          } else {
+            setOtherMode(false);
+            onChange(e.target.value);
+          }
+        }}
+        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+      >
+        <option value="">Select category…</option>
+        {CONTENT_CATEGORIES.map((c) => (
+          <option key={c} value={c}>
+            {c}
+          </option>
+        ))}
+        <option value="Others">Others</option>
+      </select>
+      {otherMode && (
+        <input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="Type the category"
+          autoFocus
+          className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:placeholder:text-slate-500"
+        />
+      )}
+    </div>
+  );
+}
+
+// Same Others-escape-hatch pattern as CategoryField, for one language row.
+function LanguageField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const isKnown = INDIAN_LANGUAGES.includes(value);
+  const [otherMode, setOtherMode] = useState(!isKnown && value !== "");
+
+  return (
+    <div className="flex-1">
+      <select
+        value={otherMode ? "Others" : value}
+        onChange={(e) => {
+          if (e.target.value === "Others") {
+            setOtherMode(true);
+            onChange("");
+          } else {
+            setOtherMode(false);
+            onChange(e.target.value);
+          }
+        }}
+        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+      >
+        <option value="">Select language…</option>
+        {INDIAN_LANGUAGES.map((lang) => (
+          <option key={lang} value={lang}>
+            {lang}
+          </option>
+        ))}
+        <option value="Others">Others</option>
+      </select>
+      {otherMode && (
+        <input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="Type the language"
+          autoFocus
+          className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:placeholder:text-slate-500"
+        />
+      )}
+    </div>
+  );
+}
 
 // Controlled — the caller owns the array of platform briefs. Used directly
 // by CampaignHeaderEditor (already a client component managing its own
@@ -119,15 +254,7 @@ export default function PlatformBriefsEditor({
           <p className="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">{brief.platform} brief</p>
 
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Category</label>
-              <input
-                value={brief.category}
-                onChange={(e) => updateBrief(brief.platform, { category: e.target.value })}
-                placeholder="e.g. Lifestyle / Comic"
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:placeholder:text-slate-500"
-              />
-            </div>
+            <CategoryField value={brief.category} onChange={(v) => updateBrief(brief.platform, { category: v })} />
             <div>
               <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Deliverables</label>
               <input
@@ -176,12 +303,10 @@ export default function PlatformBriefsEditor({
             </div>
             <div className="space-y-2">
               {brief.languageRequirements.map((row, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <input
+                <div key={i} className="flex items-start gap-2">
+                  <LanguageField
                     value={row.language}
-                    onChange={(e) => updateLangRow(brief.platform, i, { language: e.target.value })}
-                    placeholder="Language, e.g. Hindi"
-                    className="flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:placeholder:text-slate-500"
+                    onChange={(v) => updateLangRow(brief.platform, i, { language: v })}
                   />
                   <input
                     value={row.creatorsRequired}
