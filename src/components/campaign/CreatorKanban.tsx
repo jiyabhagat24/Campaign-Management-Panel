@@ -397,7 +397,7 @@ export default function CreatorKanban({
                     <th className="sticky top-0 z-30 w-[140px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Script Link</th>
                     <th className="sticky top-0 z-30 w-[180px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Deadline for Script Approval</th>
                     <th className="sticky top-0 z-30 w-[170px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Video Status</th>
-                    <th className="sticky top-0 z-30 w-[140px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Live Video Link</th>
+                    <th className="sticky top-0 z-30 w-[140px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Video Link</th>
                     <th className="sticky top-0 z-30 w-[180px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Deadline for Video Draft</th>
                     <th className="sticky top-0 z-30 w-[170px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Deadline</th>
                     <th className="sticky top-0 z-30 w-[150px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Time Remaining</th>
@@ -1678,6 +1678,10 @@ function OnboardingCreatorRow({
   const [refreshing, setRefreshing] = useState(false);
   const [refreshMsg, setRefreshMsg] = useState<string | null>(null);
   const [pauseBusy, setPauseBusy] = useState(false);
+  // Which deliverable's Video Link is currently in edit mode — keyed by
+  // deliverable id since a creator can have more than one live deliverable
+  // (e.g. multiple Shorts) each needing its own independent edit toggle.
+  const [editingLiveLinkIds, setEditingLiveLinkIds] = useState<Set<string>>(new Set());
   const router = useRouter();
 
   // Every inline edit below saves via a server action directly (not a <form
@@ -2355,17 +2359,18 @@ function OnboardingCreatorRow({
         )}
       </td>
 
-      {/* Live Video Link — per deliverable; pasting one triggers tracking.
-          Stays editable even after a link is set, so a wrong paste can be
-          corrected instead of being stuck read-only. */}
+      {/* Video Link — per deliverable; pasting one triggers tracking. A set
+          link shows as a clickable "Live" open-in-new-tab link, with a
+          pencil to switch that one row into an editable input (for fixing a
+          wrong paste) instead of being stuck read-only. */}
       <td className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
         {creator.deliverables.length === 0 ? (
           <span className="text-xs text-slate-400 dark:text-slate-500">—</span>
         ) : (
           <div className="flex flex-col gap-1">
             {creator.deliverables.map((d) =>
-              isClientView ? (
-                <div key={d.id}>
+              isClientView || (d.liveLink && !editingLiveLinkIds.has(d.id)) ? (
+                <div key={d.id} className="flex items-center gap-1.5">
                   {d.liveLink ? (
                     <a href={d.liveLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline">
                       <span>Live</span>
@@ -2374,15 +2379,30 @@ function OnboardingCreatorRow({
                   ) : (
                     <span className="text-xs text-slate-400 dark:text-slate-500">—</span>
                   )}
+                  {!isClientView && d.liveLink && (
+                    <button
+                      onClick={() => setEditingLiveLinkIds((prev) => new Set(prev).add(d.id))}
+                      className="text-slate-300 hover:text-indigo-600 dark:text-slate-600 dark:hover:text-indigo-400"
+                      title="Edit video link"
+                    >
+                      <Pencil className="h-3 w-3" />
+                    </button>
+                  )}
                 </div>
               ) : (
                 <input
                   key={d.id}
                   type="url"
+                  autoFocus={editingLiveLinkIds.has(d.id)}
                   defaultValue={d.liveLink ?? ""}
                   placeholder="Paste live URL"
                   onBlur={async (e) => {
                     const next = e.target.value.trim();
+                    setEditingLiveLinkIds((prev) => {
+                      const copy = new Set(prev);
+                      copy.delete(d.id);
+                      return copy;
+                    });
                     if (!next || next === (d.liveLink ?? "")) return;
                     try {
                       await withRefresh(addLiveLink(d.id, next));
