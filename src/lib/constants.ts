@@ -82,6 +82,15 @@ export const INVOICE_STATUS_LABELS: Record<InvoiceStatus, string> = {
   PAID: "Paid",
 };
 
+// How a campaign is billed — a cut of spend or a flat recurring retainer,
+// never both (see Campaign.financeFeeType).
+export const FEE_TYPES = ["PERCENTAGE", "RETAINER"] as const;
+export type FeeType = (typeof FEE_TYPES)[number];
+export const FEE_TYPE_LABELS: Record<FeeType, string> = {
+  PERCENTAGE: "Agency Fee %",
+  RETAINER: "Retainer Fee",
+};
+
 // Finance & Invoicing — Creator side payouts (section A of the sheet's
 // separate spec), Creator.payoutPaymentStatus. Distinct from InvoiceStatus
 // above, which tracks the client side, not what TBM owes a creator.

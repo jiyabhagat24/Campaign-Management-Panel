@@ -67,14 +67,14 @@ export default function TeamRow({
               }}
               className="flex items-center gap-1.5"
             >
-              <select value={role} onChange={(e) => setRole(e.target.value)} className="rounded-lg border border-slate-300 px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+              <select value={role} onChange={(e) => { setRole(e.target.value); setUserId(""); }} className="rounded-lg border border-slate-300 px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
                 {ROLES.filter((r) => r !== "CLIENT").map((r) => (
                   <option key={r} value={r}>{ROLE_LABEL[r]}</option>
                 ))}
               </select>
               <select value={userId} onChange={(e) => setUserId(e.target.value)} className="rounded-lg border border-slate-300 px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
                 <option value="" disabled>Person...</option>
-                {internalUsers.map((u) => (
+                {internalUsers.filter((u) => u.role === role).map((u) => (
                   <option key={u.id} value={u.id}>{u.name}</option>
                 ))}
               </select>

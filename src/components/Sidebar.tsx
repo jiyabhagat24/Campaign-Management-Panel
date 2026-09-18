@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { Role } from "@/lib/constants";
-import { canSeeInternalCost, canManageTeam, canSetCommercials, isClient, isSuperAdmin } from "@/lib/rbac";
+import { canSeeInternalCost, canManageTeam, canManageClients, canSetCommercials, isClient, isSuperAdmin } from "@/lib/rbac";
 import ThemeToggle from "@/components/ThemeToggle";
 import NotificationBell, { type NotificationItem } from "@/components/NotificationBell";
 import {
@@ -38,10 +38,10 @@ const NAV = [
   { href: "/action-tracker", label: "Action Tracker", icon: PhoneCall, internalOnly: true },
   // CXO-only — the Team admin page (add/re-role/remove logins).
   { href: "/team", label: "Team", icon: Users, teamOnly: true },
-  // CXO-only — client login management (reset password/remove) plus
-  // grant/revoke which campaigns each client can see. Same gate as Team
-  // since it's the same "who gets what access" admin surface.
-  { href: "/clients", label: "Clients", icon: UserCheck, teamOnly: true },
+  // CXO + Brand Solutions — client login management (reset password/
+  // remove) plus grant/revoke which campaigns each client can see.
+  // Separate flag from teamOnly (Team page / Month Lock stay CXO-only).
+  { href: "/clients", label: "Clients", icon: UserCheck, clientsOnly: true },
   // CXO-only — month lock (task #17 / spec Gate G12).
   { href: "/admin/months", label: "Month Lock", icon: CalendarCheck, teamOnly: true },
 ];
@@ -70,6 +70,7 @@ export default function Sidebar({ role, name, notifications, userId }: { role: R
     if (role === "CLIENT" && item.href === "/pipeline") return false;
     if ("financeOnly" in item && item.financeOnly && (isClient(role) || !canSeeInternalCost(role))) return false;
     if ("teamOnly" in item && item.teamOnly && !canManageTeam(role)) return false;
+    if ("clientsOnly" in item && item.clientsOnly && !canManageClients(role)) return false;
     if ("internalOnly" in item && item.internalOnly && isClient(role)) return false;
     if ("pricingOnly" in item && item.pricingOnly && !canSetCommercials(role)) return false;
     return true;

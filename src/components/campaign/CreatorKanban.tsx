@@ -29,6 +29,7 @@ import {
   lookupYoutubeChannelAction,
   refreshCreatorSocialStats,
   updateCreatorShortlist,
+  publishQuotedCost,
   addShortlistDeliverable,
   deleteShortlistDeliverable,
   setCreatorClientDecision,
@@ -50,6 +51,7 @@ import {
   RefreshCw,
   X,
   Plus,
+  Minus,
   Tv,
   Camera,
   Video,
@@ -105,6 +107,19 @@ type ShortlistDeliverableRow = {
   executionDeliverableId: string | null;
 };
 
+// Same type pitched more than once (e.g. 3x YT Shorts) is 3 separate rows in
+// the DB — collapse them into one group per type, in first-seen order, so
+// the UI can show one chip with a quantity instead of one chip per unit.
+function groupShortlistDeliverables(lines: ShortlistDeliverableRow[]): { type: string; ids: string[] }[] {
+  const groups: { type: string; ids: string[] }[] = [];
+  for (const line of lines) {
+    const existing = groups.find((g) => g.type === line.deliverableType);
+    if (existing) existing.ids.push(line.id);
+    else groups.push({ type: line.deliverableType, ids: [line.id] });
+  }
+  return groups;
+}
+
 // internalCost/insightsLinks etc. are optional because the client-facing
 // serializer strips internalCost, and older records may predate these fields.
 export type Creator = {
@@ -124,6 +139,7 @@ export type Creator = {
   youtubeShortsMedianERPercent?: number | null;
   internalCost?: number | null;
   quotedCost: number | null;
+  quotedCostPublished?: boolean;
   status: string;
   rejectionReason: string | null;
   commercialsLocked: boolean;
@@ -303,6 +319,12 @@ export default function CreatorKanban({
                           excluded (Gate G3), not the client. */}
                       {role !== "IR_INTERN" && (
                         <th className="sticky top-0 z-30 w-[150px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Quoted Cost</th>
+                      )}
+                      {/* Not shown to the client — their rows are already
+                          filtered to published-only, so this column would be
+                          all-"Published" noise for them. */}
+                      {!isClientView && role !== "IR_INTERN" && (
+                        <th className="sticky top-0 z-30 w-[130px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Publish</th>
                       )}
                       <th className="sticky top-0 z-30 w-[170px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Client&apos;s Intent</th>
                       <th className="sticky top-0 z-30 w-[200px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Client&apos;s Counter Cost</th>
@@ -488,6 +510,8 @@ function AddCreatorForm({
   const formRef = useRef<HTMLFormElement>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [duplicate, setDuplicate] = useState<{ id: string; name: string; addedBy: string | null } | null>(null);
+  const lastFormData = useRef<FormData | null>(null);
   const [fetching, setFetching] = useState(false);
   const [fetchMsg, setFetchMsg] = useState<{ type: "error" | "success"; text: string } | null>(null);
   const lastFetchedUrl = useRef<string>("");
@@ -638,12 +662,18 @@ function AddCreatorForm({
               const primaryType = pitchedTypes[0];
               fd.set("platformPrimary", primaryType ? SHORTLIST_TO_EXECUTION_PLATFORM[primaryType] : "INSTAGRAM_REEL");
             }
+            lastFormData.current = fd;
             setSaving(true);
             setSaveError(null);
+            setDuplicate(null);
             try {
-              const created = await addCreator(campaignId, fd);
-              if (created && onCreatorAdded) {
-                onCreatorAdded(created as unknown as Creator);
+              const result = await addCreator(campaignId, fd);
+              if (result && "duplicate" in result && result.duplicate) {
+                setDuplicate(result.duplicate);
+                return;
+              }
+              if (result && onCreatorAdded) {
+                onCreatorAdded(result as unknown as Creator);
               }
               router.refresh();
               onDone();
@@ -851,6 +881,39 @@ function AddCreatorForm({
 
           {saveError && (
             <p className="text-xs text-rose-600 dark:text-rose-400 font-medium">{saveError}</p>
+          )}
+
+          {duplicate && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800 dark:bg-amber-950/40">
+              <p className="text-xs font-medium text-amber-800 dark:text-amber-300">
+                <strong>{duplicate.name}</strong> is already on this campaign&apos;s shortlist
+                {duplicate.addedBy ? ` (added by ${duplicate.addedBy})` : ""} — this looks like a duplicate.
+              </p>
+              <button
+                type="button"
+                disabled={saving}
+                onClick={async () => {
+                  if (!lastFormData.current) return;
+                  setSaving(true);
+                  setSaveError(null);
+                  try {
+                    const result = await addCreator(campaignId, lastFormData.current, true);
+                    if (result && onCreatorAdded) {
+                      onCreatorAdded(result as unknown as Creator);
+                    }
+                    router.refresh();
+                    onDone();
+                  } catch (err: any) {
+                    setSaveError(err?.message || "Couldn't save influencer. Please try again.");
+                  } finally {
+                    setSaving(false);
+                  }
+                }}
+                className="shrink-0 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Force Allow
+              </button>
+            </div>
           )}
 
           <div className="flex items-center gap-2 border-t border-slate-100 pt-4 dark:border-slate-800">
@@ -1122,23 +1185,42 @@ function ShortlistCreatorRow({
       </td>
       <td className="sticky left-[430px] z-10 w-[260px] min-w-[260px] max-w-[260px] border-b border-slate-100 bg-white px-5 py-4 group-hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:group-hover:bg-slate-800">
         <div className="flex flex-wrap items-center gap-1.5">
-          {creator.shortlistDeliverables.map((line) => (
-            <span key={line.id} className="inline-flex items-center gap-1 rounded-lg bg-slate-100 border border-slate-200 px-2 py-1 text-xs font-bold text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300">
-              {SHORTLIST_DELIVERABLE_LABELS[line.deliverableType as keyof typeof SHORTLIST_DELIVERABLE_LABELS] ?? line.deliverableType}
+          {/* Same deliverable type pitched more than once (e.g. 3x YT
+              Shorts) collapses into one chip with a quantity + a +/-
+              stepper, instead of one identical chip per unit. */}
+          {groupShortlistDeliverables(creator.shortlistDeliverables).map((group) => (
+            <span key={group.type} className="inline-flex items-center gap-1 rounded-lg bg-slate-100 border border-slate-200 px-2 py-1 text-xs font-bold text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300">
+              {SHORTLIST_DELIVERABLE_LABELS[group.type as keyof typeof SHORTLIST_DELIVERABLE_LABELS] ?? group.type}
+              {group.ids.length > 1 && <span className="text-indigo-600 dark:text-indigo-400">×{group.ids.length}</span>}
               {!isClientView && (
-                <button
-                  onClick={async () => {
-                    if (!confirm("Remove this deliverable?")) return;
-                    try {
-                      await withRefresh(deleteShortlistDeliverable(line.id));
-                    } catch (err: any) {
-                      window.alert(err?.message ?? "Failed to remove this deliverable.");
-                    }
-                  }}
-                  className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400"
-                >
-                  <X className="h-3 w-3" />
-                </button>
+                <span className="flex items-center">
+                  <button
+                    onClick={async () => {
+                      try {
+                        await withRefresh(deleteShortlistDeliverable(group.ids[group.ids.length - 1]));
+                      } catch (err: any) {
+                        window.alert(err?.message ?? "Failed to remove this deliverable.");
+                      }
+                    }}
+                    title={`Remove one ${SHORTLIST_DELIVERABLE_LABELS[group.type as keyof typeof SHORTLIST_DELIVERABLE_LABELS] ?? group.type}`}
+                    className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400"
+                  >
+                    <Minus className="h-3 w-3" />
+                  </button>
+                  <button
+                    onClick={async () => {
+                      try {
+                        await withRefresh(addShortlistDeliverable(creator.id, group.type as (typeof SHORTLIST_DELIVERABLE_TYPES)[number]));
+                      } catch (err: any) {
+                        window.alert(err?.message ?? "Failed to add this deliverable.");
+                      }
+                    }}
+                    title={`Add one more ${SHORTLIST_DELIVERABLE_LABELS[group.type as keyof typeof SHORTLIST_DELIVERABLE_LABELS] ?? group.type}`}
+                    className="text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400"
+                  >
+                    <Plus className="h-3 w-3" />
+                  </button>
+                </span>
               )}
             </span>
           ))}
@@ -1159,7 +1241,7 @@ function ShortlistCreatorRow({
               className="rounded-lg border border-dashed border-slate-300 bg-white px-1.5 py-1 text-xs font-semibold text-indigo-600 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-indigo-400"
             >
               <option value="">+ Add</option>
-              {SHORTLIST_DELIVERABLE_TYPES.map((type) => (
+              {SHORTLIST_DELIVERABLE_TYPES.filter((type) => !creator.shortlistDeliverables.some((l) => l.deliverableType === type)).map((type) => (
                 <option key={type} value={type}>{SHORTLIST_DELIVERABLE_LABELS[type]}</option>
               ))}
             </select>
@@ -1276,6 +1358,27 @@ function ShortlistCreatorRow({
           onSave={(v) => withRefresh(updateCreatorShortlist(creator.id, { quotedCost: v }))}
           textClassName="font-bold text-slate-900 dark:text-white"
         />
+      )}
+      {!isClientView && role !== "IR_INTERN" && (
+        <td className="whitespace-nowrap border-b border-slate-100 px-5 py-4 dark:border-slate-800">
+          {creator.quotedCostPublished ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2 py-1 text-[11px] font-bold text-emerald-700 dark:bg-emerald-950/50 dark:border-emerald-800 dark:text-emerald-300">
+              Published
+            </span>
+          ) : role === "CAMPAIGN_MANAGER" || superAdmin ? (
+            <button
+              type="button"
+              disabled={creator.quotedCost === null}
+              onClick={() => withRefresh(publishQuotedCost(creator.id))}
+              title={creator.quotedCost === null ? "Set a Quoted Cost first" : "Show this Quoted Cost to the client"}
+              className="rounded-lg bg-brand px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Publish
+            </button>
+          ) : (
+            <span className="text-xs text-slate-400 dark:text-slate-500">Not published</span>
+          )}
+        </td>
       )}
       <td className="whitespace-nowrap border-b border-slate-100 px-5 py-4 dark:border-slate-800">
         {isClientView ? (

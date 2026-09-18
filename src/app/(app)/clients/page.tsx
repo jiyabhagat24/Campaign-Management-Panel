@@ -1,18 +1,18 @@
 import { redirect } from "next/navigation";
 import { currentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { canManageTeam } from "@/lib/rbac";
+import { canManageClients } from "@/lib/rbac";
 import ClientAccessManager, { type ClientRow, type CampaignOption } from "@/components/team/ClientAccessManager";
 
-// CXO-only — where a signed-up (or manually added) client account gets
-// granted or revoked visibility into specific campaigns. Sign-up itself
-// (src/app/signup) only ever creates a login; it never grants campaign
-// access on its own, so this page is the other half of that flow — the
-// thing a CXO actually does after a new client shows up on the Team page.
+// CXO + Brand Solutions — where a signed-up (or manually added) client
+// account gets granted or revoked visibility into specific campaigns.
+// Sign-up itself (src/app/signup) only ever creates a login; it never
+// grants campaign access on its own, so this page is the other half of
+// that flow.
 export default async function ClientsAccessPage() {
   const user = await currentUser();
   if (!user) redirect("/login");
-  if (!canManageTeam(user.role)) redirect("/dashboard");
+  if (!canManageClients(user.role)) redirect("/dashboard");
 
   const [clients, campaigns] = await Promise.all([
     prisma.client.findMany({

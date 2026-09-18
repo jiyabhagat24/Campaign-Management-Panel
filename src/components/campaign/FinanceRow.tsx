@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { updateCampaignFinance } from "@/lib/actions";
-import { INVOICE_STATUSES, INVOICE_STATUS_LABELS, type InvoiceStatus } from "@/lib/constants";
+import { INVOICE_STATUSES, INVOICE_STATUS_LABELS, type InvoiceStatus, FEE_TYPES, FEE_TYPE_LABELS, type FeeType } from "@/lib/constants";
 
 // Manual entry for the Finance numbers that can't be derived from data
 // tracked elsewhere (Agency Fee / Agency Fee % / Client Invoice status) — no
@@ -18,6 +18,8 @@ type FinanceValues = {
   financeAgencyFee: number | null;
   financeAgencyFeePercent: number | null;
   financeClientInvoiceStatus: string | null;
+  financeFeeType: string | null;
+  financeRetainerFee: number | null;
 };
 
 type Props = {
@@ -30,7 +32,7 @@ type Props = {
 // is a string, not a number, and money() below only accepts number | null —
 // widening this to the full keyof union made values[f.key] infer as
 // string | number | null, which is what broke the production type-check.
-type MoneyFieldKey = Exclude<keyof FinanceValues, "financeClientInvoiceStatus">;
+type MoneyFieldKey = Exclude<keyof FinanceValues, "financeClientInvoiceStatus" | "financeFeeType">;
 
 const MONEY_FIELDS: { key: MoneyFieldKey; label: string }[] = [
   { key: "financeAgencyFee", label: "Agency Fee" },
@@ -42,8 +44,12 @@ export default function FinanceRow({ campaignId, canEdit, initial }: Props) {
   const [saving, setSaving] = useState(false);
 
   const money = (n: number | null) => (n === null || n === undefined ? "—" : `₹${n.toLocaleString("en-IN")}`);
+  const pct = (n: number | null) => (n === null || n === undefined ? "—" : `${n}%`);
   const invoiceLabel = (v: string | null) =>
     v && (INVOICE_STATUSES as readonly string[]).includes(v) ? INVOICE_STATUS_LABELS[v as InvoiceStatus] : "—";
+  // Legacy campaigns never had a fee type set, but already have a % filled
+  // in — default those to PERCENTAGE rather than showing an empty state.
+  const feeType: FeeType = values.financeFeeType === "RETAINER" ? "RETAINER" : "PERCENTAGE";
 
   if (!editing) {
     return (
@@ -58,9 +64,9 @@ export default function FinanceRow({ campaignId, canEdit, initial }: Props) {
           </span>
         ))}
         <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs dark:border-slate-700 dark:bg-slate-900">
-          <span className="text-slate-400 dark:text-slate-500">Agency Fee %:</span>
+          <span className="text-slate-400 dark:text-slate-500">{FEE_TYPE_LABELS[feeType]}:</span>
           <span className="font-medium text-ink dark:text-white">
-            {values.financeAgencyFeePercent === null ? "—" : `${values.financeAgencyFeePercent}%`}
+            {feeType === "RETAINER" ? money(values.financeRetainerFee) : pct(values.financeAgencyFeePercent)}
           </span>
         </span>
         <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs dark:border-slate-700 dark:bg-slate-900">
@@ -110,18 +116,49 @@ export default function FinanceRow({ campaignId, canEdit, initial }: Props) {
       ))}
 
       <label className="flex flex-col gap-1">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Agency Fee %</span>
-        <input
-          type="number"
-          step="0.01"
-          value={values.financeAgencyFeePercent ?? ""}
-          onChange={(e) =>
-            setValues((v) => ({ ...v, financeAgencyFeePercent: e.target.value === "" ? null : Number(e.target.value) }))
-          }
-          className="w-24 rounded-lg border border-slate-300 px-2 py-1.5 text-xs dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
-          placeholder="0%"
-        />
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Fee type</span>
+        <select
+          value={feeType}
+          onChange={(e) => setValues((v) => ({ ...v, financeFeeType: e.target.value }))}
+          className="w-36 rounded-lg border border-slate-300 px-2 py-1.5 text-xs dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+        >
+          {FEE_TYPES.map((t) => (
+            <option key={t} value={t}>
+              {FEE_TYPE_LABELS[t]}
+            </option>
+          ))}
+        </select>
       </label>
+
+      {feeType === "RETAINER" ? (
+        <label className="flex flex-col gap-1">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Retainer Fee</span>
+          <input
+            type="number"
+            step="0.01"
+            value={values.financeRetainerFee ?? ""}
+            onChange={(e) =>
+              setValues((v) => ({ ...v, financeRetainerFee: e.target.value === "" ? null : Number(e.target.value) }))
+            }
+            className="w-36 rounded-lg border border-slate-300 px-2 py-1.5 text-xs dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+            placeholder="₹0"
+          />
+        </label>
+      ) : (
+        <label className="flex flex-col gap-1">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Agency Fee %</span>
+          <input
+            type="number"
+            step="0.01"
+            value={values.financeAgencyFeePercent ?? ""}
+            onChange={(e) =>
+              setValues((v) => ({ ...v, financeAgencyFeePercent: e.target.value === "" ? null : Number(e.target.value) }))
+            }
+            className="w-24 rounded-lg border border-slate-300 px-2 py-1.5 text-xs dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+            placeholder="0%"
+          />
+        </label>
+      )}
 
       <label className="flex flex-col gap-1">
         <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Client Invoice status</span>

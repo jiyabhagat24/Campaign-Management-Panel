@@ -153,6 +153,9 @@ model Campaign {
   endDate        DateTime?
   goLiveDeadline DateTime? // computed default: onboard date + slaOnboardToGoLiveDays
 
+  clientWebsiteUrl String? // the client brand's website — reference link for whoever's briefing creators
+  productUrl       String? // link to the specific product page being promoted, if there is one
+
   // ---------- Structured brief (Atomberg-style brief format) ----------
   // v1 of this — Product only. Deliverables/Category/budget-per-creator/
   // language breakdown now live per-platform on platformBriefs below, since
@@ -185,6 +188,12 @@ model Campaign {
   financeAgencyFee            Float? // the Campaign Table's "Agency Fee" column
   financeAgencyFeePercent     Float? // the Finance Table's "Agency Fee %" column (distinct from the ₹ value above)
   financeClientInvoiceStatus  String? // see constants.ts INVOICE_STATUSES — the Finance Table's "Client Invoice status" column
+
+  // A campaign is billed one of two ways, never both: a percentage cut
+  // (financeAgencyFeePercent above) or a fixed recurring retainer. See
+  // constants.ts FEE_TYPES.
+  financeFeeType     String? // "PERCENTAGE" | "RETAINER"
+  financeRetainerFee Float? // fixed recurring payment, used when financeFeeType = RETAINER
 
   // Finance & Invoicing — Client side (section B of the sheet's separate
   // spec). Deliberately a plain boolean, distinct from the 3-state
@@ -317,6 +326,12 @@ model Creator {
   // src/lib/rbac.ts + serializeCreatorForClient().
   internalCost Float?
   quotedCost   Float?
+  // A Campaign Manager can save a Quoted Cost without it reaching the client
+  // yet — it only becomes visible once explicitly published (publishQuotedCost
+  // below). Reset to false on every quotedCost change, so an edited price
+  // always needs a fresh publish rather than silently updating what a client
+  // already sees.
+  quotedCostPublished Boolean @default(false)
 
   status           String  @default("SHORTLISTED") // see constants.ts CREATOR_STATUSES
   rejectionReason  String?

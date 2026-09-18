@@ -116,6 +116,8 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
             brand: campaign.brand,
             brandLogoUrl: campaign.brandLogoUrl,
             product: campaign.product,
+            clientWebsiteUrl: campaign.clientWebsiteUrl,
+            productUrl: campaign.productUrl,
             budgetQuoted: campaign.budgetQuoted,
             startDate: campaign.startDate ? campaign.startDate.toISOString() : null,
             goLiveDeadline: campaign.goLiveDeadline ? campaign.goLiveDeadline.toISOString() : null,
@@ -134,7 +136,7 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
             campaignId={campaign.id}
             teamMembers={campaign.teamMembers}
             internalUsers={internalUsers}
-            canEdit={user.role === "IR_MANAGER" || isSuperAdmin(user.id)}
+            canEdit={user.role === "IR_MANAGER" || user.role === "BRAND_SOLUTIONS" || isSuperAdmin(user.id)}
           />
         </div>
 
@@ -158,6 +160,8 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
                 financeAgencyFee: campaign.financeAgencyFee,
                 financeAgencyFeePercent: campaign.financeAgencyFeePercent,
                 financeClientInvoiceStatus: campaign.financeClientInvoiceStatus,
+                financeFeeType: campaign.financeFeeType,
+                financeRetainerFee: campaign.financeRetainerFee,
               }}
             />
           </div>

@@ -108,6 +108,16 @@ export function canManageTeam(role: Role) {
   return role === "CXO";
 }
 
+// Who can access the Clients page (add/edit/remove clients, grant campaign
+// access). CXO plus Brand Solutions — Brand Solutions owns client intake
+// (they create the campaigns those clients belong to), so they need to be
+// able to add a client and grant access without going through a CXO.
+// Deliberately separate from canManageTeam, which stays CXO-only (Team
+// admin page, Month lock).
+export function canManageClients(role: Role) {
+  return role === "CXO" || role === "BRAND_SOLUTIONS";
+}
+
 // Who can create a new campaign — spec: Brand Solutions exclusively ("Brief
 // intake" is their step 1, and Page Permissions gives them "Create and
 // edit, own clients" on Campaigns while CXO gets only "View, all"; Read Me
@@ -152,12 +162,12 @@ export function serializeCreatorForClient<T extends { internalCost: number | nul
   return rest;
 }
 
-// Gate G1: a creator row with no vet decision (Campaign Manager never set
-// quotedCost) or that's been internally rejected must never reach a
-// client-facing query — filtered out here, not left to each call site to
-// remember, so nothing client-facing can accidentally skip this.
-export function serializeCreatorsForClient<T extends { internalCost: number | null; quotedCost: number | null; status: string }>(
+// Gate G1: a creator row with no vet decision (Campaign Manager never
+// published a quotedCost) or that's been internally rejected must never
+// reach a client-facing query — filtered out here, not left to each call
+// site to remember, so nothing client-facing can accidentally skip this.
+export function serializeCreatorsForClient<T extends { internalCost: number | null; quotedCostPublished: boolean; status: string }>(
   creators: T[]
 ): Omit<T, "internalCost">[] {
-  return creators.filter((c) => c.quotedCost !== null && c.status !== "REJECTED").map(serializeCreatorForClient);
+  return creators.filter((c) => c.quotedCostPublished && c.status !== "REJECTED").map(serializeCreatorForClient);
 }

@@ -6,7 +6,7 @@ import bcrypt from "bcryptjs";
 import { requireUser } from "@/lib/auth";
 import { logActivity } from "@/lib/activity";
 import { notify } from "@/lib/notify";
-import { canApproveCommercialEdit, canSetCommercials, canApproveMarginOverride, canSeeInternalCost, canManageTeam, canCreateCampaign, canOperateShortlist, isClient, isSuperAdmin } from "@/lib/rbac";
+import { canApproveCommercialEdit, canSetCommercials, canApproveMarginOverride, canSeeInternalCost, canManageTeam, canManageClients, canCreateCampaign, canOperateShortlist, isClient, isSuperAdmin } from "@/lib/rbac";
 import {
   DEFAULT_SLA,
   type Stage,
@@ -20,6 +20,7 @@ import {
   CAMPAIGN_STATUSES,
   INVOICE_STATUSES,
   PAYOUT_PAYMENT_STATUSES,
+  FEE_TYPES,
 } from "@/lib/constants";
 import { extractInstagramUsername } from "@/lib/instagram";
 import {
@@ -151,14 +152,18 @@ export async function createCampaign(formData: FormData) {
   if (!name || !brand) throw new Error("Name and brand are required");
 
   const product = String(formData.get("product") ?? "").trim() || null;
+  const clientWebsiteUrl = String(formData.get("clientWebsiteUrl") ?? "").trim() || null;
+  const productUrl = String(formData.get("productUrl") ?? "").trim() || null;
+  if (clientWebsiteUrl && !isValidUrl(clientWebsiteUrl)) throw new Error("Client website must be a valid URL.");
+  if (productUrl && !isValidUrl(productUrl)) throw new Error("Product URL must be a valid URL.");
 
-  // "Came in" and a target go-live deadline — both optional, plain <input
-  // type="date"> values (YYYY-MM-DD). goLiveDeadline set here is a target
-  // only: onboardCreator (further down) will tighten it automatically to
-  // whichever's sooner once a creator actually gets onboarded, same as
-  // before this field existed.
-  const startDateRaw = String(formData.get("startDate") ?? "").trim();
-  const startDate = startDateRaw ? new Date(startDateRaw) : null;
+  // "Came in" is no longer a manual pick — it's stamped to the moment the
+  // campaign is actually created, so it always matches reality instead of
+  // whatever date someone happened to type in. goLiveDeadline is still a
+  // manual target: onboardCreator (further down) will tighten it
+  // automatically to whichever's sooner once a creator actually gets
+  // onboarded, same as before this field existed.
+  const startDate = new Date();
   const goLiveDeadlineRaw = String(formData.get("goLiveDeadline") ?? "").trim();
   const goLiveDeadline = goLiveDeadlineRaw ? new Date(goLiveDeadlineRaw) : null;
 
@@ -179,6 +184,8 @@ export async function createCampaign(formData: FormData) {
       budgetQuoted: budgetQuoted ?? undefined,
       platformMix: platformMix ?? undefined,
       product: product ?? undefined,
+      clientWebsiteUrl: clientWebsiteUrl ?? undefined,
+      productUrl: productUrl ?? undefined,
       startDate: startDate ?? undefined,
       goLiveDeadline: goLiveDeadline ?? undefined,
       platformBriefs: platformBriefs.length ? { create: platformBriefs.map(toPlatformBriefCreateInput) } : undefined,
@@ -207,6 +214,22 @@ export async function createCampaign(formData: FormData) {
     entityType: "Campaign",
     entityId: campaign.id,
   });
+
+  // Every IR Manager gets pinged the moment Brand Solutions opens a new
+  // campaign — they're org-wide (see isOrgWide in rbac.ts) and already see
+  // every campaign automatically, but they still need to know a fresh one
+  // just landed so they can staff the team (assignTeamMember).
+  const irManagers = await prisma.user.findMany({ where: { role: "IR_MANAGER" }, select: { id: true } });
+  await Promise.all(
+    irManagers.map((m) =>
+      notify({
+        userId: m.id,
+        channel: "INSTANT",
+        title: `New campaign: ${campaign.name}`,
+        body: `${user.name} just created "${campaign.name}" (${brand}) — assign the team when ready.`,
+      })
+    )
+  );
 
   revalidatePath("/campaigns");
   return campaign.id;
@@ -293,6 +316,8 @@ export async function updateCampaignDetails(
     name: string;
     brand: string;
     product: string | null;
+    clientWebsiteUrl: string | null;
+    productUrl: string | null;
     budgetQuoted: number | null;
     startDate: string | null; // "YYYY-MM-DD" or null
     goLiveDeadline: string | null; // "YYYY-MM-DD" or null
@@ -306,6 +331,11 @@ export async function updateCampaignDetails(
   const name = data.name.trim();
   const brand = data.brand.trim();
   if (!name || !brand) throw new Error("Name and brand are required.");
+
+  const clientWebsiteUrl = data.clientWebsiteUrl?.trim() || null;
+  const productUrl = data.productUrl?.trim() || null;
+  if (clientWebsiteUrl && !isValidUrl(clientWebsiteUrl)) throw new Error("Client website must be a valid URL.");
+  if (productUrl && !isValidUrl(productUrl)) throw new Error("Product URL must be a valid URL.");
 
   const platformBriefs = sanitizePlatformBriefs(data.platformBriefs);
   const platformMix = platformBriefs.length ? platformBriefs.map((p) => p.platform).join(", ") : null;
@@ -321,6 +351,8 @@ export async function updateCampaignDetails(
       name,
       brand,
       product: data.product?.trim() || null,
+      clientWebsiteUrl,
+      productUrl,
       platformMix,
       budgetQuoted: data.budgetQuoted,
       startDate: data.startDate ? new Date(data.startDate) : null,
@@ -348,6 +380,8 @@ export async function updateCampaignFinance(
     financeAgencyFee?: number | null;
     financeAgencyFeePercent?: number | null;
     financeClientInvoiceStatus?: string | null;
+    financeFeeType?: string | null;
+    financeRetainerFee?: number | null;
   }
 ) {
   const user = await requireUser();
@@ -357,6 +391,9 @@ export async function updateCampaignFinance(
     !(INVOICE_STATUSES as readonly string[]).includes(fields.financeClientInvoiceStatus)
   ) {
     throw new Error("Invalid invoice status.");
+  }
+  if (fields.financeFeeType != null && !(FEE_TYPES as readonly string[]).includes(fields.financeFeeType)) {
+    throw new Error("Invalid fee type.");
   }
 
   await prisma.campaign.update({ where: { id: campaignId }, data: fields });
@@ -490,7 +527,7 @@ export async function removeClientAccess(clientAccessId: string, campaignId: str
 // campaign's own page and usable by an existing client, not just a CXO.
 export async function setClientCampaignAccess(clientId: string, campaignId: string, hasAccess: boolean) {
   const user = await requireUser();
-  if (!canManageTeam(user.role)) throw new Error("Only a CXO can manage client campaign access.");
+  if (!canManageClients(user.role)) throw new Error("Only a CXO or Brand Solutions can manage client campaign access.");
 
   if (hasAccess) {
     await prisma.campaignClientAccess.upsert({
@@ -517,8 +554,11 @@ export async function setClientCampaignAccess(clientId: string, campaignId: stri
 // open to Brand Solutions/CXO/Campaign Manager the way it was before.
 export async function assignTeamMember(campaignId: string, userId: string, roleOnCampaign: string) {
   const user = await requireUser();
-  if (user.role !== "IR_MANAGER" && !isSuperAdmin(user.id)) throw new Error("Only the IR Manager can assign the campaign team.");
+  if (user.role !== "IR_MANAGER" && user.role !== "BRAND_SOLUTIONS" && !isSuperAdmin(user.id)) throw new Error("Only the IR Manager or Brand Solutions can assign the campaign team.");
 
+  const existing = await prisma.campaignTeamMember.findUnique({
+    where: { campaignId_userId_roleOnCampaign: { campaignId, userId, roleOnCampaign } },
+  });
   await prisma.campaignTeamMember.upsert({
     where: { campaignId_userId_roleOnCampaign: { campaignId, userId, roleOnCampaign } },
     update: {},
@@ -528,7 +568,18 @@ export async function assignTeamMember(campaignId: string, userId: string, roleO
   // Spec State Machine: DRAFT -> ASSIGNED fires automatically once a
   // Campaign Manager and at least one IR Executive are on the team — it's
   // not a manual status pick (see updateCampaignStatus above).
-  const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { status: true } });
+  const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { status: true, name: true } });
+
+  // Instant notify: the person just added should know they're on this campaign.
+  if (!existing && userId !== user.id) {
+    await notify({
+      userId,
+      channel: "INSTANT",
+      title: `Added to ${campaign?.name ?? "a campaign"}`,
+      body: `${user.name} added you as ${roleOnCampaign.replace(/_/g, " ").toLowerCase()} on ${campaign?.name ?? "a campaign"}.`,
+    });
+  }
+
   if (campaign?.status === "DRAFT") {
     const team = await prisma.campaignTeamMember.findMany({ where: { campaignId }, select: { roleOnCampaign: true } });
     const hasCM = team.some((t) => t.roleOnCampaign === "CAMPAIGN_MANAGER");
@@ -554,7 +605,7 @@ export async function assignTeamMember(campaignId: string, userId: string, roleO
 
 export async function removeTeamMember(teamMemberId: string, campaignId: string) {
   const user = await requireUser();
-  if (user.role !== "IR_MANAGER" && !isSuperAdmin(user.id)) throw new Error("Only the IR Manager can change the campaign team.");
+  if (user.role !== "IR_MANAGER" && user.role !== "BRAND_SOLUTIONS" && !isSuperAdmin(user.id)) throw new Error("Only the IR Manager or Brand Solutions can change the campaign team.");
 
   await prisma.campaignTeamMember.delete({ where: { id: teamMemberId } });
   revalidatePath(`/campaigns/${campaignId}`);
@@ -562,7 +613,7 @@ export async function removeTeamMember(teamMemberId: string, campaignId: string)
 
 // ---------- Creator / Shortlist ----------
 
-export async function addCreator(campaignId: string, formData: FormData) {
+export async function addCreator(campaignId: string, formData: FormData, force = false) {
   const user = await requireUser();
   if (!canOperateShortlist(user.role) && !isSuperAdmin(user.id)) throw new Error("Not authorized to add creators to the shortlist.");
 
@@ -600,6 +651,70 @@ export async function addCreator(campaignId: string, formData: FormData) {
     .getAll("deliverables")
     .map((v) => String(v))
     .filter((v): v is ShortlistDeliverableType => (SHORTLIST_DELIVERABLE_TYPES as readonly string[]).includes(v));
+
+  // Duplicate guard: someone else may have already shortlisted this exact
+  // handle on this campaign (IR Executive/Intern rows aren't scoped from
+  // each other here on purpose — the whole point is catching a second
+  // person unknowingly re-adding a profile a teammate already pitched).
+  // REJECTED rows don't count as a live duplicate.
+  const existing = await prisma.creator.findFirst({
+    where: { campaignId, status: { not: "REJECTED" }, channelHandle: { equals: channelHandle, mode: "insensitive" } },
+    include: {
+      shortlistDeliverables: true,
+      sourcedBy: { select: { name: true } },
+    },
+  });
+
+  if (existing && !force) {
+    return { duplicate: { id: existing.id, name: existing.name, addedBy: existing.sourcedBy?.name ?? null } };
+  }
+
+  if (existing && force) {
+    // Force Allow: don't create a second row for the same profile — fold
+    // whatever was just submitted into the existing one instead. Optional
+    // fields only overwrite when a new value was actually entered, so a
+    // blank field on this submission never wipes out data the first person
+    // already captured.
+    const newDeliverableTypes = deliverableTypes.filter((t) => !existing.shortlistDeliverables.some((l) => l.deliverableType === t));
+    const updated = await prisma.creator.update({
+      where: { id: existing.id },
+      data: {
+        name,
+        ...(profileUrl ? { profileUrl } : {}),
+        ...(youtubeUrl ? { youtubeUrl } : {}),
+        platformPrimary,
+        ...(followers !== null ? { followers } : {}),
+        ...(avgViews !== null ? { avgViews } : {}),
+        ...(engagementRate !== null ? { engagementRate } : {}),
+        ...(youtubeSubscribers !== null ? { youtubeSubscribers } : {}),
+        ...(youtubeLongMedianViews !== null ? { youtubeLongMedianViews } : {}),
+        ...(youtubeLongMedianERPercent !== null ? { youtubeLongMedianERPercent } : {}),
+        ...(youtubeShortsMedianViews !== null ? { youtubeShortsMedianViews } : {}),
+        ...(youtubeShortsMedianERPercent !== null ? { youtubeShortsMedianERPercent } : {}),
+        ...(internalCost !== null ? { internalCost } : {}),
+        shortlistDeliverables: newDeliverableTypes.length ? { create: newDeliverableTypes.map((type) => ({ deliverableType: type })) } : undefined,
+      },
+      include: {
+        negotiationRounds: { orderBy: { roundNumber: "asc" } },
+        deliverables: true,
+        shortlistDeliverables: { orderBy: { createdAt: "asc" } },
+        poc: { select: { id: true, name: true } },
+      },
+    });
+
+    await logActivity({
+      campaignId,
+      actorId: user.id,
+      actorName: user.name,
+      action: "CREATOR_FORCE_MERGED",
+      entityType: "Creator",
+      entityId: updated.id,
+      meta: { name, channelHandle },
+    });
+
+    revalidatePath(`/campaigns/${campaignId}`);
+    return updated;
+  }
 
   // Followers/engagementRate can arrive pre-filled from lookupInstagramProfileAction
   // (paste-URL auto-fill in the shortlist form) — see src/lib/instagram.ts.
@@ -735,10 +850,11 @@ export async function updateCreatorShortlist(
     data: {
       ...rest,
       ...(insightsLinks ? { insightsLinks: JSON.stringify(insightsLinks.filter(Boolean).slice(0, 4)) } : {}),
-      // Ball owner: the Campaign Manager setting a Quoted Cost is publishing
-      // this row to the client (spec State Machine: In Pricing -> Published,
-      // ball owner Client) — it's now their move.
-      ...(fields.quotedCost !== undefined && fields.quotedCost !== null ? { ballOwner: "CLIENT" } : {}),
+      // Setting/changing the Quoted Cost here only saves it — it does NOT
+      // reach the client until the Campaign Manager explicitly publishes it
+      // (see publishQuotedCost below). Any change to the number un-publishes
+      // it, so a client never sees a price that's since been edited.
+      ...(fields.quotedCost !== undefined ? { quotedCostPublished: false } : {}),
     },
   });
 
@@ -756,6 +872,44 @@ export async function updateCreatorShortlist(
 
   revalidatePath(`/campaigns/${creator.campaignId}`);
   return { error: null };
+}
+
+// The explicit "publish" step (spec: Campaign Manager's Shortlisting grant
+// is "Vet, price and publish") — a saved Quoted Cost stays TBM-internal
+// until this runs, at which point the row becomes visible to the client
+// (see serializeCreatorsForClient in rbac.ts) and the ball moves to them.
+export async function publishQuotedCost(creatorId: string) {
+  const user = await requireUser();
+  if (!canSetCommercials(user.role) && !isSuperAdmin(user.id)) throw new Error("Only a Campaign Manager can publish the Quoted Cost.");
+
+  const creator = await prisma.creator.findUnique({ where: { id: creatorId }, select: { campaignId: true, quotedCost: true, name: true } });
+  if (!creator) throw new Error("Creator not found");
+  if (creator.quotedCost === null) throw new Error("Set a Quoted Cost before publishing.");
+
+  await prisma.creator.update({ where: { id: creatorId }, data: { quotedCostPublished: true, ballOwner: "CLIENT" } });
+
+  await logActivity({
+    campaignId: creator.campaignId,
+    actorId: user.id,
+    actorName: user.name,
+    action: "QUOTED_COST_PUBLISHED",
+    entityType: "Creator",
+    entityId: creatorId,
+    meta: { quotedCost: creator.quotedCost },
+  });
+
+  const clientAccess = await prisma.campaignClientAccess.findFirst({ where: { campaignId: creator.campaignId } });
+  if (clientAccess) {
+    const campaign = await prisma.campaign.findUnique({ where: { id: creator.campaignId }, select: { name: true } });
+    await notify({
+      clientId: clientAccess.clientId,
+      channel: "INSTANT",
+      title: `Cost ready for your review`,
+      body: `${user.name} published a quoted cost for ${creator.name} on ${campaign?.name ?? "your campaign"}.`,
+    });
+  }
+
+  revalidatePath(`/campaigns/${creator.campaignId}`);
 }
 
 // Adds/removes which deliverable types a creator is tagged for (e.g. IR
@@ -1203,9 +1357,11 @@ export async function proposeNegotiationRound(creatorId: string, proposedCost: n
   // brief slide 07). Ball owner flips to whichever side didn't just move —
   // Client after a TBM proposal, TBM after a client counter-offer.
   if (!isClient(user.role)) {
+    // Proposing a round is itself an explicit send-to-client action, so
+    // unlike a plain updateCreatorShortlist save this publishes immediately.
     await prisma.creator.update({
       where: { id: creatorId },
-      data: { quotedCost: proposedCost, status: "CLIENT_NEGOTIATING", ballOwner: "CLIENT" },
+      data: { quotedCost: proposedCost, quotedCostPublished: true, status: "CLIENT_NEGOTIATING", ballOwner: "CLIENT" },
     });
   } else {
     await prisma.creator.update({ where: { id: creatorId }, data: { ballOwner: "TBM" } });
@@ -2384,7 +2540,7 @@ export async function signUpClient(input: {
 
 export async function createClientAccount(input: { name: string; email: string; password: string }) {
   const actor = await requireUser();
-  if (!canManageTeam(actor.role)) throw new Error("Only a CXO can add clients.");
+  if (!canManageClients(actor.role)) throw new Error("Only a CXO or Brand Solutions can add clients.");
 
   const name = input.name.trim();
   const email = input.email.trim().toLowerCase();
@@ -2412,7 +2568,7 @@ export async function createClientAccount(input: { name: string; email: string; 
 
 export async function updateClientAccount(clientId: string, input: { name?: string; password?: string }) {
   const actor = await requireUser();
-  if (!canManageTeam(actor.role)) throw new Error("Only a CXO can edit a client.");
+  if (!canManageClients(actor.role)) throw new Error("Only a CXO or Brand Solutions can edit a client.");
 
   const data: { name?: string; passwordHash?: string } = {};
   if (input.name !== undefined) {
@@ -2431,7 +2587,7 @@ export async function updateClientAccount(clientId: string, input: { name?: stri
 
 export async function deleteClientAccount(clientId: string) {
   const actor = await requireUser();
-  if (!canManageTeam(actor.role)) throw new Error("Only a CXO can remove a client.");
+  if (!canManageClients(actor.role)) throw new Error("Only a CXO or Brand Solutions can remove a client.");
 
   try {
     await prisma.client.delete({ where: { id: clientId } });

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { updateCampaignDetails } from "@/lib/actions";
 import PlatformBriefsEditor, { type PlatformBriefValue } from "./PlatformBriefsEditor";
 import BrandAvatar from "./BrandAvatar";
-import { Pencil, Calendar, Clock, IndianRupee, AlertTriangle } from "lucide-react";
+import { Pencil, Calendar, Clock, IndianRupee, AlertTriangle, Link as LinkIcon } from "lucide-react";
 
 export type CampaignHeaderPlatformBrief = {
   id: string;
@@ -23,6 +23,8 @@ export type CampaignHeaderData = {
   brand: string;
   brandLogoUrl: string | null;
   product: string | null;
+  clientWebsiteUrl: string | null;
+  productUrl: string | null;
   budgetQuoted: number | null;
   startDate: string | null; // ISO
   goLiveDeadline: string | null; // ISO
@@ -72,6 +74,8 @@ export default function CampaignHeaderEditor({
   const [name, setName] = useState(campaign.name);
   const [brand, setBrand] = useState(campaign.brand);
   const [product, setProduct] = useState(campaign.product ?? "");
+  const [clientWebsiteUrl, setClientWebsiteUrl] = useState(campaign.clientWebsiteUrl ?? "");
+  const [productUrl, setProductUrl] = useState(campaign.productUrl ?? "");
   const [budgetQuoted, setBudgetQuoted] = useState(campaign.budgetQuoted?.toString() ?? "");
   const [startDate, setStartDate] = useState(toDateInputValue(campaign.startDate));
   const [goLiveDeadline, setGoLiveDeadline] = useState(toDateInputValue(campaign.goLiveDeadline));
@@ -121,6 +125,21 @@ export default function CampaignHeaderEditor({
               <p className="mt-2 max-w-2xl whitespace-pre-wrap text-sm leading-relaxed text-slate-600 dark:text-slate-400">
                 {campaign.brief}
               </p>
+            )}
+
+            {(campaign.clientWebsiteUrl || campaign.productUrl) && (
+              <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
+                {campaign.clientWebsiteUrl && (
+                  <a href={campaign.clientWebsiteUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-medium text-indigo-600 hover:underline dark:text-indigo-400">
+                    <LinkIcon className="h-3 w-3" /> Client website
+                  </a>
+                )}
+                {campaign.productUrl && (
+                  <a href={campaign.productUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-medium text-indigo-600 hover:underline dark:text-indigo-400">
+                    <LinkIcon className="h-3 w-3" /> Product page
+                  </a>
+                )}
+              </div>
             )}
 
             {/* One block per platform brief — Instagram and YouTube (etc.)
@@ -219,6 +238,8 @@ export default function CampaignHeaderEditor({
             name,
             brand,
             product: product || null,
+            clientWebsiteUrl: clientWebsiteUrl || null,
+            productUrl: productUrl || null,
             budgetQuoted: budgetQuoted ? Number(budgetQuoted) : null,
             startDate: startDate || null,
             goLiveDeadline: goLiveDeadline || null,
@@ -252,6 +273,17 @@ export default function CampaignHeaderEditor({
         <div>
           <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Final cost / total budget (₹)</label>
           <input value={budgetQuoted} onChange={(e) => setBudgetQuoted(e.target.value)} type="number" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Client website URL</label>
+          <input value={clientWebsiteUrl} onChange={(e) => setClientWebsiteUrl(e.target.value)} type="url" placeholder="https://brand.com" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200" />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Product URL</label>
+          <input value={productUrl} onChange={(e) => setProductUrl(e.target.value)} type="url" placeholder="https://brand.com/product" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200" />
         </div>
       </div>
 
