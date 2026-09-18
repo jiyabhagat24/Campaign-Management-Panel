@@ -116,9 +116,7 @@ export function canManageTeam(role: Role) {
 // originate them. Gates both the "New Campaign"
 // button/link and the createCampaign server action itself.
 export function canCreateCampaign(role: Role) {
-  // Restricted to superadmin only (isSuperAdmin bypass at each call site) —
-  // no role, including Brand Solutions, can create campaigns on their own.
-  return false;
+  return role === "BRAND_SOLUTIONS";
 }
 
 // Task #19 / Page Permissions: within the Shortlisting page itself, IR

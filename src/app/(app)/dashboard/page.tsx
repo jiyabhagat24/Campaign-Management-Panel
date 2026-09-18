@@ -1,6 +1,6 @@
 import { currentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { canSeeInternalCost, campaignVisibilityWhere, isClient, canCreateCampaign } from "@/lib/rbac";
+import { canSeeInternalCost, campaignVisibilityWhere, isClient, canCreateCampaign, isSuperAdmin } from "@/lib/rbac";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import PortfolioDashboardClient, {
@@ -234,7 +234,7 @@ export default async function DashboardPage() {
           </p>
         </div>
 
-        {canCreateCampaign(user.role) && (
+        {(canCreateCampaign(user.role) || isSuperAdmin(user.id)) && (
           <Link
             href="/campaigns/new"
             className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/20 transition-all hover:from-indigo-700 hover:to-indigo-800 hover:shadow-indigo-600/30 hover:-translate-y-0.5 active:translate-y-0"
