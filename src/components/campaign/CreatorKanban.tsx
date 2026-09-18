@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Role } from "@/lib/constants";
-import { canSetCommercials, canApproveCommercialEdit, canApproveMarginOverride, canOperateShortlist, isSuperAdmin } from "@/lib/rbac";
+import { canSetCommercials, canApproveCommercialEdit, canOperateShortlist, isSuperAdmin } from "@/lib/rbac";
 import {
   PLATFORM_LABELS,
   creatorKanbanColumn,
@@ -1411,11 +1411,7 @@ function ShortlistCreatorRow({
         <EditableNumberCell
           value={creator.quotedCost}
           prefix="₹"
-          // Brand Solutions/CXO can also touch this cell — not to set prices
-          // day-to-day, but so they can actually be the "Brand Solutions
-          // sign-off" the margin-floor error message below points a Campaign
-          // Manager to (see canApproveMarginOverride in rbac.ts).
-          editable={role === "CAMPAIGN_MANAGER" || canApproveMarginOverride(role) || superAdmin}
+          editable={role === "CAMPAIGN_MANAGER" || superAdmin}
           onSave={(v) => withRefresh(updateCreatorShortlist(creator.id, { quotedCost: v }))}
           textClassName="font-bold text-slate-900 dark:text-white"
         />

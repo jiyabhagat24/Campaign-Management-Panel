@@ -6,7 +6,7 @@ import bcrypt from "bcryptjs";
 import { requireUser } from "@/lib/auth";
 import { logActivity } from "@/lib/activity";
 import { notify } from "@/lib/notify";
-import { canApproveCommercialEdit, canSetCommercials, canApproveMarginOverride, canSeeInternalCost, canManageTeam, canManageClients, canCreateCampaign, canDeleteCampaign, canOperateShortlist, isClient, isSuperAdmin } from "@/lib/rbac";
+import { canApproveCommercialEdit, canSetCommercials, canSeeInternalCost, canManageTeam, canManageClients, canCreateCampaign, canDeleteCampaign, canOperateShortlist, isClient, isSuperAdmin } from "@/lib/rbac";
 import {
   DEFAULT_SLA,
   type Stage,
@@ -849,24 +849,6 @@ export async function updateCreatorShortlist(
     negativeCostError(fields.finalQuotedCost, "Final quoted cost");
   if (negativeError) return { error: negativeError };
 
-  // Gate G11: block a quoted-cost save that leaves less than 12% margin —
-  // uses whatever internal cost this same call sets, else the stored one.
-  // Brand Solutions/CXO (canApproveMarginOverride) and the superadmin can
-  // save through this anyway — that's the actual "Brand Solutions sign-off"
-  // the error message below points people to; a Campaign Manager alone
-  // cannot.
-  let marginOverridden = false;
-  if (fields.quotedCost !== undefined && fields.quotedCost !== null) {
-    const internalCostForCheck = fields.internalCost !== undefined ? fields.internalCost : creator.internalCost;
-    const marginError = checkMarginFloor(fields.quotedCost, internalCostForCheck);
-    if (marginError) {
-      if (!canApproveMarginOverride(user.role) && !isSuperAdmin(user.id)) {
-        return { error: marginError };
-      }
-      marginOverridden = true;
-    }
-  }
-
   const { insightsLinks, ...rest } = fields;
   await prisma.creator.update({
     where: { id: creatorId },
@@ -881,17 +863,6 @@ export async function updateCreatorShortlist(
     },
   });
 
-  if (marginOverridden) {
-    await logActivity({
-      campaignId: creator.campaignId,
-      actorId: user.id,
-      actorName: user.name,
-      action: "MARGIN_FLOOR_OVERRIDDEN",
-      entityType: "Creator",
-      entityId: creatorId,
-      meta: { quotedCost: fields.quotedCost, internalCost: fields.internalCost ?? creator.internalCost },
-    });
-  }
 
   revalidatePath(`/campaigns/${creator.campaignId}`);
   return { error: null };
@@ -1649,22 +1620,6 @@ function negativeCostError(value: number | null | undefined, label: string): str
   return null;
 }
 
-// Gate G11: quoted cost can't be saved if it leaves less than a 12% margin
-// over internal cost — that needs Brand Solutions/CXO sign-off
-// (canApproveMarginOverride in rbac.ts) rather than silently applying a
-// thin-margin price. Returns the message instead of throwing: a thrown
-// Server Action error has its .message stripped by Next.js in production
-// before it reaches the client, so a validation message like this one would
-// never actually be visible to whoever tripped it (see updateCreatorShortlist).
-const MARGIN_FLOOR_PERCENT = 12;
-function checkMarginFloor(quotedCost: number, internalCost: number | null): string | null {
-  if (internalCost === null || internalCost <= 0 || quotedCost <= 0) return null;
-  const marginPercent = ((quotedCost - internalCost) / quotedCost) * 100;
-  if (marginPercent < MARGIN_FLOOR_PERCENT) {
-    return `This price leaves only ${marginPercent.toFixed(1)}% margin, below the ${MARGIN_FLOOR_PERCENT}% floor. Get Brand Solutions sign-off before pricing this low.`;
-  }
-  return null;
-}
 
 export async function requestCommercialEdit(creatorId: string, newQuotedCost: number, reason: string) {
   const user = await requireUser();
