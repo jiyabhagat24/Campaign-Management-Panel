@@ -914,26 +914,32 @@ export async function publishQuotedCost(creatorId: string) {
 
 // Adds/removes which deliverable types a creator is tagged for (e.g. IR
 // pitches an extra platform after the initial shortlist).
+// Returns { error } instead of throwing (see updateCreatorShortlist above
+// for why) — a thrown Error's message gets stripped in a production build,
+// showing up client-side as an opaque "Minified React error #441" instead
+// of the actual reason.
 export async function addShortlistDeliverable(creatorId: string, deliverableType: ShortlistDeliverableType) {
   const user = await requireUser();
-  if (isClient(user.role)) throw new Error("Clients cannot add deliverables");
+  if (isClient(user.role)) return { error: "Clients cannot add deliverables" };
 
   const creator = await prisma.creator.findUnique({ where: { id: creatorId }, select: { campaignId: true } });
-  if (!creator) throw new Error("Creator not found");
+  if (!creator) return { error: "Creator not found" };
 
   await prisma.shortlistDeliverable.create({ data: { creatorId, deliverableType } });
   revalidatePath(`/campaigns/${creator.campaignId}`);
+  return { error: null };
 }
 
 export async function deleteShortlistDeliverable(id: string) {
   const user = await requireUser();
-  if (isClient(user.role)) throw new Error("Clients cannot delete deliverables");
+  if (isClient(user.role)) return { error: "Clients cannot delete deliverables" };
 
   const line = await prisma.shortlistDeliverable.findUnique({ where: { id }, select: { creator: { select: { campaignId: true } } } });
-  if (!line) throw new Error("Shortlist deliverable not found");
+  if (!line) return { error: "Shortlist deliverable not found" };
 
   await prisma.shortlistDeliverable.delete({ where: { id } });
   revalidatePath(`/campaigns/${line.creator.campaignId}`);
+  return { error: null };
 }
 
 // Client-only decision fields. Selecting ONBOARD on either clientIntent or

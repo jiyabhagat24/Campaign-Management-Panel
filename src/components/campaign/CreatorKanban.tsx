@@ -1045,6 +1045,18 @@ function ShortlistCreatorRow({
   const [refreshMsg, setRefreshMsg] = useState<string | null>(null);
   const router = useRouter();
 
+  // Optimistic local copy of the deliverable tags, so the +/- stepper below
+  // reflects a click immediately instead of waiting on a full-page
+  // router.refresh() round trip (that round trip refetches the entire
+  // campaign — every creator's every field — just to show one row's count
+  // change, which was the actual source of the "takes forever" lag).
+  // Re-synced whenever the server's own copy changes (a real refresh, or
+  // another edit on this row).
+  const [localDeliverables, setLocalDeliverables] = useState<ShortlistDeliverableRow[]>(creator.shortlistDeliverables);
+  useEffect(() => {
+    setLocalDeliverables(creator.shortlistDeliverables);
+  }, [creator.shortlistDeliverables]);
+
   // Every inline edit below saves via a server action directly (not a <form
   // action>), so Next.js won't auto-refresh this page's data on its own even
   // though the action revalidates the path server-side — wrap every save so
@@ -1069,6 +1081,43 @@ function ShortlistCreatorRow({
         window.alert(err?.message ?? "Something went wrong — that didn't save.");
         throw err;
       });
+  }
+
+  // Optimistic +1/-1 on the deliverable stepper — updates localDeliverables
+  // immediately, then saves in the background. No router.refresh() on the
+  // happy path (that's the whole point); only a genuine error triggers one,
+  // to resync local state with whatever's actually in the database.
+  async function bumpDeliverable(type: ShortlistDeliverableType, delta: 1 | -1) {
+    if (delta === 1) {
+      const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      setLocalDeliverables((prev) => [...prev, { id: tempId, deliverableType: type, executionDeliverableId: null }]);
+      try {
+        const result: any = await addShortlistDeliverable(creator.id, type);
+        if (result?.error) {
+          window.alert(result.error);
+          setLocalDeliverables((prev) => prev.filter((l) => l.id !== tempId));
+        }
+      } catch (err: any) {
+        window.alert(err?.message ?? "Failed to add this deliverable.");
+        setLocalDeliverables((prev) => prev.filter((l) => l.id !== tempId));
+      }
+    } else {
+      const group = groupShortlistDeliverables(localDeliverables).find((g) => g.type === type);
+      const idToRemove = group?.ids[group.ids.length - 1];
+      if (!idToRemove) return;
+      setLocalDeliverables((prev) => prev.filter((l) => l.id !== idToRemove));
+      if (idToRemove.startsWith("temp-")) return; // never persisted — nothing to delete server-side
+      try {
+        const result: any = await deleteShortlistDeliverable(idToRemove);
+        if (result?.error) {
+          window.alert(result.error);
+          router.refresh();
+        }
+      } catch (err: any) {
+        window.alert(err?.message ?? "Failed to remove this deliverable.");
+        router.refresh();
+      }
+    }
   }
 
   async function handleRefreshStats() {
@@ -1200,33 +1249,21 @@ function ShortlistCreatorRow({
           {/* Same deliverable type pitched more than once (e.g. 3x YT
               Shorts) collapses into one chip with a quantity + a +/-
               stepper, instead of one identical chip per unit. */}
-          {groupShortlistDeliverables(creator.shortlistDeliverables).map((group) => (
+          {groupShortlistDeliverables(localDeliverables).map((group) => (
             <span key={group.type} className="inline-flex items-center gap-1 rounded-lg bg-slate-100 border border-slate-200 px-2 py-1 text-xs font-bold text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300">
               {SHORTLIST_DELIVERABLE_LABELS[group.type as keyof typeof SHORTLIST_DELIVERABLE_LABELS] ?? group.type}
               {group.ids.length > 1 && <span className="text-indigo-600 dark:text-indigo-400">×{group.ids.length}</span>}
               {!isClientView && (
                 <span className="flex items-center">
                   <button
-                    onClick={async () => {
-                      try {
-                        await withRefresh(deleteShortlistDeliverable(group.ids[group.ids.length - 1]));
-                      } catch (err: any) {
-                        window.alert(err?.message ?? "Failed to remove this deliverable.");
-                      }
-                    }}
+                    onClick={() => bumpDeliverable(group.type as (typeof SHORTLIST_DELIVERABLE_TYPES)[number], -1)}
                     title={`Remove one ${SHORTLIST_DELIVERABLE_LABELS[group.type as keyof typeof SHORTLIST_DELIVERABLE_LABELS] ?? group.type}`}
                     className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400"
                   >
                     <Minus className="h-3 w-3" />
                   </button>
                   <button
-                    onClick={async () => {
-                      try {
-                        await withRefresh(addShortlistDeliverable(creator.id, group.type as (typeof SHORTLIST_DELIVERABLE_TYPES)[number]));
-                      } catch (err: any) {
-                        window.alert(err?.message ?? "Failed to add this deliverable.");
-                      }
-                    }}
+                    onClick={() => bumpDeliverable(group.type as (typeof SHORTLIST_DELIVERABLE_TYPES)[number], 1)}
                     title={`Add one more ${SHORTLIST_DELIVERABLE_LABELS[group.type as keyof typeof SHORTLIST_DELIVERABLE_LABELS] ?? group.type}`}
                     className="text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400"
                   >
@@ -1236,24 +1273,20 @@ function ShortlistCreatorRow({
               )}
             </span>
           ))}
-          {creator.shortlistDeliverables.length === 0 && <span className="text-xs text-slate-400 dark:text-slate-500">—</span>}
+          {localDeliverables.length === 0 && <span className="text-xs text-slate-400 dark:text-slate-500">—</span>}
           {!isClientView && (
             <select
               defaultValue=""
-              onChange={async (e) => {
+              onChange={(e) => {
                 const value = e.target.value;
                 if (!value) return;
                 e.target.value = "";
-                try {
-                  await withRefresh(addShortlistDeliverable(creator.id, value as (typeof SHORTLIST_DELIVERABLE_TYPES)[number]));
-                } catch (err: any) {
-                  window.alert(err?.message ?? "Failed to add this deliverable.");
-                }
+                bumpDeliverable(value as (typeof SHORTLIST_DELIVERABLE_TYPES)[number], 1);
               }}
               className="rounded-lg border border-dashed border-slate-300 bg-white px-1.5 py-1 text-xs font-semibold text-indigo-600 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-indigo-400"
             >
               <option value="">+ Add</option>
-              {SHORTLIST_DELIVERABLE_TYPES.filter((type) => !creator.shortlistDeliverables.some((l) => l.deliverableType === type)).map((type) => (
+              {SHORTLIST_DELIVERABLE_TYPES.filter((type) => !localDeliverables.some((l) => l.deliverableType === type)).map((type) => (
                 <option key={type} value={type}>{SHORTLIST_DELIVERABLE_LABELS[type]}</option>
               ))}
             </select>
