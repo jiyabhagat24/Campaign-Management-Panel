@@ -85,6 +85,22 @@ export default async function DashboardPage() {
     }).length;
 
     const onboardedCreators = c.creators.filter((cr) => cr.status === "ONBOARDED");
+    // Delayed/On Time — per CREATOR, not per campaign: a campaign's own
+    // goLiveDeadline is one optional top-level estimate, but each onboarded
+    // creator has their own effective deadline (same fallback as openFlags
+    // above), and a single campaign commonly has some creators overdue and
+    // others not. Counting whole campaigns as "delayed" the moment any one
+    // creator slips was overstating the problem (and understating "on
+    // time"); this sums actual overdue creators instead.
+    const delayedCreatorsCount = onboardedCreators.filter((cr) => {
+      const onboardedAt = cr.onboardedAt ? new Date(cr.onboardedAt) : null;
+      const effectiveDeadline = cr.goLiveDeadline
+        ? new Date(cr.goLiveDeadline)
+        : onboardedAt
+        ? new Date(onboardedAt.getTime() + DEFAULT_GO_LIVE_DAYS * 24 * 60 * 60 * 1000)
+        : null;
+      return effectiveDeadline ? now > effectiveDeadline.getTime() : false;
+    }).length;
     // "Quoted value" for Total Active Value / margin — each onboarded
     // creator's own Final Quoted Cost (falling back to Quoted Cost), same
     // convention as the Revenue Breakdown Chart. NOT Campaign.budgetQuoted:
@@ -111,6 +127,7 @@ export default async function DashboardPage() {
       brandSolutionsPoc,
       campaignManager,
       onboardedCount: onboardedCreators.length,
+      delayedCreatorsCount,
       deliverablesLive: deliverables.filter((d) => d.liveLink).length,
       deliverablesTotal: deliverables.length,
       // Only ONBOARDED creators are actually committed spend — a creator

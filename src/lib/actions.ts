@@ -960,13 +960,16 @@ export async function setCreatorClientDecision(
   const creator = await prisma.creator.findUnique({ where: { id: creatorId }, include: { shortlistDeliverables: true } });
   if (!creator) throw new Error("Creator not found");
 
-  // Onboarding only fires off the FINAL decision, not the early "Client's
-  // Intent" read — that field is just a temperature check during
-  // negotiation. The client can only lock in ONBOARD on Client's Final
-  // Intent once TBM has actually set a Final Quoted Cost; otherwise a
-  // client could jump straight from "Interested" to onboarded before
-  // commercials are even settled.
-  if ((fields.clientIntent === "ONBOARD" || fields.clientFinalIntent === "ONBOARD") && creator.finalQuotedCost === null) {
+  // Two ways to onboard: accept the published Quoted Cost as-is (Client's
+  // Intent = ONBOARD, no negotiation needed — just needs a published
+  // quotedCost) or lock in a separately negotiated Final Quoted Cost
+  // (Client's Final Intent = ONBOARD, needs finalQuotedCost). Either way
+  // commercials must actually be settled before a client can jump straight
+  // to onboarded.
+  if (fields.clientIntent === "ONBOARD" && creator.quotedCost === null) {
+    throw new Error("No quoted cost has been published yet — ask TBM to publish a Quoted Cost before onboarding this creator.");
+  }
+  if (fields.clientFinalIntent === "ONBOARD" && creator.finalQuotedCost === null) {
     throw new Error("Final costing hasn't been set yet — ask TBM to lock in the Final Quoted Cost before onboarding this creator.");
   }
 
@@ -983,7 +986,17 @@ export async function setCreatorClientDecision(
     const defaultDeadline = new Date(Date.now() + campaign.slaOnboardToGoLiveDays * 24 * 60 * 60 * 1000);
     await prisma.creator.update({
       where: { id: creatorId },
-      data: { status: "ONBOARDED", onboardedAt: new Date(), commercialsLocked: true, goLiveDeadline: defaultDeadline, ballOwner: "TBM" },
+      data: {
+        status: "ONBOARDED",
+        onboardedAt: new Date(),
+        commercialsLocked: true,
+        goLiveDeadline: defaultDeadline,
+        ballOwner: "TBM",
+        // Onboarded straight off Client's Intent with no negotiation — the
+        // accepted Quoted Cost IS the final cost, so lock it in here rather
+        // than leaving Final Quoted Cost blank.
+        ...(creator.finalQuotedCost === null ? { finalQuotedCost: creator.quotedCost } : {}),
+      },
     });
   } else if (wantsReject && creator.status !== "ONBOARDED") {
     await prisma.creator.update({ where: { id: creatorId }, data: { status: "CLIENT_REJECTED", ballOwner: "TBM" } });
@@ -1524,9 +1537,20 @@ export async function resumeFromPause(creatorId: string) {
 
 // POC = the IR Executive who owns every reminder/flag on this creator once
 // onboarded. Internal-only; clients never assign this.
+// POC assignment is Campaign-Manager-exclusive (same "one role owns this
+// field" pattern as canSetCommercials for Quoted Cost). Whoever's newly put
+// on or taken off the POC seat gets notified — both on the very first
+// assignment and on every later reassignment.
 export async function assignCreatorPOC(creatorId: string, userId: string | null) {
   const user = await requireUser();
-  if (isClient(user.role)) throw new Error("Clients cannot assign a POC");
+  if (!canSetCommercials(user.role) && !isSuperAdmin(user.id)) throw new Error("Only a Campaign Manager can assign the POC.");
+
+  const existing = await prisma.creator.findUnique({
+    where: { id: creatorId },
+    select: { pocUserId: true, name: true, campaignId: true, campaign: { select: { name: true } } },
+  });
+  if (!existing) throw new Error("Creator not found");
+  const oldPocUserId = existing.pocUserId;
 
   const creator = await prisma.creator.update({ where: { id: creatorId }, data: { pocUserId: userId } });
   await logActivity({
@@ -1538,6 +1562,26 @@ export async function assignCreatorPOC(creatorId: string, userId: string | null)
     entityId: creator.id,
     meta: { pocUserId: userId },
   });
+
+  if (oldPocUserId !== userId) {
+    if (userId) {
+      await notify({
+        userId,
+        channel: "INSTANT",
+        title: `You're the POC on ${existing.name}`,
+        body: `${user.name} made you the POC for ${existing.name} on ${existing.campaign.name}.`,
+      });
+    }
+    if (oldPocUserId && oldPocUserId !== userId) {
+      await notify({
+        userId: oldPocUserId,
+        channel: "INSTANT",
+        title: `POC reassigned on ${existing.name}`,
+        body: `${user.name} moved the POC for ${existing.name} on ${existing.campaign.name} to someone else.`,
+      });
+    }
+  }
+
   revalidatePath(`/campaigns/${creator.campaignId}`);
 }
 
@@ -1743,6 +1787,37 @@ export async function updateScriptStatus(deliverableId: string, scriptStatus: st
     entityType: "Deliverable",
     entityId: deliverable.id,
     meta: { scriptStatus },
+  });
+  revalidatePath(`/campaigns/${deliverable.creator.campaignId}`);
+}
+
+// Target date for script sign-off — a plain manual date, kept as its own
+// setter (not bundled into updateScriptStatus) so editing it never
+// re-triggers the "just approved" side effects (scriptApprovedAt/snapshot)
+// on a deliverable whose script was already approved earlier.
+export async function updateScriptApprovalDeadline(deliverableId: string, deadline: string) {
+  const user = await requireUser();
+  if (isClient(user.role)) throw new Error("Clients cannot set this deadline");
+
+  const deliverable = await prisma.deliverable.update({
+    where: { id: deliverableId },
+    data: { scriptApprovalDeadline: deadline ? new Date(deadline) : null },
+    include: { creator: true },
+  });
+  revalidatePath(`/campaigns/${deliverable.creator.campaignId}`);
+}
+
+// Target date for the video draft — same standalone-setter reasoning as
+// updateScriptApprovalDeadline above (updateContentStatus re-approving/
+// re-stamping is a side effect editing a date shouldn't trigger).
+export async function updateVideoDraftDeadline(deliverableId: string, deadline: string) {
+  const user = await requireUser();
+  if (isClient(user.role)) throw new Error("Clients cannot set this deadline");
+
+  const deliverable = await prisma.deliverable.update({
+    where: { id: deliverableId },
+    data: { videoDraftDeadline: deadline ? new Date(deadline) : null },
+    include: { creator: true },
   });
   revalidatePath(`/campaigns/${deliverable.creator.campaignId}`);
 }

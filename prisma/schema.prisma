@@ -552,16 +552,23 @@ model Deliverable {
 
   // Stage 5/6: product + script
   productStatus String? // ORDERED | IN_TRANSIT | DELIVERED
-  productEta    DateTime?
+  productEta    DateTime? // "Date of delivery" — manually entered by IR
   scriptDocUrl  String?
   scriptStatus  String? // SENT_FOR_APPROVAL | FEEDBACK | REVISED | APPROVED
   scriptApprovedSnapshotUrl String? // frozen copy, written once on approval
   scriptApprovedAt DateTime?
+  // Target date for script sign-off — manually entered by IR, distinct from
+  // scriptApprovedAt above (which is an auto timestamp of when it actually
+  // happened).
+  scriptApprovalDeadline DateTime?
 
   // Stage 7: content
   contentStatus String? // IN_SHOOT | INTERNAL_APPROVAL | EXTERNAL_APPROVAL | CHANGES | APPROVED
   contentApprovedSnapshotUrl String?
   contentApprovedAt DateTime?
+  // Target date for the video draft — manually entered by IR, same
+  // "planned vs. actual" split as scriptApprovalDeadline above.
+  videoDraftDeadline DateTime?
 
   // Stage 8-10: go live + tracking
   liveLink   String?

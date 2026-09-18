@@ -26,6 +26,9 @@ export type DashboardCampaignRow = {
   brandSolutionsPoc: string | null;
   campaignManager: string | null;
   onboardedCount: number;
+  // How many of this campaign's onboarded creators have their own go-live
+  // deadline breached — see delayedCreatorsCount in dashboard/page.tsx.
+  delayedCreatorsCount: number;
   deliverablesLive: number;
   deliverablesTotal: number;
   internalValue: number;
@@ -154,12 +157,13 @@ export default function PortfolioDashboardClient({
     totalActiveCampaignValue > 0
       ? ((totalActiveCampaignValue - totalInternalCampaignValue) / totalActiveCampaignValue) * 100
       : 0;
-  // "On time" / "Delayed" — active campaigns split by whether their go-live
-  // deadline has been breached, same isGoLiveBreached check used everywhere
-  // else in this file. A campaign with no deadline set yet counts as on
-  // time (nothing to be late against).
-  const onTimeCount = activeOnly.filter((c) => !isGoLiveBreached(c.goLiveDeadline ? new Date(c.goLiveDeadline) : null)).length;
-  const delayedCount = activeOnly.length - onTimeCount;
+  // "On time" / "Delayed" — counted per onboarded CREATOR within active
+  // campaigns, not per campaign: a single campaign commonly has some
+  // creators past their go-live deadline and others still fine, so counting
+  // the whole campaign as "delayed" the moment one creator slips overstated
+  // the problem (see delayedCreatorsCount in dashboard/page.tsx).
+  const delayedCount = activeOnly.reduce((s, c) => s + c.delayedCreatorsCount, 0);
+  const onTimeCount = activeOnly.reduce((s, c) => s + c.onboardedCount, 0) - delayedCount;
 
   // Manually-entered finance figures (see FinanceRow on the campaign page) —
   // summed across the finance-visible set, null treated as 0.

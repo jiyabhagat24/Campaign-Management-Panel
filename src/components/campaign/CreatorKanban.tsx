@@ -22,7 +22,9 @@ import {
   updateDeliverableTitle,
   updateProductStatus,
   updateScriptStatus,
+  updateScriptApprovalDeadline,
   updateContentStatus,
+  updateVideoDraftDeadline,
   deleteDeliverable,
   addLiveLink,
   lookupInstagramProfileAction,
@@ -73,9 +75,12 @@ export type Deliverable = {
   title: string | null;
   status: string;
   productStatus: string | null;
+  productEta?: string | Date | null;
   scriptStatus: string | null;
   scriptDocUrl: string | null;
+  scriptApprovalDeadline?: string | Date | null;
   contentStatus: string | null;
+  videoDraftDeadline?: string | Date | null;
   liveLink: string | null;
   liveDate: string | Date | null;
   views: number | null;
@@ -255,7 +260,7 @@ export default function CreatorKanban({
       {/* Tab Navigation */}
       <div className="flex items-center gap-2 border-b border-slate-200/80 dark:border-slate-800 pb-0.5">
         <TabButton active={tab === "SHORTLIST"} onClick={() => setTab("SHORTLIST")} label="Shortlist" count={shortlist.length} />
-        <TabButton active={tab === "ONBOARDING"} onClick={() => setTab("ONBOARDING")} label="Onboarding" count={onboarding.length} />
+        <TabButton active={tab === "ONBOARDING"} onClick={() => setTab("ONBOARDING")} label="Onboarded" count={onboarding.length} />
         <TabButton active={tab === "REPORT"} onClick={() => setTab("REPORT")} label="Campaign Report" />
       </div>
 
@@ -381,13 +386,19 @@ export default function CreatorKanban({
                     <th className="sticky top-0 z-30 w-[180px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Median Views</th>
                     <th className="sticky top-0 z-30 w-[150px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Median ER%</th>
                     <th className="sticky top-0 z-30 w-[110px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Insights</th>
+                    {/* IR team/TBM eyes only — never shown to the client, see
+                        canSeeCost gating on the cell below. */}
+                    {canSeeCost && <th className="sticky top-0 z-30 w-[150px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Internal Cost</th>}
                     <th className="sticky top-0 z-30 w-[160px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Final Quoted Cost</th>
                     <th className="sticky top-0 z-30 w-[160px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">POC</th>
                     <th className="sticky top-0 z-30 w-[160px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Product Status</th>
+                    <th className="sticky top-0 z-30 w-[150px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Date of Delivery</th>
                     <th className="sticky top-0 z-30 w-[170px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Script Status</th>
                     <th className="sticky top-0 z-30 w-[140px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Script Link</th>
+                    <th className="sticky top-0 z-30 w-[180px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Deadline for Script Approval</th>
                     <th className="sticky top-0 z-30 w-[170px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Video Status</th>
                     <th className="sticky top-0 z-30 w-[140px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Live Video Link</th>
+                    <th className="sticky top-0 z-30 w-[180px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Deadline for Video Draft</th>
                     <th className="sticky top-0 z-30 w-[170px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Deadline</th>
                     <th className="sticky top-0 z-30 w-[150px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Time Remaining</th>
                     <th className="sticky top-0 z-30 w-[190px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Last Action</th>
@@ -405,13 +416,14 @@ export default function CreatorKanban({
                       activityLogs={activityLogs}
                       canApproveCost={canApproveCommercialEdit(role) || superAdmin}
                       canSetCost={canSetCommercials(role) || superAdmin}
+                      canSeeCost={canSeeCost}
                       role={role}
                       superAdmin={superAdmin}
                     />
                   ))}
                   {onboarding.length === 0 && (
                     <tr>
-                      <td colSpan={19} className="px-5 py-12 text-center text-slate-400 dark:text-slate-500">
+                      <td colSpan={canSeeCost ? 23 : 22} className="px-5 py-12 text-center text-slate-400 dark:text-slate-500">
                         <Users className="mx-auto h-8 w-8 text-slate-300 dark:text-slate-600 mb-2" />
                         <p className="text-sm font-medium">No influencers onboarded yet.</p>
                       </td>
@@ -1388,8 +1400,12 @@ function ShortlistCreatorRow({
             className="w-28 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
           >
             <option value="">—</option>
-            <option value="ONBOARD" disabled={creator.finalQuotedCost === null}>
-              {creator.finalQuotedCost === null ? "Onboard (awaiting final costing)" : "Onboard"}
+            {/* Accepting the published Quoted Cost as-is (no negotiation)
+                onboards directly off that number — Client's Final Intent
+                below is only needed once they've actually negotiated a
+                separate Final Quoted Cost. */}
+            <option value="ONBOARD" disabled={creator.quotedCost === null}>
+              {creator.quotedCost === null ? "Onboard (awaiting quoted cost)" : "Onboard"}
             </option>
             <option value="REJECTED">Reject</option>
             <option value="NEGOTIATING">Negotiate To</option>
@@ -1644,6 +1660,7 @@ function OnboardingCreatorRow({
   activityLogs,
   canApproveCost,
   canSetCost,
+  canSeeCost,
   role,
   superAdmin = false,
 }: {
@@ -1653,6 +1670,7 @@ function OnboardingCreatorRow({
   activityLogs: ActivityLogEntry[];
   canApproveCost: boolean;
   canSetCost: boolean;
+  canSeeCost: boolean;
   role: Role;
   superAdmin?: boolean;
 }) {
@@ -2066,6 +2084,19 @@ function OnboardingCreatorRow({
         )}
       </td>
 
+      {/* Internal Cost — IR team/TBM eyes only, same field carried over
+          from Shortlisting (one source of truth for what a creator costs).
+          Never rendered for a client (canSeeCost is false for them). */}
+      {canSeeCost && (
+        <EditableNumberCell
+          value={creator.internalCost ?? null}
+          prefix="₹"
+          editable={canOperateShortlist(role) || superAdmin}
+          onSave={(v) => withRefresh(updateCreatorShortlist(creator.id, { internalCost: v }))}
+          textClassName="text-indigo-600 dark:text-indigo-400"
+        />
+      )}
+
       {/* Final Quoted Cost — locked. Editing after lock requires a reason +
           dual CM/Brand-Solutions approval (requestFinalCostEdit). */}
       <td className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
@@ -2110,9 +2141,10 @@ function OnboardingCreatorRow({
         )}
       </td>
 
-      {/* POC */}
+      {/* POC — Campaign Manager exclusively assigns/reassigns this (everyone
+          else, including IR Manager/Executive, gets a read-only name). */}
       <td className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
-        {isClientView ? (
+        {isClientView || !(role === "CAMPAIGN_MANAGER" || superAdmin) ? (
           <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">{creator.poc?.name ?? "—"}</span>
         ) : (
           <select
@@ -2157,6 +2189,33 @@ function OnboardingCreatorRow({
                 )}
               </div>
             ))}
+          </div>
+        )}
+      </td>
+
+      {/* Date of Delivery — per deliverable, paired with Product Status
+          above. Reuses updateProductStatus (no side effects on other
+          fields — it only ever touches productStatus/productEta). */}
+      <td className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
+        {creator.deliverables.length === 0 ? (
+          <span className="text-xs text-slate-400 dark:text-slate-500">—</span>
+        ) : (
+          <div className="flex flex-col gap-1">
+            {creator.deliverables.map((d) =>
+              isClientView ? (
+                <span key={d.id} className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                  {d.productEta ? new Date(d.productEta).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—"}
+                </span>
+              ) : (
+                <input
+                  key={d.id}
+                  type="date"
+                  defaultValue={d.productEta ? new Date(d.productEta).toISOString().slice(0, 10) : ""}
+                  onChange={(e) => withRefresh(updateProductStatus(d.id, d.productStatus ?? "", e.target.value || undefined))}
+                  className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+                />
+              )
+            )}
           </div>
         )}
       </td>
@@ -2237,6 +2296,32 @@ function OnboardingCreatorRow({
         )}
       </td>
 
+      {/* Deadline for Script Approval — per deliverable, own setter so
+          editing it never re-triggers the approval snapshot/timestamp. */}
+      <td className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
+        {creator.deliverables.length === 0 ? (
+          <span className="text-xs text-slate-400 dark:text-slate-500">—</span>
+        ) : (
+          <div className="flex flex-col gap-1">
+            {creator.deliverables.map((d) =>
+              isClientView ? (
+                <span key={d.id} className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                  {d.scriptApprovalDeadline ? new Date(d.scriptApprovalDeadline).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—"}
+                </span>
+              ) : (
+                <input
+                  key={d.id}
+                  type="date"
+                  defaultValue={d.scriptApprovalDeadline ? new Date(d.scriptApprovalDeadline).toISOString().slice(0, 10) : ""}
+                  onChange={(e) => withRefresh(updateScriptApprovalDeadline(d.id, e.target.value))}
+                  className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+                />
+              )
+            )}
+          </div>
+        )}
+      </td>
+
       {/* Video / Content Status — per deliverable */}
       <td className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
         {creator.deliverables.length === 0 ? (
@@ -2270,14 +2355,16 @@ function OnboardingCreatorRow({
         )}
       </td>
 
-      {/* Live Video Link — per deliverable; pasting one triggers tracking */}
+      {/* Live Video Link — per deliverable; pasting one triggers tracking.
+          Stays editable even after a link is set, so a wrong paste can be
+          corrected instead of being stuck read-only. */}
       <td className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
         {creator.deliverables.length === 0 ? (
           <span className="text-xs text-slate-400 dark:text-slate-500">—</span>
         ) : (
           <div className="flex flex-col gap-1">
             {creator.deliverables.map((d) =>
-              isClientView || d.liveLink ? (
+              isClientView ? (
                 <div key={d.id}>
                   {d.liveLink ? (
                     <a href={d.liveLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline">
@@ -2292,17 +2379,44 @@ function OnboardingCreatorRow({
                 <input
                   key={d.id}
                   type="url"
+                  defaultValue={d.liveLink ?? ""}
                   placeholder="Paste live URL"
                   onBlur={async (e) => {
                     const next = e.target.value.trim();
-                    if (!next) return;
+                    if (!next || next === (d.liveLink ?? "")) return;
                     try {
                       await withRefresh(addLiveLink(d.id, next));
                     } catch (err: any) {
                       window.alert(err?.message ?? "Failed to save — value was not stored.");
-                      e.target.value = "";
+                      e.target.value = d.liveLink ?? "";
                     }
                   }}
+                  className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+                />
+              )
+            )}
+          </div>
+        )}
+      </td>
+
+      {/* Deadline for Video Draft — per deliverable, own setter so editing
+          it never re-triggers the content-approval side effects. */}
+      <td className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
+        {creator.deliverables.length === 0 ? (
+          <span className="text-xs text-slate-400 dark:text-slate-500">—</span>
+        ) : (
+          <div className="flex flex-col gap-1">
+            {creator.deliverables.map((d) =>
+              isClientView ? (
+                <span key={d.id} className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                  {d.videoDraftDeadline ? new Date(d.videoDraftDeadline).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—"}
+                </span>
+              ) : (
+                <input
+                  key={d.id}
+                  type="date"
+                  defaultValue={d.videoDraftDeadline ? new Date(d.videoDraftDeadline).toISOString().slice(0, 10) : ""}
+                  onChange={(e) => withRefresh(updateVideoDraftDeadline(d.id, e.target.value))}
                   className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
                 />
               )
