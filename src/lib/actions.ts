@@ -235,6 +235,29 @@ export async function createCampaign(formData: FormData) {
   return campaign.id;
 }
 
+// Draft/Assigned -> Active, fully automatic: fires the first time a creator
+// actually lands on the campaign's shortlist (see addCreator), same spirit
+// as the automatic Draft -> Assigned transition in assignTeamMember below.
+// A no-op for any campaign already past Assigned (Active/OnHold/Closed/
+// Cancelled) — this only ever moves a campaign forward out of the two
+// "nothing's happening yet" states, never overrides a status someone set
+// deliberately (On Hold, Closed, Cancelled).
+async function autoActivateCampaign(campaignId: string, actorId: string, actorName: string) {
+  const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { status: true } });
+  if (campaign?.status !== "DRAFT" && campaign?.status !== "ASSIGNED") return;
+
+  await prisma.campaign.update({ where: { id: campaignId }, data: { status: "ACTIVE" } });
+  await logActivity({
+    campaignId,
+    actorId,
+    actorName,
+    action: "CAMPAIGN_STATUS_CHANGED",
+    entityType: "Campaign",
+    entityId: campaignId,
+    meta: { status: "ACTIVE", auto: true, trigger: "first_creator_shortlisted" },
+  });
+}
+
 // Sets Draft/Assigned/Active/On Hold/Closed/Cancelled on a campaign — used
 // by the status dropdown in the dashboard's Campaign Table (and anywhere
 // else that needs it later). Task #11: DRAFT -> ASSIGNED is automatic (see
@@ -735,6 +758,8 @@ export async function addCreator(campaignId: string, formData: FormData, force =
       meta: { name, channelHandle },
     });
 
+    await autoActivateCampaign(campaignId, user.id, user.name);
+
     revalidatePath(`/campaigns/${campaignId}`);
     return updated;
   }
@@ -787,6 +812,13 @@ export async function addCreator(campaignId: string, formData: FormData, force =
     entityId: creator.id,
     meta: { name, deliverableTypes },
   });
+
+  // Draft/Assigned -> Active fires automatically the moment real work
+  // actually starts on the campaign (the first creator hits the
+  // shortlist) — same "automatic per real activity" pattern as Draft ->
+  // Assigned in assignTeamMember, so nobody has to remember to flip a
+  // dropdown by hand.
+  await autoActivateCampaign(campaignId, user.id, user.name);
 
   revalidatePath(`/campaigns/${campaignId}`);
   return creator;

@@ -317,8 +317,8 @@ export default function CreatorKanban({
                       <th className="sticky top-0 z-30 w-[160px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Audience Size</th>
                       <th className="sticky top-0 z-30 w-[180px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Median Views</th>
                       <th className="sticky top-0 z-30 w-[150px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Median ER%</th>
-                      <th className="sticky top-0 z-30 w-[110px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Insights</th>
-                      {canSeeCost && <th className="sticky top-0 z-30 w-[150px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Internal Cost</th>}
+                      <th className="sticky top-0 z-30 w-[120px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Insights</th>
+                      {canSeeCost && <th className="sticky top-0 z-30 w-[170px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Internal Cost</th>}
                       {/* Quoted Cost is the price quoted to the client, so
                           clients do see this column — only IR Intern is
                           excluded (Gate G3), not the client. */}
@@ -331,13 +331,13 @@ export default function CreatorKanban({
                       {!isClientView && role !== "IR_INTERN" && (
                         <th className="sticky top-0 z-30 w-[130px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Publish</th>
                       )}
-                      <th className="sticky top-0 z-30 w-[170px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Client&apos;s Intent</th>
-                      <th className="sticky top-0 z-30 w-[200px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Client&apos;s Counter Cost</th>
+                      <th className="sticky top-0 z-30 w-[190px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Client&apos;s Intent</th>
+                      <th className="sticky top-0 z-30 w-[230px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Client&apos;s Counter Cost</th>
                       <th className="sticky top-0 z-30 w-[220px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Client&apos;s Remark</th>
-                      <th className="sticky top-0 z-30 w-[150px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Final Quoted Cost</th>
-                      <th className="sticky top-0 z-30 w-[200px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Client&apos;s Final Intent</th>
+                      <th className="sticky top-0 z-30 w-[190px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Final Quoted Cost</th>
+                      <th className="sticky top-0 z-30 w-[220px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Client&apos;s Final Intent</th>
                       {canOperateShortlist(role) || canSetCommercials(role) || superAdmin ? (
-                        <th className="sticky top-0 z-30 w-[70px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Remove</th>
+                        <th className="sticky top-0 z-30 w-[100px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Remove</th>
                       ) : (
                         <th className="sticky top-0 z-30 w-6 border-b border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800" aria-hidden />
                       )}
@@ -385,22 +385,22 @@ export default function CreatorKanban({
                     <th className="sticky top-0 z-30 w-[160px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Audience Size</th>
                     <th className="sticky top-0 z-30 w-[180px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Median Views</th>
                     <th className="sticky top-0 z-30 w-[150px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Median ER%</th>
-                    <th className="sticky top-0 z-30 w-[110px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Insights</th>
+                    <th className="sticky top-0 z-30 w-[120px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Insights</th>
                     {/* IR team/TBM eyes only — never shown to the client, see
                         canSeeCost gating on the cell below. */}
-                    {canSeeCost && <th className="sticky top-0 z-30 w-[150px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Internal Cost</th>}
-                    <th className="sticky top-0 z-30 w-[160px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Final Quoted Cost</th>
+                    {canSeeCost && <th className="sticky top-0 z-30 w-[170px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Internal Cost</th>}
+                    <th className="sticky top-0 z-30 w-[190px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Final Quoted Cost</th>
                     <th className="sticky top-0 z-30 w-[160px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">POC</th>
-                    <th className="sticky top-0 z-30 w-[160px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Product Status</th>
-                    <th className="sticky top-0 z-30 w-[150px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Date of Delivery</th>
-                    <th className="sticky top-0 z-30 w-[170px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Script Status</th>
-                    <th className="sticky top-0 z-30 w-[140px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Script Link</th>
-                    <th className="sticky top-0 z-30 w-[230px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Deadline for Script Approval</th>
-                    <th className="sticky top-0 z-30 w-[170px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Video Status</th>
-                    <th className="sticky top-0 z-30 w-[140px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Video Link</th>
-                    <th className="sticky top-0 z-30 w-[220px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Deadline for Video Draft</th>
+                    <th className="sticky top-0 z-30 w-[220px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Product Status</th>
+                    <th className="sticky top-0 z-30 w-[190px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Date of Delivery</th>
+                    <th className="sticky top-0 z-30 w-[280px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Script Status</th>
+                    <th className="sticky top-0 z-30 w-[150px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Script Link</th>
+                    <th className="sticky top-0 z-30 w-[260px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Deadline for Script Approval</th>
+                    <th className="sticky top-0 z-30 w-[270px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Video Status</th>
+                    <th className="sticky top-0 z-30 w-[150px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Video Link</th>
+                    <th className="sticky top-0 z-30 w-[250px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Deadline for Video Draft</th>
                     <th className="sticky top-0 z-30 w-[170px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Deadline</th>
-                    <th className="sticky top-0 z-30 w-[150px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Time Remaining</th>
+                    <th className="sticky top-0 z-30 w-[170px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Time Remaining</th>
                     <th className="sticky top-0 z-30 w-[190px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Last Action</th>
                     <th className="sticky top-0 z-30 w-[260px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Flag / Alert</th>
                     <th className="sticky top-0 z-30 w-6 border-b border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800" aria-hidden />
@@ -1467,7 +1467,7 @@ function ShortlistCreatorRow({
           <select
             defaultValue={creator.clientIntent ?? ""}
             onChange={(e) => withRefresh(setCreatorClientDecision(creator.id, { clientIntent: e.target.value || null }))}
-            className="w-28 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+            className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
           >
             <option value="">—</option>
             {/* Accepting the published Quoted Cost as-is (no negotiation)
@@ -1530,7 +1530,7 @@ function ShortlistCreatorRow({
           <select
             defaultValue={creator.clientFinalIntent ?? ""}
             onChange={(e) => withRefresh(setCreatorClientDecision(creator.id, { clientFinalIntent: e.target.value || null }))}
-            className="w-28 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+            className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
           >
             <option value="">—</option>
             {(["ONBOARD", "REJECTED"] as const).map((o) => (
