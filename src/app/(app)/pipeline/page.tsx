@@ -159,22 +159,30 @@ export default async function PipelinePage() {
                             <span>{breached ? "Go-live SLA Breached" : "Go-live At Risk"}</span>
                           </div>
                         )}
+
+                        {!member && (
+                          <p className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-600">
+                            View report →
+                          </p>
+                        )}
                       </div>
                     </div>
                   );
 
                   if (!member) {
-                    // Visible for context only — not a member of this campaign's
-                    // team, so it's greyed out and neither clickable nor
-                    // manageable from here.
+                    // Not a member of this campaign's team, so it's greyed
+                    // out and not manageable from here — but it still links
+                    // to a read-only report view (no shortlist, no cost, no
+                    // team detail), rather than being fully dead. Visible
+                    // for context; report accessible on request.
                     return (
-                      <div
+                      <Link
                         key={c.id}
-                        aria-disabled="true"
-                        className="block cursor-default select-none rounded-xl border border-slate-200/60 dark:border-slate-800/60 bg-slate-50/60 dark:bg-slate-900/40 p-4 opacity-60"
+                        href={`/campaigns/${c.id}/report`}
+                        className="block cursor-pointer select-none rounded-xl border border-slate-200/60 dark:border-slate-800/60 bg-slate-50/60 dark:bg-slate-900/40 p-4 opacity-60 transition-opacity hover:opacity-80"
                       >
                         {cardBody}
-                      </div>
+                      </Link>
                     );
                   }
 

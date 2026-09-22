@@ -2,7 +2,41 @@
 
 import { ExternalLink, TrendingUp, MessageCircle } from "lucide-react";
 import { PLATFORM_LABELS } from "@/lib/constants";
-import type { Creator, Deliverable } from "@/components/campaign/CreatorKanban";
+
+// Deliberately narrower than CreatorKanban's full Creator/Deliverable types
+// (which carry internalCost, quotedCost, negotiation history, etc.) — this
+// report only ever touches finalQuotedCost and public performance numbers,
+// so that's all it declares. That makes it safe to feed from a lean, hand-
+// picked Prisma `select` (see the standalone /campaigns/[id]/report page,
+// shown to internal staff who aren't on the campaign's team) without ever
+// having internalCost/quotedCost pass through this component's props, even
+// unrendered — CreatorKanban's full Creator[] still satisfies this type
+// structurally, so the existing embedded Report tab keeps working as-is.
+export type ReportDeliverable = {
+  id: string;
+  platform: string;
+  title: string | null;
+  liveLink: string | null;
+  liveDate: string | Date | null;
+  views: number | null;
+  likes: number | null;
+  comments: number | null;
+  shares?: number | null;
+  lastTrackedAt?: string | Date | null;
+};
+
+export type ReportCreator = {
+  id: string;
+  name: string;
+  channelHandle: string;
+  profileUrl: string | null;
+  youtubeUrl: string | null;
+  platformPrimary: string;
+  followers: number | null;
+  youtubeSubscribers?: number | null;
+  finalQuotedCost: number | null;
+  deliverables: ReportDeliverable[];
+};
 
 function inr(n: number): string {
   return `₹${Math.round(n).toLocaleString("en-IN")}`;
@@ -23,8 +57,8 @@ function isInstagram(platform: string) {
 }
 
 type LiveRow = {
-  creator: Creator;
-  deliverable: Deliverable;
+  creator: ReportCreator;
+  deliverable: ReportDeliverable;
   // A creator's finalQuotedCost is one number covering the whole deal, but
   // that deal can span several live deliverables (e.g. a Reel + a Collab
   // Reel). Splitting it evenly across the creator's own live deliverables
@@ -48,7 +82,7 @@ export default function CampaignReport({
   campaignName: string;
   campaignBrand: string;
   campaignStartDate: string | Date | null;
-  onboarding: Creator[];
+  onboarding: ReportCreator[];
 }) {
   // ---------- 2. Cost & delivery overview ----------
   const totalQuotedCost = onboarding.reduce((sum, c) => sum + (c.finalQuotedCost ?? 0), 0);
@@ -124,7 +158,7 @@ export default function CampaignReport({
     { label: "500k – 1M", min: 500000, max: 1000000 },
     { label: "1M+", min: 1000000, max: Infinity },
   ];
-  function audienceSizeOf(c: Creator): number {
+  function audienceSizeOf(c: ReportCreator): number {
     const isYoutube = c.platformPrimary?.startsWith("YOUTUBE");
     return (isYoutube ? c.youtubeSubscribers : c.followers) ?? c.followers ?? c.youtubeSubscribers ?? 0;
   }
