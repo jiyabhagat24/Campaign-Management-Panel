@@ -140,22 +140,20 @@ export default function Sidebar({ role, name, notifications, userId }: { role: R
               {name.charAt(0).toUpperCase()}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-xs font-semibold text-slate-50">{name}</p>
-              {role !== "CXO" && (
-                <span
-                  className={`mt-0.5 inline-block rounded-md border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${getRoleBadgeColor(
-                    role
-                  )}`}
-                >
-                  {role.replace(/_/g, " ")}
-                </span>
-              )}
+              <p className="truncate text-sm font-semibold text-slate-50">{name}</p>
+              <span
+                className={`mt-1 inline-block rounded-md border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${getRoleBadgeColor(
+                  role
+                )}`}
+              >
+                {role.replace(/_/g, " ")}
+              </span>
             </div>
           </div>
 
           <a
             href="/api/auth/signout"
-            className="mt-3 flex items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-900 py-1.5 text-xs font-medium text-slate-400 shadow-xs transition-colors hover:bg-rose-950/40 hover:text-rose-300 hover:border-rose-800/60"
+            className="mt-3 flex items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-900 py-2 text-xs font-medium text-slate-400 shadow-xs transition-colors hover:bg-rose-950/40 hover:text-rose-300 hover:border-rose-800/60"
           >
             <LogOut className="h-3.5 w-3.5" />
             <span>Sign out</span>
