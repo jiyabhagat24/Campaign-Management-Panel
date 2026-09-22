@@ -11,7 +11,7 @@
 // tokens in globals.css (light + dark) instead of each chart hand-rolling
 // its own colors.
 import { useMemo, useState } from "react";
-import { Bar, CartesianGrid, ComposedChart, Line, LineChart, XAxis, YAxis } from "recharts";
+import { Bar, CartesianGrid, ComposedChart, Line, LineChart, ReferenceLine, XAxis, YAxis } from "recharts";
 import { ChartConfig, ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 
 // One row per ONBOARDED creator with a real onboarding ("closure") date —
@@ -110,8 +110,23 @@ function FinancialPerformanceChart({ days }: { days: DayRow[] }) {
           content={<ChartTooltipContent formatter={moneyTooltipRow} />}
         />
         <ChartLegend content={<ChartLegendContent />} />
-        <Line dataKey="revenue" type="monotone" stroke="var(--color-revenue)" strokeWidth={2.5} dot={false} activeDot={{ r: 5, strokeWidth: 2 }} />
-        <Line dataKey="marginValue" type="monotone" stroke="var(--color-marginValue)" strokeWidth={2.5} dot={false} activeDot={{ r: 5, strokeWidth: 2 }} />
+        {/* A <Line> needs 2+ points to draw an actual segment — with a
+            single day of data (e.g. right after launch, before a second
+            day's onboarding lands) it silently renders nothing at all, dot
+            included. A ReferenceLine draws the same flat guide across the
+            full width the old hand-rolled chart used to for this exact
+            case, so there's always a visible line once there's any data. */}
+        {days.length === 1 ? (
+          <>
+            <ReferenceLine y={days[0].revenue} stroke="var(--color-revenue)" strokeWidth={2.5} />
+            <ReferenceLine y={days[0].marginValue} stroke="var(--color-marginValue)" strokeWidth={2.5} />
+          </>
+        ) : (
+          <>
+            <Line dataKey="revenue" type="monotone" stroke="var(--color-revenue)" strokeWidth={2.5} dot={false} activeDot={{ r: 5, strokeWidth: 2 }} />
+            <Line dataKey="marginValue" type="monotone" stroke="var(--color-marginValue)" strokeWidth={2.5} dot={false} activeDot={{ r: 5, strokeWidth: 2 }} />
+          </>
+        )}
       </LineChart>
     </ChartContainer>
   );
@@ -158,15 +173,22 @@ function OnboardingEconomicsChart({ months }: { months: MonthRow[] }) {
         />
         <ChartLegend content={<ChartLegendContent />} />
         <Bar yAxisId="left" dataKey="creatorsOnboarded" fill="var(--color-creatorsOnboarded)" radius={[6, 6, 0, 0]} maxBarSize={46} />
-        <Line
-          yAxisId="right"
-          dataKey="avgCostPerCreator"
-          type="monotone"
-          stroke="var(--color-avgCostPerCreator)"
-          strokeWidth={2.5}
-          dot={false}
-          activeDot={{ r: 5, strokeWidth: 2 }}
-        />
+        {/* Same single-point gap as the chart above: a <Line> with one data
+            point draws nothing, so a lone onboarding month would show the
+            bar but no cost line at all. */}
+        {months.length === 1 ? (
+          <ReferenceLine yAxisId="right" y={months[0].avgCostPerCreator} stroke="var(--color-avgCostPerCreator)" strokeWidth={2.5} />
+        ) : (
+          <Line
+            yAxisId="right"
+            dataKey="avgCostPerCreator"
+            type="monotone"
+            stroke="var(--color-avgCostPerCreator)"
+            strokeWidth={2.5}
+            dot={false}
+            activeDot={{ r: 5, strokeWidth: 2 }}
+          />
+        )}
       </ComposedChart>
     </ChartContainer>
   );
