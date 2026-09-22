@@ -95,6 +95,27 @@ const config: Config = {
           instagram: "#e1306c",
           shorts: "#ff0000",
         },
+        // shadcn/ui's chart primitive (src/components/ui/chart.tsx) expects
+        // these semantic tokens — background/foreground/border/muted for its
+        // tooltip box and axis/grid styling, chart-1..5 for series colors.
+        // Defined as CSS variables in globals.css (light + dark), stored as
+        // raw "R G B" triplets so the rgb(var(...) / <alpha-value>) pattern
+        // below keeps Tailwind's opacity modifiers (e.g. border-border/50,
+        // used by the chart tooltip) working correctly.
+        background: "rgb(var(--background) / <alpha-value>)",
+        foreground: "rgb(var(--foreground) / <alpha-value>)",
+        border: "rgb(var(--border) / <alpha-value>)",
+        muted: {
+          DEFAULT: "rgb(var(--muted) / <alpha-value>)",
+          foreground: "rgb(var(--muted-foreground) / <alpha-value>)",
+        },
+        chart: {
+          "1": "var(--chart-1)",
+          "2": "var(--chart-2)",
+          "3": "var(--chart-3)",
+          "4": "var(--chart-4)",
+          "5": "var(--chart-5)",
+        },
       },
       boxShadow: {
         glass: "0 8px 32px 0 rgba(31, 38, 135, 0.07)",

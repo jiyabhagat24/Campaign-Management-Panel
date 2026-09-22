@@ -6,6 +6,41 @@ body {
   @apply bg-slate-50/70 text-slate-900 font-sans antialiased dark:bg-slate-950 dark:text-slate-100 transition-colors duration-200;
 }
 
+/* shadcn/ui chart primitive tokens (src/components/ui/chart.tsx) — kept as
+   raw "R G B" triplets (not hex/oklch) so Tailwind's rgb(var(...) /
+   <alpha-value>) pattern in tailwind.config.ts can apply opacity modifiers
+   like border-border/50, which the chart tooltip box uses. Values are
+   pulled from this app's own palette (tailwind.config.ts) rather than
+   shadcn's defaults, so the chart tooltip/grid/axis read as part of this
+   app, not a bolted-on demo. --chart-1..5 are plain hex since those are
+   only ever referenced directly as var(--chart-N) inside a chart's own
+   config (fill/stroke), never through a Tailwind opacity-aware utility. */
+:root {
+  --background: 253 252 250; /* slate-50 #FDFCFA */
+  --foreground: 20 20 20; /* slate-900 #141414 */
+  --muted: 250 247 240; /* slate-100 #FAF7F0 */
+  --muted-foreground: 110 99 80; /* slate-600 #6E6350 */
+  --border: 239 232 217; /* slate-200 #EFE8D9 */
+  --chart-1: #C68E00; /* brand gold — Revenue */
+  --chart-2: #0d9488; /* teal — Margin */
+  --chart-3: #4f46e5; /* indigo — Creators Onboarded */
+  --chart-4: #f43f5e; /* rose — Avg Cost/Creator */
+  --chart-5: #b45309; /* amber-700 — 5th series fallback */
+}
+
+.dark {
+  --background: 20 20 20; /* slate-900 #141414 */
+  --foreground: 255 255 255;
+  --muted: 31 31 31; /* slate-800 #1F1F1F */
+  --muted-foreground: 148 163 184; /* legible neutral gray on dark, independent of the light-mode warm-taupe slate scale */
+  --border: 51 51 51; /* slate-700 #333333 */
+  --chart-1: #C68E00;
+  --chart-2: #2dd4bf; /* teal-400 — brighter for contrast on dark */
+  --chart-3: #818cf8; /* indigo-400 */
+  --chart-4: #fb7185; /* rose-400 */
+  --chart-5: #d97706; /* amber-600 */
+}
+
 .stat-card {
   @apply relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card transition-all duration-200 hover:shadow-card-hover hover:-translate-y-0.5 dark:border-slate-800/80 dark:bg-slate-900 dark:shadow-none;
 }
