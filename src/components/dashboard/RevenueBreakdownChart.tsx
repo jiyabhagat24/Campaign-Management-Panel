@@ -42,17 +42,20 @@ const monthLabel = (key: string) => {
 // styled to match the app, positioned relative to the chart's own
 // container div (not the page), so it tracks correctly no matter where the
 // chart sits on screen.
-type TooltipState = { x: number; y: number; lines: string[] } | null;
+// `key` is optional and only used to highlight the hovered element itself
+// (enlarge its point, dim its sibling bars, draw a crosshair through it) —
+// distinct from `lines`, which is just the tooltip's displayed text.
+type TooltipState = { x: number; y: number; lines: string[]; key?: string } | null;
 
 function useChartTooltip() {
   const containerRef = useRef<HTMLDivElement>(null);
   const [tooltip, setTooltip] = useState<TooltipState>(null);
 
-  function show(e: React.MouseEvent, lines: string[]) {
+  function show(e: React.MouseEvent, lines: string[], key?: string) {
     const container = containerRef.current;
     if (!container) return;
     const rect = container.getBoundingClientRect();
-    setTooltip({ x: e.clientX - rect.left, y: e.clientY - rect.top, lines });
+    setTooltip({ x: e.clientX - rect.left, y: e.clientY - rect.top, lines, key });
   }
   function hide() {
     setTooltip(null);
@@ -127,6 +130,30 @@ function linePathFor(points: { x: number; y: number }[]): string {
     return `M ${PAD_L.toFixed(1)} ${y.toFixed(1)} L ${(W - PAD_R).toFixed(1)} ${y.toFixed(1)}`;
   }
   return points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
+}
+
+// Same job as linePathFor, but joined with cubic-bezier curves through a
+// Catmull-Rom spline instead of straight segments — a gentle, editorial
+// curve reads as considered/finished the way a ruler-straight zig-zag line
+// chart doesn't, and it's how every polished analytics dashboard (Stripe,
+// Linear, etc.) draws a trend line. Falls back to the same flat-line/no-op
+// handling as linePathFor for 0-1 points since there's nothing to curve.
+function smoothPathFor(points: { x: number; y: number }[]): string {
+  if (points.length < 2) return linePathFor(points);
+  const p = points;
+  let d = `M ${p[0].x.toFixed(1)} ${p[0].y.toFixed(1)}`;
+  for (let i = 0; i < p.length - 1; i++) {
+    const p0 = p[i - 1] ?? p[i];
+    const p1 = p[i];
+    const p2 = p[i + 1];
+    const p3 = p[i + 2] ?? p2;
+    const c1x = p1.x + (p2.x - p0.x) / 6;
+    const c1y = p1.y + (p2.y - p0.y) / 6;
+    const c2x = p2.x - (p3.x - p1.x) / 6;
+    const c2y = p2.y - (p3.y - p1.y) / 6;
+    d += ` C ${c1x.toFixed(1)} ${c1y.toFixed(1)}, ${c2x.toFixed(1)} ${c2y.toFixed(1)}, ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
+  }
+  return d;
 }
 
 // For a whole-number axis (a count, like creators onboarded) gridlines
@@ -229,7 +256,7 @@ function FinancialPerformanceChart({ months }: { months: MonthRow[] }) {
   const hasNegative = minVal < 0;
 
   const linePath = (field: "revenue" | "marginValue") =>
-    linePathFor(months.map((m, i) => ({ x: xFor(i, months.length), y: yFor(m[field]) })));
+    smoothPathFor(months.map((m, i) => ({ x: xFor(i, months.length), y: yFor(m[field]) })));
   // Closing corners match the line's own endpoints (full plot width for a
   // single month, per-month x positions otherwise) rather than always using
   // xFor, which collapses to the same center point for a single month and
@@ -240,19 +267,29 @@ function FinancialPerformanceChart({ months }: { months: MonthRow[] }) {
     return `${linePath(field)} L ${rightX.toFixed(1)} ${yFor(0).toFixed(1)} L ${leftX.toFixed(1)} ${yFor(0).toFixed(1)} Z`;
   };
 
+  const hoveredMonth = months.find((m) => m.key === tooltip?.key);
+
   return (
     <div ref={containerRef} className="relative">
       <ChartTooltip tooltip={tooltip} />
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-[300px]">
       <defs>
         <linearGradient id="revenueAreaGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#C68E00" stopOpacity="0.16" />
+          <stop offset="0%" stopColor="#C68E00" stopOpacity="0.22" />
+          <stop offset="55%" stopColor="#C68E00" stopOpacity="0.06" />
           <stop offset="100%" stopColor="#C68E00" stopOpacity="0" />
         </linearGradient>
         <linearGradient id="marginAreaGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#10b981" stopOpacity="0.16" />
+          <stop offset="0%" stopColor="#10b981" stopOpacity="0.22" />
+          <stop offset="55%" stopColor="#10b981" stopOpacity="0.06" />
           <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
         </linearGradient>
+        <filter id="lineGlowGold" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="1.5" stdDeviation="2.5" floodColor="#C68E00" floodOpacity="0.35" />
+        </filter>
+        <filter id="lineGlowGreen" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="1.5" stdDeviation="2.5" floodColor="#10b981" floodOpacity="0.35" />
+        </filter>
       </defs>
       <Legend
         items={[
@@ -264,7 +301,7 @@ function FinancialPerformanceChart({ months }: { months: MonthRow[] }) {
         const y = PAD_T + plotH - (i * plotH) / (yTicks.length - 1);
         return (
           <g key={t}>
-            <line x1={PAD_L} y1={y} x2={W - PAD_R} y2={y} stroke="currentColor" className="text-slate-100 dark:text-slate-800" strokeWidth="1" />
+            <line x1={PAD_L} y1={y} x2={W - PAD_R} y2={y} stroke="currentColor" strokeDasharray="3 4" className="text-slate-100 dark:text-slate-800" strokeWidth="1" />
             <text x={PAD_L - 8} y={y + 3} fontSize="10" textAnchor="end" fill="#C68E00">
               {money(t)}
             </text>
@@ -281,37 +318,94 @@ function FinancialPerformanceChart({ months }: { months: MonthRow[] }) {
       {hasNegative && (
         <line x1={PAD_L} y1={yFor(0)} x2={W - PAD_R} y2={yFor(0)} stroke="currentColor" className="text-slate-300 dark:text-slate-600" strokeWidth="1.5" />
       )}
-      <path d={areaPath("revenue")} fill="url(#revenueAreaGrad)" stroke="none" />
-      <path d={areaPath("marginValue")} fill="url(#marginAreaGrad)" stroke="none" />
-      <path d={linePath("revenue")} fill="none" stroke="#C68E00" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-      <path d={linePath("marginValue")} fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-      {months.map((m, i) => (
-        <g key={m.key}>
+      {/* Crosshair: a vertical guide through whichever month is hovered, so
+          it's obvious at a glance which revenue/margin pair the tooltip is
+          describing even when the two dots aren't vertically close. */}
+      {hoveredMonth && (
+        <line
+          x1={xFor(months.indexOf(hoveredMonth), months.length)}
+          y1={PAD_T}
+          x2={xFor(months.indexOf(hoveredMonth), months.length)}
+          y2={PAD_T + plotH}
+          stroke="currentColor"
+          strokeDasharray="3 3"
+          className="text-slate-300 dark:text-slate-600"
+          strokeWidth="1"
+        />
+      )}
+      <path className="chart-fade-rise" style={{ animationDelay: "120ms" }} d={areaPath("revenue")} fill="url(#revenueAreaGrad)" stroke="none" />
+      <path className="chart-fade-rise" style={{ animationDelay: "180ms" }} d={areaPath("marginValue")} fill="url(#marginAreaGrad)" stroke="none" />
+      <path
+        className="chart-line-draw"
+        pathLength={1000}
+        d={linePath("revenue")}
+        fill="none"
+        stroke="#C68E00"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        filter="url(#lineGlowGold)"
+      />
+      <path
+        className="chart-line-draw"
+        style={{ animationDelay: "80ms" }}
+        pathLength={1000}
+        d={linePath("marginValue")}
+        fill="none"
+        stroke="#10b981"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        filter="url(#lineGlowGreen)"
+      />
+      {months.map((m, i) => {
+        const isActive = tooltip?.key === m.key;
+        return (
+        <g key={m.key} className="chart-fade-rise" style={{ animationDelay: `${300 + i * 40}ms` }}>
           {/* title on an invisible oversized hit circle, not just the tiny
               2px center dot — that made the tooltip only fire on a
               pixel-perfect hover, missing most of the visible marker. */}
           <g
-            onMouseEnter={(e) => show(e, [m.label, `Revenue: ${exactMoney(m.revenue)}`])}
-            onMouseMove={(e) => show(e, [m.label, `Revenue: ${exactMoney(m.revenue)}`])}
+            onMouseEnter={(e) => show(e, [m.label, `Revenue: ${exactMoney(m.revenue)}`], m.key)}
+            onMouseMove={(e) => show(e, [m.label, `Revenue: ${exactMoney(m.revenue)}`], m.key)}
             onMouseLeave={hide}
+            className="cursor-pointer"
           >
             <title>{`${m.label} Revenue: ${exactMoney(m.revenue)}`}</title>
-            <circle cx={xFor(i, months.length)} cy={yFor(m.revenue)} r="10" fill="transparent" />
-            <circle cx={xFor(i, months.length)} cy={yFor(m.revenue)} r="5" fill="#fff" stroke="#C68E00" strokeWidth="2.5" />
+            <circle cx={xFor(i, months.length)} cy={yFor(m.revenue)} r="12" fill="transparent" />
+            <circle
+              cx={xFor(i, months.length)}
+              cy={yFor(m.revenue)}
+              r={isActive ? "7" : "5"}
+              fill="#fff"
+              stroke="#C68E00"
+              strokeWidth="2.5"
+              style={{ transition: "r 150ms ease" }}
+            />
             <circle cx={xFor(i, months.length)} cy={yFor(m.revenue)} r="2" fill="#C68E00" />
           </g>
           <g
-            onMouseEnter={(e) => show(e, [m.label, `Margin: ${exactMoney(m.marginValue)}`])}
-            onMouseMove={(e) => show(e, [m.label, `Margin: ${exactMoney(m.marginValue)}`])}
+            onMouseEnter={(e) => show(e, [m.label, `Margin: ${exactMoney(m.marginValue)}`], m.key)}
+            onMouseMove={(e) => show(e, [m.label, `Margin: ${exactMoney(m.marginValue)}`], m.key)}
             onMouseLeave={hide}
+            className="cursor-pointer"
           >
             <title>{`${m.label} Margin: ${exactMoney(m.marginValue)}`}</title>
-            <circle cx={xFor(i, months.length)} cy={yFor(m.marginValue)} r="10" fill="transparent" />
-            <circle cx={xFor(i, months.length)} cy={yFor(m.marginValue)} r="5" fill="#fff" stroke="#10b981" strokeWidth="2.5" />
+            <circle cx={xFor(i, months.length)} cy={yFor(m.marginValue)} r="12" fill="transparent" />
+            <circle
+              cx={xFor(i, months.length)}
+              cy={yFor(m.marginValue)}
+              r={isActive ? "7" : "5"}
+              fill="#fff"
+              stroke="#10b981"
+              strokeWidth="2.5"
+              style={{ transition: "r 150ms ease" }}
+            />
             <circle cx={xFor(i, months.length)} cy={yFor(m.marginValue)} r="2" fill="#10b981" />
           </g>
         </g>
-      ))}
+        );
+      })}
       </svg>
     </div>
   );
@@ -338,7 +432,7 @@ function OnboardingEconomicsChart({ months }: { months: MonthRow[] }) {
   const xBand = (i: number) => PAD_L + bandW * (i + 0.5);
   const barW = Math.max(18, Math.min(46, bandW * 0.42));
 
-  const linePath = linePathFor(months.map((m, i) => ({ x: xBand(i), y: yForCost(m.avgCostPerCreator) })));
+  const linePath = smoothPathFor(months.map((m, i) => ({ x: xBand(i), y: yForCost(m.avgCostPerCreator) })));
 
   return (
     <div ref={containerRef} className="relative">
@@ -349,6 +443,9 @@ function OnboardingEconomicsChart({ months }: { months: MonthRow[] }) {
           <stop offset="0%" stopColor="#e879f9" />
           <stop offset="100%" stopColor="#c026d3" />
         </linearGradient>
+        <filter id="lineGlowAmber" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="1.5" stdDeviation="2.5" floodColor="#f59e0b" floodOpacity="0.35" />
+        </filter>
       </defs>
       <Legend
         items={[
@@ -360,7 +457,7 @@ function OnboardingEconomicsChart({ months }: { months: MonthRow[] }) {
         const y = yForCount(t);
         return (
           <g key={`l${t}`}>
-            <line x1={PAD_L} y1={y} x2={W - PAD_R} y2={y} stroke="currentColor" className="text-slate-100 dark:text-slate-800" strokeWidth="1" />
+            <line x1={PAD_L} y1={y} x2={W - PAD_R} y2={y} stroke="currentColor" strokeDasharray="3 4" className="text-slate-100 dark:text-slate-800" strokeWidth="1" />
             <text x={PAD_L - 10} y={y + 3} fontSize="10" textAnchor="end" fill="#c026d3">
               {t}
             </text>
@@ -386,14 +483,25 @@ function OnboardingEconomicsChart({ months }: { months: MonthRow[] }) {
       {months.map((m, i) => {
         const topY = yForCount(m.creatorsOnboarded);
         const barH = Math.max(0, PAD_T + plotH - topY);
+        const isActive = tooltip?.key === m.key;
         return (
           <g
             key={m.key}
-            onMouseEnter={(e) => show(e, [m.label, `Creators onboarded: ${m.creatorsOnboarded}`])}
-            onMouseMove={(e) => show(e, [m.label, `Creators onboarded: ${m.creatorsOnboarded}`])}
+            onMouseEnter={(e) => show(e, [m.label, `Creators onboarded: ${m.creatorsOnboarded}`], m.key)}
+            onMouseMove={(e) => show(e, [m.label, `Creators onboarded: ${m.creatorsOnboarded}`], m.key)}
             onMouseLeave={hide}
+            className="chart-fade-rise cursor-pointer"
+            style={{ animationDelay: `${i * 45}ms`, opacity: tooltip && !isActive ? 0.55 : 1, transition: "opacity 150ms ease" }}
           >
-            <rect x={xBand(i) - barW / 2} y={topY} width={barW} height={barH} fill="url(#onboardingBarGrad)" rx="6">
+            <rect
+              x={xBand(i) - barW / 2}
+              y={topY}
+              width={barW}
+              height={barH}
+              fill="url(#onboardingBarGrad)"
+              rx="6"
+              style={{ transform: isActive ? "translateY(-2px)" : undefined, transformOrigin: "center bottom", transition: "transform 150ms ease" }}
+            >
               <title>{`${m.label}: ${m.creatorsOnboarded} creators onboarded`}</title>
             </rect>
             {barH > 0 && (
@@ -404,20 +512,33 @@ function OnboardingEconomicsChart({ months }: { months: MonthRow[] }) {
           </g>
         );
       })}
-      <path d={linePath} fill="none" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-      {months.map((m, i) => (
+      <path className="chart-line-draw" pathLength={1000} d={linePath} fill="none" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" filter="url(#lineGlowAmber)" />
+      {months.map((m, i) => {
+        const isActive = tooltip?.key === m.key;
+        return (
         <g
           key={m.key}
-          onMouseEnter={(e) => show(e, [m.label, `Avg cost/creator: ${exactMoney(m.avgCostPerCreator)}`])}
-          onMouseMove={(e) => show(e, [m.label, `Avg cost/creator: ${exactMoney(m.avgCostPerCreator)}`])}
+          onMouseEnter={(e) => show(e, [m.label, `Avg cost/creator: ${exactMoney(m.avgCostPerCreator)}`], m.key)}
+          onMouseMove={(e) => show(e, [m.label, `Avg cost/creator: ${exactMoney(m.avgCostPerCreator)}`], m.key)}
           onMouseLeave={hide}
+          className="chart-fade-rise cursor-pointer"
+          style={{ animationDelay: `${300 + i * 45}ms` }}
         >
           <title>{`${m.label} Avg cost/creator: ${exactMoney(m.avgCostPerCreator)}`}</title>
-          <circle cx={xBand(i)} cy={yForCost(m.avgCostPerCreator)} r="10" fill="transparent" />
-          <circle cx={xBand(i)} cy={yForCost(m.avgCostPerCreator)} r="5" fill="#fff" stroke="#f59e0b" strokeWidth="2.5" />
+          <circle cx={xBand(i)} cy={yForCost(m.avgCostPerCreator)} r="12" fill="transparent" />
+          <circle
+            cx={xBand(i)}
+            cy={yForCost(m.avgCostPerCreator)}
+            r={isActive ? "7" : "5"}
+            fill="#fff"
+            stroke="#f59e0b"
+            strokeWidth="2.5"
+            style={{ transition: "r 150ms ease" }}
+          />
           <circle cx={xBand(i)} cy={yForCost(m.avgCostPerCreator)} r="2" fill="#f59e0b" />
         </g>
-      ))}
+        );
+      })}
       </svg>
     </div>
   );
@@ -475,7 +596,7 @@ function ClientRevenueStackChart({ rows }: { rows: RevenueDataRow[] }) {
           const y = PAD_T3 + plotH3 - (i * plotH3) / (yTicks.length - 1);
           return (
             <g key={t}>
-              <line x1={PAD_L3} y1={y} x2={W - PAD_R3} y2={y} stroke="currentColor" className="text-slate-100 dark:text-slate-800" strokeWidth="1" />
+              <line x1={PAD_L3} y1={y} x2={W - PAD_R3} y2={y} stroke="currentColor" strokeDasharray="3 4" className="text-slate-100 dark:text-slate-800" strokeWidth="1" />
               <text x={PAD_L3 - 8} y={y + 3} fontSize="10" textAnchor="end" fill="#C68E00">
                 {money(t)}
               </text>
@@ -506,7 +627,11 @@ function ClientRevenueStackChart({ rows }: { rows: RevenueDataRow[] }) {
           const total = totals.get(brand) ?? 0;
           let cum = 0;
           return (
-            <g key={brand}>
+            <g
+              key={brand}
+              className="chart-fade-rise"
+              style={{ animationDelay: `${bi * 60}ms`, opacity: tooltip && !tooltip.key?.startsWith(`${brand}__`) ? 0.45 : 1, transition: "opacity 150ms ease" }}
+            >
               <g clipPath={`url(#stack-clip-${bi})`}>
                 {monthKeys.map((mk, mi) => {
                   const v = dataByBrand.get(brand)?.get(mk) ?? 0;
@@ -514,6 +639,8 @@ function ClientRevenueStackChart({ rows }: { rows: RevenueDataRow[] }) {
                   const y0 = yFor(cum);
                   cum += v;
                   const y1 = yFor(cum);
+                  const segKey = `${brand}__${mk}`;
+                  const isActive = tooltip?.key === segKey;
                   return (
                     <rect
                       key={mk}
@@ -522,10 +649,12 @@ function ClientRevenueStackChart({ rows }: { rows: RevenueDataRow[] }) {
                       width={barW}
                       height={Math.max(0, y0 - y1)}
                       fill={MONTH_PALETTE[mi % MONTH_PALETTE.length]}
-                      stroke="#fff"
-                      strokeWidth="1"
-                      onMouseEnter={(e) => show(e, [`${brand} — ${monthLabel(mk)}`, exactMoney(v)])}
-                      onMouseMove={(e) => show(e, [`${brand} — ${monthLabel(mk)}`, exactMoney(v)])}
+                      stroke={isActive ? "#1e293b" : "#fff"}
+                      strokeWidth={isActive ? 1.5 : 1}
+                      className="cursor-pointer"
+                      style={{ transition: "stroke 120ms ease, opacity 120ms ease" }}
+                      onMouseEnter={(e) => show(e, [`${brand} — ${monthLabel(mk)}`, exactMoney(v)], segKey)}
+                      onMouseMove={(e) => show(e, [`${brand} — ${monthLabel(mk)}`, exactMoney(v)], segKey)}
                       onMouseLeave={hide}
                     >
                       <title>{`${brand} — ${monthLabel(mk)}: ${exactMoney(v)}`}</title>
@@ -536,12 +665,12 @@ function ClientRevenueStackChart({ rows }: { rows: RevenueDataRow[] }) {
               <text
                 x={x + barW / 2}
                 y={yFor(total) - 8}
-                fontSize="11"
-                fontWeight="700"
+                fontSize="11.5"
+                fontWeight="800"
                 textAnchor="middle"
-                className="fill-slate-700 dark:fill-slate-200"
-                onMouseEnter={(e) => show(e, [brand, `Total: ${exactMoney(total)}`])}
-                onMouseMove={(e) => show(e, [brand, `Total: ${exactMoney(total)}`])}
+                className="fill-slate-700 dark:fill-slate-200 cursor-pointer"
+                onMouseEnter={(e) => show(e, [brand, `Total: ${exactMoney(total)}`], `${brand}__total`)}
+                onMouseMove={(e) => show(e, [brand, `Total: ${exactMoney(total)}`], `${brand}__total`)}
                 onMouseLeave={hide}
               >
                 {money(total)}
@@ -569,7 +698,7 @@ function ClientRevenueStackChart({ rows }: { rows: RevenueDataRow[] }) {
 
 function ChartCard({ title, sub, children }: { title: string; sub?: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border border-slate-200/80 bg-white dark:bg-slate-900 dark:border-slate-800 shadow-card overflow-hidden">
+    <div className="rounded-2xl border border-slate-200/80 bg-white dark:bg-slate-900 dark:border-slate-800 shadow-card overflow-hidden transition-shadow duration-200 hover:shadow-card-hover">
       <div className="border-b border-slate-100 dark:border-slate-800 px-6 py-4 bg-slate-50/50 dark:bg-slate-800/40">
         <h3 className="text-sm font-bold text-slate-900 dark:text-white">{title}</h3>
         {sub && <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">{sub}</p>}
