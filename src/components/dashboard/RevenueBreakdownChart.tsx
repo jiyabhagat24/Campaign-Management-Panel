@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 // One row per ONBOARDED creator with a real onboarding ("closure") date —
 // same closure-date convention the Finance Table uses. Revenue is that
@@ -33,6 +33,51 @@ const monthLabel = (key: string) => {
   const [y, m] = key.split("-").map(Number);
   return new Date(y, m - 1, 1).toLocaleDateString("en-IN", { month: "short", year: "2-digit" });
 };
+
+// Custom on-hover tooltip shared by all three charts below. The SVG <title>
+// left on every point/bar/segment stays in place too (harmless, helps
+// screen readers/no-JS), but a native browser title tooltip has a ~1s hover
+// delay and renders as a plain unstyled OS box — to anyone who doesn't wait
+// it out, hovering just looks like it does nothing. This renders instantly,
+// styled to match the app, positioned relative to the chart's own
+// container div (not the page), so it tracks correctly no matter where the
+// chart sits on screen.
+type TooltipState = { x: number; y: number; lines: string[] } | null;
+
+function useChartTooltip() {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [tooltip, setTooltip] = useState<TooltipState>(null);
+
+  function show(e: React.MouseEvent, lines: string[]) {
+    const container = containerRef.current;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    setTooltip({ x: e.clientX - rect.left, y: e.clientY - rect.top, lines });
+  }
+  function hide() {
+    setTooltip(null);
+  }
+  return { containerRef, tooltip, show, hide };
+}
+
+function ChartTooltip({ tooltip }: { tooltip: TooltipState }) {
+  if (!tooltip) return null;
+  // Flip to the cursor's left once it's past the container's right half so
+  // the box never runs off the edge of its own chart.
+  const flip = tooltip.x > 400;
+  return (
+    <div
+      className="pointer-events-none absolute z-10 whitespace-nowrap rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold leading-tight text-slate-700 shadow-lg dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+      style={{ left: tooltip.x, top: tooltip.y - 12, transform: `translate(${flip ? "-100%" : "0%"}, -100%)` }}
+    >
+      {tooltip.lines.map((l, i) => (
+        <div key={i} className={i === 0 ? "font-medium text-slate-400 dark:text-slate-500" : ""}>
+          {l}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 type MonthRow = {
   key: string;
@@ -168,6 +213,7 @@ function Legend({ items, y = 14 }: { items: { label: string; color: string }[]; 
 
 // ---------- Chart 1: Monthly Financial Performance (Revenue + Margin) ----------
 function FinancialPerformanceChart({ months }: { months: MonthRow[] }) {
+  const { containerRef, tooltip, show, hide } = useChartTooltip();
   if (months.length === 0) return <EmptyState />;
 
   // Margin can go negative (a month's internal cost exceeding its revenue)
@@ -195,7 +241,9 @@ function FinancialPerformanceChart({ months }: { months: MonthRow[] }) {
   };
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-[300px]">
+    <div ref={containerRef} className="relative">
+      <ChartTooltip tooltip={tooltip} />
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-[300px]">
       <defs>
         <linearGradient id="revenueAreaGrad" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="#C68E00" stopOpacity="0.16" />
@@ -242,13 +290,21 @@ function FinancialPerformanceChart({ months }: { months: MonthRow[] }) {
           {/* title on an invisible oversized hit circle, not just the tiny
               2px center dot — that made the tooltip only fire on a
               pixel-perfect hover, missing most of the visible marker. */}
-          <g>
+          <g
+            onMouseEnter={(e) => show(e, [m.label, `Revenue: ${exactMoney(m.revenue)}`])}
+            onMouseMove={(e) => show(e, [m.label, `Revenue: ${exactMoney(m.revenue)}`])}
+            onMouseLeave={hide}
+          >
             <title>{`${m.label} Revenue: ${exactMoney(m.revenue)}`}</title>
             <circle cx={xFor(i, months.length)} cy={yFor(m.revenue)} r="10" fill="transparent" />
             <circle cx={xFor(i, months.length)} cy={yFor(m.revenue)} r="5" fill="#fff" stroke="#C68E00" strokeWidth="2.5" />
             <circle cx={xFor(i, months.length)} cy={yFor(m.revenue)} r="2" fill="#C68E00" />
           </g>
-          <g>
+          <g
+            onMouseEnter={(e) => show(e, [m.label, `Margin: ${exactMoney(m.marginValue)}`])}
+            onMouseMove={(e) => show(e, [m.label, `Margin: ${exactMoney(m.marginValue)}`])}
+            onMouseLeave={hide}
+          >
             <title>{`${m.label} Margin: ${exactMoney(m.marginValue)}`}</title>
             <circle cx={xFor(i, months.length)} cy={yFor(m.marginValue)} r="10" fill="transparent" />
             <circle cx={xFor(i, months.length)} cy={yFor(m.marginValue)} r="5" fill="#fff" stroke="#10b981" strokeWidth="2.5" />
@@ -256,7 +312,8 @@ function FinancialPerformanceChart({ months }: { months: MonthRow[] }) {
           </g>
         </g>
       ))}
-    </svg>
+      </svg>
+    </div>
   );
 }
 
@@ -267,6 +324,7 @@ function FinancialPerformanceChart({ months }: { months: MonthRow[] }) {
 // axis and its labels, which is what looked broken with only 1-2 months
 // of demo data.
 function OnboardingEconomicsChart({ months }: { months: MonthRow[] }) {
+  const { containerRef, tooltip, show, hide } = useChartTooltip();
   if (months.length === 0) return <EmptyState />;
 
   const countAxis = integerAxis(Math.max(...months.map((m) => m.creatorsOnboarded), 1));
@@ -283,7 +341,9 @@ function OnboardingEconomicsChart({ months }: { months: MonthRow[] }) {
   const linePath = linePathFor(months.map((m, i) => ({ x: xBand(i), y: yForCost(m.avgCostPerCreator) })));
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-[300px]">
+    <div ref={containerRef} className="relative">
+      <ChartTooltip tooltip={tooltip} />
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-[300px]">
       <defs>
         <linearGradient id="onboardingBarGrad" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="#e879f9" />
@@ -327,7 +387,12 @@ function OnboardingEconomicsChart({ months }: { months: MonthRow[] }) {
         const topY = yForCount(m.creatorsOnboarded);
         const barH = Math.max(0, PAD_T + plotH - topY);
         return (
-          <g key={m.key}>
+          <g
+            key={m.key}
+            onMouseEnter={(e) => show(e, [m.label, `Creators onboarded: ${m.creatorsOnboarded}`])}
+            onMouseMove={(e) => show(e, [m.label, `Creators onboarded: ${m.creatorsOnboarded}`])}
+            onMouseLeave={hide}
+          >
             <rect x={xBand(i) - barW / 2} y={topY} width={barW} height={barH} fill="url(#onboardingBarGrad)" rx="6">
               <title>{`${m.label}: ${m.creatorsOnboarded} creators onboarded`}</title>
             </rect>
@@ -341,14 +406,20 @@ function OnboardingEconomicsChart({ months }: { months: MonthRow[] }) {
       })}
       <path d={linePath} fill="none" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
       {months.map((m, i) => (
-        <g key={m.key}>
+        <g
+          key={m.key}
+          onMouseEnter={(e) => show(e, [m.label, `Avg cost/creator: ${exactMoney(m.avgCostPerCreator)}`])}
+          onMouseMove={(e) => show(e, [m.label, `Avg cost/creator: ${exactMoney(m.avgCostPerCreator)}`])}
+          onMouseLeave={hide}
+        >
           <title>{`${m.label} Avg cost/creator: ${exactMoney(m.avgCostPerCreator)}`}</title>
           <circle cx={xBand(i)} cy={yForCost(m.avgCostPerCreator)} r="10" fill="transparent" />
           <circle cx={xBand(i)} cy={yForCost(m.avgCostPerCreator)} r="5" fill="#fff" stroke="#f59e0b" strokeWidth="2.5" />
           <circle cx={xBand(i)} cy={yForCost(m.avgCostPerCreator)} r="2" fill="#f59e0b" />
         </g>
       ))}
-    </svg>
+      </svg>
+    </div>
   );
 }
 
@@ -362,6 +433,7 @@ const MONTH_PALETTE = [
 ];
 
 function ClientRevenueStackChart({ rows }: { rows: RevenueDataRow[] }) {
+  const { containerRef, tooltip, show, hide } = useChartTooltip();
   const { brands, monthKeys, dataByBrand, totals } = useMemo(() => {
     const monthSet = new Set<string>();
     const byBrand = new Map<string, Map<string, number>>();
@@ -396,7 +468,8 @@ function ClientRevenueStackChart({ rows }: { rows: RevenueDataRow[] }) {
   const yTicks = [0, 0.25, 0.5, 0.75, 1].map((f) => f * maxTotal);
 
   return (
-    <div className="space-y-3">
+    <div ref={containerRef} className="relative space-y-3">
+      <ChartTooltip tooltip={tooltip} />
       <svg viewBox={`0 0 ${W} ${H3}`} className="w-full h-[360px]">
         {yTicks.map((t, i) => {
           const y = PAD_T3 + plotH3 - (i * plotH3) / (yTicks.length - 1);
@@ -451,13 +524,26 @@ function ClientRevenueStackChart({ rows }: { rows: RevenueDataRow[] }) {
                       fill={MONTH_PALETTE[mi % MONTH_PALETTE.length]}
                       stroke="#fff"
                       strokeWidth="1"
+                      onMouseEnter={(e) => show(e, [`${brand} — ${monthLabel(mk)}`, exactMoney(v)])}
+                      onMouseMove={(e) => show(e, [`${brand} — ${monthLabel(mk)}`, exactMoney(v)])}
+                      onMouseLeave={hide}
                     >
                       <title>{`${brand} — ${monthLabel(mk)}: ${exactMoney(v)}`}</title>
                     </rect>
                   );
                 })}
               </g>
-              <text x={x + barW / 2} y={yFor(total) - 8} fontSize="11" fontWeight="700" textAnchor="middle" className="fill-slate-700 dark:fill-slate-200">
+              <text
+                x={x + barW / 2}
+                y={yFor(total) - 8}
+                fontSize="11"
+                fontWeight="700"
+                textAnchor="middle"
+                className="fill-slate-700 dark:fill-slate-200"
+                onMouseEnter={(e) => show(e, [brand, `Total: ${exactMoney(total)}`])}
+                onMouseMove={(e) => show(e, [brand, `Total: ${exactMoney(total)}`])}
+                onMouseLeave={hide}
+              >
                 {money(total)}
               </text>
               <text x={x + barW / 2} y={H3 - PAD_B3 + 16} fontSize="10.5" fontWeight="600" textAnchor="middle" className="fill-slate-500 dark:fill-slate-400">
