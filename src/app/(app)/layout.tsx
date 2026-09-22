@@ -15,10 +15,19 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   });
 
   return (
-    <div className="flex">
+    // h-screen + overflow-hidden here (instead of the old unbounded div) is
+    // what actually fixes the sidebar — without a height cap on this
+    // wrapper, it grows to match whichever page's content is tallest, but
+    // the sidebar itself is a fixed h-screen box, so on any page taller
+    // than one screen its dark background just stopped partway down,
+    // exposing the page's own (light) background below it. Locking the
+    // whole shell to exactly the viewport height and letting only <main>
+    // scroll internally means the sidebar is always full-height, no matter
+    // how long the page underneath it is.
+    <div className="flex h-screen overflow-hidden">
       <AutoRefresh />
       <Sidebar role={user.role} name={user.name} notifications={notifications} userId={user.id} />
-      <main className="min-h-screen flex-1 overflow-y-auto bg-panel dark:bg-slate-950">{children}</main>
+      <main className="h-screen flex-1 overflow-y-auto bg-panel dark:bg-slate-950">{children}</main>
     </div>
   );
 }

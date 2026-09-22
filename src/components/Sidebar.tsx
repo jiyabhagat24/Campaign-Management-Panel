@@ -83,7 +83,7 @@ export default function Sidebar({ role, name, notifications, userId }: { role: R
   // slate/indigo tokens throughout (not hardcoded hex) so swapping the
   // palette in tailwind.config.ts is enough to restyle this too.
   return (
-    <aside className="sticky top-0 flex h-screen w-64 flex-col border-r border-slate-700 bg-slate-900 transition-colors">
+    <aside className="flex h-full w-64 flex-shrink-0 flex-col border-r border-slate-700 bg-slate-900 transition-colors">
       {/* Brand Header */}
       <div className="flex items-center justify-between border-b border-slate-700 px-4 py-3">
         <div className="flex min-w-0 flex-1 items-center">
