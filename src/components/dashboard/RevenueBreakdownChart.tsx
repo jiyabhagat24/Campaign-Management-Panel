@@ -11,7 +11,7 @@
 // tokens in globals.css (light + dark) instead of each chart hand-rolling
 // its own colors.
 import { useMemo, useState } from "react";
-import { Area, AreaChart, Bar, CartesianGrid, ComposedChart, Line, XAxis, YAxis } from "recharts";
+import { Bar, CartesianGrid, ComposedChart, Line, LineChart, XAxis, YAxis } from "recharts";
 import { ChartConfig, ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 
 // One row per ONBOARDED creator with a real onboarding ("closure") date —
@@ -86,17 +86,7 @@ function FinancialPerformanceChart({ months }: { months: MonthRow[] }) {
 
   return (
     <ChartContainer config={financialConfig} className="aspect-auto h-[300px] w-full">
-      <AreaChart data={months} margin={{ left: 4, right: 4, top: 8 }}>
-        <defs>
-          <linearGradient id="revenueFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--color-revenue)" stopOpacity={0.28} />
-            <stop offset="100%" stopColor="var(--color-revenue)" stopOpacity={0} />
-          </linearGradient>
-          <linearGradient id="marginFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--color-marginValue)" stopOpacity={0.28} />
-            <stop offset="100%" stopColor="var(--color-marginValue)" stopOpacity={0} />
-          </linearGradient>
-        </defs>
+      <LineChart data={months} margin={{ left: 4, right: 4, top: 8 }}>
         <CartesianGrid vertical={false} strokeDasharray="3 4" />
         <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={10} fontSize={10.5} />
         <YAxis tickLine={false} axisLine={false} tickMargin={8} fontSize={10.5} width={56} tickFormatter={money} />
@@ -105,25 +95,9 @@ function FinancialPerformanceChart({ months }: { months: MonthRow[] }) {
           content={<ChartTooltipContent formatter={moneyTooltipRow} />}
         />
         <ChartLegend content={<ChartLegendContent />} />
-        <Area
-          dataKey="revenue"
-          type="monotone"
-          stroke="var(--color-revenue)"
-          fill="url(#revenueFill)"
-          strokeWidth={2.5}
-          dot={{ r: 4, strokeWidth: 2, fill: "var(--background)" }}
-          activeDot={{ r: 6, strokeWidth: 2 }}
-        />
-        <Area
-          dataKey="marginValue"
-          type="monotone"
-          stroke="var(--color-marginValue)"
-          fill="url(#marginFill)"
-          strokeWidth={2.5}
-          dot={{ r: 4, strokeWidth: 2, fill: "var(--background)" }}
-          activeDot={{ r: 6, strokeWidth: 2 }}
-        />
-      </AreaChart>
+        <Line dataKey="revenue" type="monotone" stroke="var(--color-revenue)" strokeWidth={2.5} dot={false} activeDot={{ r: 5, strokeWidth: 2 }} />
+        <Line dataKey="marginValue" type="monotone" stroke="var(--color-marginValue)" strokeWidth={2.5} dot={false} activeDot={{ r: 5, strokeWidth: 2 }} />
+      </LineChart>
     </ChartContainer>
   );
 }
@@ -175,8 +149,8 @@ function OnboardingEconomicsChart({ months }: { months: MonthRow[] }) {
           type="monotone"
           stroke="var(--color-avgCostPerCreator)"
           strokeWidth={2.5}
-          dot={{ r: 4, strokeWidth: 2, fill: "var(--background)" }}
-          activeDot={{ r: 6, strokeWidth: 2 }}
+          dot={false}
+          activeDot={{ r: 5, strokeWidth: 2 }}
         />
       </ComposedChart>
     </ChartContainer>
