@@ -34,9 +34,16 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const onboarding = campaign.creators;
   const allDeliverables = onboarding.flatMap((c) => c.deliverables);
-  const liveRows = onboarding.flatMap((creator) =>
-    creator.deliverables.filter((d) => Boolean(d.liveLink)).map((deliverable) => ({ creator, deliverable }))
-  );
+  // A creator's finalQuotedCost covers the whole deal, which can span
+  // several live deliverables — split it evenly across the creator's own
+  // live deliverables (unitCost) so per-row/per-platform CPV never double-
+  // counts a creator with 2+ live deliverables. Mirrors CampaignReport.tsx
+  // exactly, so the download always matches what's on screen.
+  const liveRows = onboarding.flatMap((creator) => {
+    const liveDeliverables = creator.deliverables.filter((d) => Boolean(d.liveLink));
+    const unitCost = liveDeliverables.length > 0 ? (creator.finalQuotedCost ?? 0) / liveDeliverables.length : 0;
+    return liveDeliverables.map((deliverable) => ({ creator, deliverable, unitCost }));
+  });
 
   // ---------- 2. Cost & delivery overview ----------
   const totalQuotedCost = onboarding.reduce((s, c) => s + (c.finalQuotedCost ?? 0), 0);
@@ -63,7 +70,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const comments = liveForPlatform.reduce((s, r) => s + (r.deliverable.comments ?? 0), 0);
     const shares = isInstagram(platform) ? liveForPlatform.reduce((s, r) => s + (r.deliverable.shares ?? 0), 0) : null;
     const er = views > 0 ? ((likes + comments + (shares ?? 0)) / views) * 100 : 0;
-    const cost = liveForPlatform.reduce((s, r) => s + (r.creator.finalQuotedCost ?? 0), 0);
+    const cost = liveForPlatform.reduce((s, r) => s + r.unitCost, 0);
     const cpv = views > 0 ? cost / views : 0;
     return { label: PLATFORM_LABELS[platform as keyof typeof PLATFORM_LABELS] ?? platform, total: allForPlatform.length, live: liveForPlatform.length, views, likes, comments, shares, er, cpv };
   });
@@ -130,18 +137,17 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   lines.push("5. Live deliverables, line item");
   row(["Creator", "Socials", "Deliverable", "Live Date", "Cost Paid", "Views", "Likes", "Comments", "Shares", "ER%", "CPV", "Live Link"]);
-  for (const { creator, deliverable: d } of sortedLiveRows) {
+  for (const { creator, deliverable: d, unitCost } of sortedLiveRows) {
     const shares = isInstagram(d.platform) ? d.shares ?? 0 : null;
     const er = d.views && d.views > 0 ? (((d.likes ?? 0) + (d.comments ?? 0) + (shares ?? 0)) / d.views) * 100 : 0;
-    const cost = creator.finalQuotedCost ?? 0;
-    const cpv = d.views && d.views > 0 ? cost / d.views : 0;
+    const cpv = d.views && d.views > 0 ? unitCost / d.views : 0;
     const socialsHref = (isInstagram(d.platform) ? creator.profileUrl : creator.youtubeUrl) ?? "-";
     row([
       creator.name,
       socialsHref,
       d.title || (PLATFORM_LABELS[d.platform as keyof typeof PLATFORM_LABELS] ?? d.platform),
       d.liveDate ? new Date(d.liveDate).toLocaleDateString("en-IN") : "-",
-      cost,
+      unitCost,
       d.views ?? 0,
       d.likes ?? 0,
       d.comments ?? 0,

@@ -25,6 +25,18 @@ function isInstagram(platform: string) {
 type LiveRow = {
   creator: Creator;
   deliverable: Deliverable;
+  // A creator's finalQuotedCost is one number covering the whole deal, but
+  // that deal can span several live deliverables (e.g. a Reel + a Collab
+  // Reel). Splitting it evenly across the creator's own live deliverables
+  // means each row/platform carries only its fair share of the spend —
+  // summing unitCost back up across every row for a creator always equals
+  // exactly their finalQuotedCost, never more. Previously every live
+  // deliverable was charged the creator's FULL cost, so a creator with 2
+  // live deliverables inflated both the per-row CPV and the platform-level
+  // "Split by Platform" total to roughly double the real spend, while the
+  // top-line "Blended CPV" (costOfLiveContent, summed once per creator) was
+  // already correct — the two numbers visibly didn't reconcile.
+  unitCost: number;
 };
 
 export default function CampaignReport({
@@ -48,9 +60,11 @@ export default function CampaignReport({
   const pendingDeliverables = allDeliverables.length - liveDeliverables.length;
 
   // ---------- Live rows (used by 3, 4, 5) ----------
-  const liveRows: LiveRow[] = onboarding.flatMap((creator) =>
-    creator.deliverables.filter((d) => Boolean(d.liveLink)).map((deliverable) => ({ creator, deliverable }))
-  );
+  const liveRows: LiveRow[] = onboarding.flatMap((creator) => {
+    const liveDeliverables = creator.deliverables.filter((d) => Boolean(d.liveLink));
+    const unitCost = liveDeliverables.length > 0 ? (creator.finalQuotedCost ?? 0) / liveDeliverables.length : 0;
+    return liveDeliverables.map((deliverable) => ({ creator, deliverable, unitCost }));
+  });
 
   const lastUpdated = allDeliverables
     .map((d) => (d.lastTrackedAt ? new Date(d.lastTrackedAt) : null))
@@ -75,10 +89,11 @@ export default function CampaignReport({
     const comments = liveForPlatform.reduce((s, r) => s + (r.deliverable.comments ?? 0), 0);
     const shares = isInstagram(platform) ? liveForPlatform.reduce((s, r) => s + (r.deliverable.shares ?? 0), 0) : null;
     const er = views > 0 ? ((likes + comments + (shares ?? 0)) / views) * 100 : 0;
-    // Cost attributed to this format: each live deliverable in the format
-    // carries its creator's full final cost — directional when one cost
-    // covers several deliverables, exactly as documented in the brief.
-    const cost = liveForPlatform.reduce((s, r) => s + (r.creator.finalQuotedCost ?? 0), 0);
+    // Cost attributed to this format: each live deliverable carries its
+    // even share of the creator's final cost (see LiveRow.unitCost) — sums
+    // correctly even when a creator has several live deliverables, on the
+    // same platform or split across platforms.
+    const cost = liveForPlatform.reduce((s, r) => s + r.unitCost, 0);
     const cpv = views > 0 ? cost / views : 0;
     return {
       platform,
@@ -258,11 +273,10 @@ export default function CampaignReport({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium dark:divide-slate-800">
-              {sortedLiveRows.map(({ creator, deliverable: d }) => {
+              {sortedLiveRows.map(({ creator, deliverable: d, unitCost }) => {
                 const shares = isInstagram(d.platform) ? d.shares ?? 0 : null;
                 const er = d.views && d.views > 0 ? (((d.likes ?? 0) + (d.comments ?? 0) + (shares ?? 0)) / d.views) * 100 : 0;
-                const cost = creator.finalQuotedCost ?? 0;
-                const cpv = d.views && d.views > 0 ? cost / d.views : 0;
+                const cpv = d.views && d.views > 0 ? unitCost / d.views : 0;
                 const socialsHref = isInstagram(d.platform) ? creator.profileUrl : creator.youtubeUrl;
                 return (
                   <tr key={d.id}>
@@ -279,7 +293,7 @@ export default function CampaignReport({
                     </td>
                     <td className="whitespace-nowrap px-5 py-3">{d.title || (PLATFORM_LABELS[d.platform as keyof typeof PLATFORM_LABELS] ?? d.platform)}</td>
                     <td className="whitespace-nowrap px-5 py-3">{d.liveDate ? new Date(d.liveDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—"}</td>
-                    <td className="whitespace-nowrap px-5 py-3">{inr(cost)}</td>
+                    <td className="whitespace-nowrap px-5 py-3">{inr(unitCost)}</td>
                     <td className="px-5 py-3">{num(d.views ?? 0)}</td>
                     <td className="px-5 py-3">{num(d.likes ?? 0)}</td>
                     <td className="px-5 py-3">{num(d.comments ?? 0)}</td>
