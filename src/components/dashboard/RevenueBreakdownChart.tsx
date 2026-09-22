@@ -94,20 +94,20 @@ function FinancialPerformanceChart({ months }: { months: MonthRow[] }) {
           content={<ChartTooltipContent formatter={moneyTooltipRow} />}
         />
         <ChartLegend content={<ChartLegendContent />} />
-        {/* A <Line> needs 2+ points to draw an actual segment — with a
-            single month of data it silently renders nothing at all, dot
-            included. A ReferenceLine draws the same flat guide across the
-            full width the old hand-rolled chart used to for this exact
-            case, so there's always a visible line once there's any data. */}
-        {months.length === 1 ? (
+        {/* The <Line> stays mounted even with a single point — Recharts
+            needs an actual series present to compute the Y-axis domain and
+            populate the legend; dropping it entirely (as an earlier version
+            of this did) blanked out the whole chart, not just the line.
+            With only 1 point a <Line> has nothing to draw a path between
+            (silently renders no stroke), so a <ReferenceLine> is layered on
+            top for that case only, giving the same flat full-width guide
+            the old hand-rolled chart used to draw here. */}
+        <Line dataKey="revenue" type="monotone" stroke="var(--color-revenue)" strokeWidth={2.5} dot={false} activeDot={{ r: 5, strokeWidth: 2 }} />
+        <Line dataKey="marginValue" type="monotone" stroke="var(--color-marginValue)" strokeWidth={2.5} dot={false} activeDot={{ r: 5, strokeWidth: 2 }} />
+        {months.length === 1 && (
           <>
-            <ReferenceLine y={months[0].revenue} stroke="var(--color-revenue)" strokeWidth={2.5} />
-            <ReferenceLine y={months[0].marginValue} stroke="var(--color-marginValue)" strokeWidth={2.5} />
-          </>
-        ) : (
-          <>
-            <Line dataKey="revenue" type="monotone" stroke="var(--color-revenue)" strokeWidth={2.5} dot={false} activeDot={{ r: 5, strokeWidth: 2 }} />
-            <Line dataKey="marginValue" type="monotone" stroke="var(--color-marginValue)" strokeWidth={2.5} dot={false} activeDot={{ r: 5, strokeWidth: 2 }} />
+            <ReferenceLine y={months[0].revenue} stroke="var(--color-revenue)" strokeWidth={2.5} ifOverflow="extendDomain" />
+            <ReferenceLine y={months[0].marginValue} stroke="var(--color-marginValue)" strokeWidth={2.5} ifOverflow="extendDomain" />
           </>
         )}
       </LineChart>
@@ -156,21 +156,21 @@ function OnboardingEconomicsChart({ months }: { months: MonthRow[] }) {
         />
         <ChartLegend content={<ChartLegendContent />} />
         <Bar yAxisId="left" dataKey="creatorsOnboarded" fill="var(--color-creatorsOnboarded)" radius={[6, 6, 0, 0]} maxBarSize={46} />
-        {/* Same single-point gap as the chart above: a <Line> with one data
-            point draws nothing, so a lone onboarding month would show the
-            bar but no cost line at all. */}
-        {months.length === 1 ? (
-          <ReferenceLine yAxisId="right" y={months[0].avgCostPerCreator} stroke="var(--color-avgCostPerCreator)" strokeWidth={2.5} />
-        ) : (
-          <Line
-            yAxisId="right"
-            dataKey="avgCostPerCreator"
-            type="monotone"
-            stroke="var(--color-avgCostPerCreator)"
-            strokeWidth={2.5}
-            dot={false}
-            activeDot={{ r: 5, strokeWidth: 2 }}
-          />
+        {/* Line stays mounted even with 1 point, same reasoning as the chart
+            above — dropping it entirely blanks the right-hand axis, not
+            just the line itself. ReferenceLine adds the visible flat guide
+            on top for the single-month case. */}
+        <Line
+          yAxisId="right"
+          dataKey="avgCostPerCreator"
+          type="monotone"
+          stroke="var(--color-avgCostPerCreator)"
+          strokeWidth={2.5}
+          dot={false}
+          activeDot={{ r: 5, strokeWidth: 2 }}
+        />
+        {months.length === 1 && (
+          <ReferenceLine yAxisId="right" y={months[0].avgCostPerCreator} stroke="var(--color-avgCostPerCreator)" strokeWidth={2.5} ifOverflow="extendDomain" />
         )}
       </ComposedChart>
     </ChartContainer>
