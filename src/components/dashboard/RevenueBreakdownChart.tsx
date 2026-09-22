@@ -132,26 +132,73 @@ function linePathFor(points: { x: number; y: number }[]): string {
   return points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
 }
 
-// Same job as linePathFor, but joined with cubic-bezier curves through a
-// Catmull-Rom spline instead of straight segments — a gentle, editorial
-// curve reads as considered/finished the way a ruler-straight zig-zag line
-// chart doesn't, and it's how every polished analytics dashboard (Stripe,
-// Linear, etc.) draws a trend line. Falls back to the same flat-line/no-op
-// handling as linePathFor for 0-1 points since there's nothing to curve.
+// Same job as linePathFor, but joined with smooth cubic-bezier curves
+// instead of straight segments.
+//
+// This used to be a plain Catmull-Rom spline. Catmull-Rom guarantees the
+// curve passes exactly through every data point, but says nothing about
+// what happens BETWEEN two points — it's free to bulge past both of their
+// values before settling back down. On a financial line chart that's a real
+// bug, not just an aesthetic quirk: trace the curve's peak between two
+// months and it can sit above a gridline that neither month's actual value
+// reaches, which reads exactly like "the axis doesn't match what's
+// plotted" (reported live). This is monotone cubic interpolation instead
+// (Fritsch–Carlson method — the same algorithm behind d3's
+// curveMonotoneX): still a smooth curve through every point, but the
+// tangents are clamped so a segment can never overshoot past either of its
+// two endpoints' values. Provably safe for real data, which is why it's the
+// standard choice for charts over actual numbers rather than decorative
+// curves.
 function smoothPathFor(points: { x: number; y: number }[]): string {
-  if (points.length < 2) return linePathFor(points);
-  const p = points;
-  let d = `M ${p[0].x.toFixed(1)} ${p[0].y.toFixed(1)}`;
-  for (let i = 0; i < p.length - 1; i++) {
-    const p0 = p[i - 1] ?? p[i];
-    const p1 = p[i];
-    const p2 = p[i + 1];
-    const p3 = p[i + 2] ?? p2;
-    const c1x = p1.x + (p2.x - p0.x) / 6;
-    const c1y = p1.y + (p2.y - p0.y) / 6;
-    const c2x = p2.x - (p3.x - p1.x) / 6;
-    const c2y = p2.y - (p3.y - p1.y) / 6;
-    d += ` C ${c1x.toFixed(1)} ${c1y.toFixed(1)}, ${c2x.toFixed(1)} ${c2y.toFixed(1)}, ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
+  const n = points.length;
+  if (n < 2) return linePathFor(points);
+
+  const xs = points.map((p) => p.x);
+  const ys = points.map((p) => p.y);
+  const dx: number[] = [];
+  const slope: number[] = [];
+  for (let i = 0; i < n - 1; i++) {
+    dx.push(xs[i + 1] - xs[i]);
+    slope.push((ys[i + 1] - ys[i]) / (dx[i] || 1));
+  }
+
+  // One tangent per point: the endpoints just take the one slope touching
+  // them, interior points average their two neighboring slopes UNLESS the
+  // line changes direction there (a local peak/trough) — in which case the
+  // tangent is flattened to 0, which is what stops the curve from
+  // overshooting past a peak instead of easing into it.
+  const tangent: number[] = new Array(n).fill(0);
+  tangent[0] = slope[0];
+  tangent[n - 1] = slope[n - 2];
+  for (let i = 1; i < n - 1; i++) {
+    tangent[i] = slope[i - 1] === 0 || slope[i] === 0 || slope[i - 1] * slope[i] < 0 ? 0 : (slope[i - 1] + slope[i]) / 2;
+  }
+  // Fritsch-Carlson clamp: if a segment's two tangents are jointly too
+  // steep relative to its own secant slope, scale both back until they
+  // aren't — this is the actual overshoot-prevention step.
+  for (let i = 0; i < n - 1; i++) {
+    if (slope[i] === 0) {
+      tangent[i] = 0;
+      tangent[i + 1] = 0;
+      continue;
+    }
+    const a = tangent[i] / slope[i];
+    const b = tangent[i + 1] / slope[i];
+    const h = Math.sqrt(a * a + b * b);
+    if (h > 3) {
+      const t = 3 / h;
+      tangent[i] *= t;
+      tangent[i + 1] *= t;
+    }
+  }
+
+  let d = `M ${xs[0].toFixed(1)} ${ys[0].toFixed(1)}`;
+  for (let i = 0; i < n - 1; i++) {
+    const c1x = xs[i] + dx[i] / 3;
+    const c1y = ys[i] + (tangent[i] * dx[i]) / 3;
+    const c2x = xs[i + 1] - dx[i] / 3;
+    const c2y = ys[i + 1] - (tangent[i + 1] * dx[i]) / 3;
+    d += ` C ${c1x.toFixed(1)} ${c1y.toFixed(1)}, ${c2x.toFixed(1)} ${c2y.toFixed(1)}, ${xs[i + 1].toFixed(1)} ${ys[i + 1].toFixed(1)}`;
   }
   return d;
 }
@@ -280,21 +327,21 @@ function FinancialPerformanceChart({ months }: { months: MonthRow[] }) {
           <stop offset="100%" stopColor="#C68E00" stopOpacity="0" />
         </linearGradient>
         <linearGradient id="marginAreaGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#10b981" stopOpacity="0.22" />
-          <stop offset="55%" stopColor="#10b981" stopOpacity="0.06" />
-          <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
+          <stop offset="0%" stopColor="#0d9488" stopOpacity="0.22" />
+          <stop offset="55%" stopColor="#0d9488" stopOpacity="0.06" />
+          <stop offset="100%" stopColor="#0d9488" stopOpacity="0" />
         </linearGradient>
         <filter id="lineGlowGold" x="-20%" y="-20%" width="140%" height="140%">
           <feDropShadow dx="0" dy="1.5" stdDeviation="2.5" floodColor="#C68E00" floodOpacity="0.35" />
         </filter>
-        <filter id="lineGlowGreen" x="-20%" y="-20%" width="140%" height="140%">
-          <feDropShadow dx="0" dy="1.5" stdDeviation="2.5" floodColor="#10b981" floodOpacity="0.35" />
+        <filter id="lineGlowTeal" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="1.5" stdDeviation="2.5" floodColor="#0d9488" floodOpacity="0.35" />
         </filter>
       </defs>
       <Legend
         items={[
           { label: "Revenue", color: "#C68E00" },
-          { label: "Margin Value", color: "#10b981" },
+          { label: "Margin Value", color: "#0d9488" },
         ]}
       />
       {yTicks.map((t, i) => {
@@ -352,11 +399,11 @@ function FinancialPerformanceChart({ months }: { months: MonthRow[] }) {
         pathLength={1000}
         d={linePath("marginValue")}
         fill="none"
-        stroke="#10b981"
+        stroke="#0d9488"
         strokeWidth="2.5"
         strokeLinecap="round"
         strokeLinejoin="round"
-        filter="url(#lineGlowGreen)"
+        filter="url(#lineGlowTeal)"
       />
       {months.map((m, i) => {
         const isActive = tooltip?.key === m.key;
@@ -397,11 +444,11 @@ function FinancialPerformanceChart({ months }: { months: MonthRow[] }) {
               cy={yFor(m.marginValue)}
               r={isActive ? "7" : "5"}
               fill="#fff"
-              stroke="#10b981"
+              stroke="#0d9488"
               strokeWidth="2.5"
               style={{ transition: "r 150ms ease" }}
             />
-            <circle cx={xFor(i, months.length)} cy={yFor(m.marginValue)} r="2" fill="#10b981" />
+            <circle cx={xFor(i, months.length)} cy={yFor(m.marginValue)} r="2" fill="#0d9488" />
           </g>
         </g>
         );
@@ -440,17 +487,17 @@ function OnboardingEconomicsChart({ months }: { months: MonthRow[] }) {
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-[300px]">
       <defs>
         <linearGradient id="onboardingBarGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#e879f9" />
-          <stop offset="100%" stopColor="#c026d3" />
+          <stop offset="0%" stopColor="#a5b4fc" />
+          <stop offset="100%" stopColor="#4f46e5" />
         </linearGradient>
-        <filter id="lineGlowAmber" x="-20%" y="-20%" width="140%" height="140%">
-          <feDropShadow dx="0" dy="1.5" stdDeviation="2.5" floodColor="#f59e0b" floodOpacity="0.35" />
+        <filter id="lineGlowRose" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="1.5" stdDeviation="2.5" floodColor="#f43f5e" floodOpacity="0.35" />
         </filter>
       </defs>
       <Legend
         items={[
-          { label: "Creators Onboarded", color: "#d946ef" },
-          { label: "Avg Cost / Creator", color: "#f59e0b" },
+          { label: "Creators Onboarded", color: "#6366f1" },
+          { label: "Avg Cost / Creator", color: "#f43f5e" },
         ]}
       />
       {countAxis.ticks.map((t) => {
@@ -458,7 +505,7 @@ function OnboardingEconomicsChart({ months }: { months: MonthRow[] }) {
         return (
           <g key={`l${t}`}>
             <line x1={PAD_L} y1={y} x2={W - PAD_R} y2={y} stroke="currentColor" strokeDasharray="3 4" className="text-slate-100 dark:text-slate-800" strokeWidth="1" />
-            <text x={PAD_L - 10} y={y + 3} fontSize="10" textAnchor="end" fill="#c026d3">
+            <text x={PAD_L - 10} y={y + 3} fontSize="10" textAnchor="end" fill="#4f46e5">
               {t}
             </text>
           </g>
@@ -467,7 +514,7 @@ function OnboardingEconomicsChart({ months }: { months: MonthRow[] }) {
       {costTicks.map((t, i) => {
         const y = PAD_T + plotH - (i * plotH) / (costTicks.length - 1);
         return (
-          <text key={`r${t}`} x={W - PAD_R + 10} y={y + 3} fontSize="10" textAnchor="start" fill="#d97706">
+          <text key={`r${t}`} x={W - PAD_R + 10} y={y + 3} fontSize="10" textAnchor="start" fill="#e11d48">
             {money(t)}
           </text>
         );
@@ -478,8 +525,8 @@ function OnboardingEconomicsChart({ months }: { months: MonthRow[] }) {
         </text>
       ))}
       <XAxisTitle label="Month" />
-      <YAxisTitle label="Creators Onboarded" color="#c026d3" />
-      <YAxisTitle label="Avg Cost / Creator (₹)" side="right" color="#d97706" />
+      <YAxisTitle label="Creators Onboarded" color="#4f46e5" />
+      <YAxisTitle label="Avg Cost / Creator (₹)" side="right" color="#e11d48" />
       {months.map((m, i) => {
         const topY = yForCount(m.creatorsOnboarded);
         const barH = Math.max(0, PAD_T + plotH - topY);
@@ -505,14 +552,14 @@ function OnboardingEconomicsChart({ months }: { months: MonthRow[] }) {
               <title>{`${m.label}: ${m.creatorsOnboarded} creators onboarded`}</title>
             </rect>
             {barH > 0 && (
-              <text x={xBand(i)} y={topY - 7} fontSize="10.5" fontWeight="700" textAnchor="middle" fill="#a21caf">
+              <text x={xBand(i)} y={topY - 7} fontSize="10.5" fontWeight="700" textAnchor="middle" fill="#4338ca">
                 {m.creatorsOnboarded}
               </text>
             )}
           </g>
         );
       })}
-      <path className="chart-line-draw" pathLength={1000} d={linePath} fill="none" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" filter="url(#lineGlowAmber)" />
+      <path className="chart-line-draw" pathLength={1000} d={linePath} fill="none" stroke="#f43f5e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" filter="url(#lineGlowRose)" />
       {months.map((m, i) => {
         const isActive = tooltip?.key === m.key;
         return (
@@ -531,11 +578,11 @@ function OnboardingEconomicsChart({ months }: { months: MonthRow[] }) {
             cy={yForCost(m.avgCostPerCreator)}
             r={isActive ? "7" : "5"}
             fill="#fff"
-            stroke="#f59e0b"
+            stroke="#f43f5e"
             strokeWidth="2.5"
             style={{ transition: "r 150ms ease" }}
           />
-          <circle cx={xBand(i)} cy={yForCost(m.avgCostPerCreator)} r="2" fill="#f59e0b" />
+          <circle cx={xBand(i)} cy={yForCost(m.avgCostPerCreator)} r="2" fill="#f43f5e" />
         </g>
         );
       })}
@@ -548,9 +595,13 @@ function OnboardingEconomicsChart({ months }: { months: MonthRow[] }) {
 // Always shows every client — the "select a client" dropdown above only
 // filters charts 1 and 2, since filtering this one down to a single client
 // would leave a single bar, defeating the point of a cross-client view.
+// Deep, desaturated jewel tones instead of a bright primary-color rainbow —
+// still 12 distinguishable hues (one per possible month), but reads as a
+// considered palette rather than a crayon box, and sits closer to the
+// brand's own warm gold (#C68E00) than the old red-to-blue spectrum did.
 const MONTH_PALETTE = [
-  "#b91c3c", "#dc4731", "#f0703b", "#f4a637", "#f9d34f", "#eef283",
-  "#c8e17e", "#8fd18f", "#5cc0a0", "#3fa8b0", "#2f86b0", "#3161a8",
+  "#b45309", "#c2410c", "#b91c1c", "#9d174d", "#86198f", "#6d28d9",
+  "#4338ca", "#1d4ed8", "#0369a1", "#0e7490", "#047857", "#4d7c0f",
 ];
 
 function ClientRevenueStackChart({ rows }: { rows: RevenueDataRow[] }) {
