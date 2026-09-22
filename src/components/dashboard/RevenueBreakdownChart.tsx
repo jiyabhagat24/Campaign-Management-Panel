@@ -45,28 +45,12 @@ const monthLabel = (key: string) => {
   const [y, m] = key.split("-").map(Number);
   return new Date(y, m - 1, 1).toLocaleDateString("en-IN", { month: "short", year: "2-digit" });
 };
-// Same idea as monthKey/monthLabel, one level finer — used by the Financial
-// Performance chart specifically (per request: daily, not monthly), while
-// Onboarding Volume below stays bucketed by month.
-const dayKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-const dayLabel = (key: string) => {
-  const [y, m, d] = key.split("-").map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
-};
-
 type MonthRow = {
   key: string;
   label: string;
   revenue: number;
   creatorsOnboarded: number;
   avgCostPerCreator: number;
-  marginValue: number;
-};
-
-type DayRow = {
-  key: string;
-  label: string;
-  revenue: number;
   marginValue: number;
 };
 
@@ -96,14 +80,14 @@ const financialConfig = {
   marginValue: { label: "Margin Value", color: "var(--chart-2)" },
 } satisfies ChartConfig;
 
-function FinancialPerformanceChart({ days }: { days: DayRow[] }) {
-  if (days.length === 0) return <EmptyState />;
+function FinancialPerformanceChart({ months }: { months: MonthRow[] }) {
+  if (months.length === 0) return <EmptyState />;
 
   return (
     <ChartContainer config={financialConfig} className="aspect-auto h-[300px] w-full">
-      <LineChart data={days} margin={{ left: 4, right: 4, top: 8 }}>
+      <LineChart data={months} margin={{ left: 4, right: 4, top: 8 }}>
         <CartesianGrid vertical={false} strokeDasharray="3 4" />
-        <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={10} fontSize={10.5} interval="preserveStartEnd" minTickGap={24} />
+        <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={10} fontSize={10.5} />
         <YAxis tickLine={false} axisLine={false} tickMargin={8} fontSize={10.5} width={56} tickFormatter={money} />
         <ChartTooltip
           cursor={{ strokeDasharray: "3 3" }}
@@ -111,15 +95,14 @@ function FinancialPerformanceChart({ days }: { days: DayRow[] }) {
         />
         <ChartLegend content={<ChartLegendContent />} />
         {/* A <Line> needs 2+ points to draw an actual segment — with a
-            single day of data (e.g. right after launch, before a second
-            day's onboarding lands) it silently renders nothing at all, dot
+            single month of data it silently renders nothing at all, dot
             included. A ReferenceLine draws the same flat guide across the
             full width the old hand-rolled chart used to for this exact
             case, so there's always a visible line once there's any data. */}
-        {days.length === 1 ? (
+        {months.length === 1 ? (
           <>
-            <ReferenceLine y={days[0].revenue} stroke="var(--color-revenue)" strokeWidth={2.5} />
-            <ReferenceLine y={days[0].marginValue} stroke="var(--color-marginValue)" strokeWidth={2.5} />
+            <ReferenceLine y={months[0].revenue} stroke="var(--color-revenue)" strokeWidth={2.5} />
+            <ReferenceLine y={months[0].marginValue} stroke="var(--color-marginValue)" strokeWidth={2.5} />
           </>
         ) : (
           <>
@@ -309,26 +292,6 @@ export default function RevenueBreakdownChart({ rows }: { rows: RevenueDataRow[]
       });
   }, [rows, client]);
 
-  const days: DayRow[] = useMemo(() => {
-    const filtered = client ? rows.filter((r) => r.brand === client) : rows;
-    const buckets = new Map<string, { revenue: number; internalCost: number }>();
-
-    for (const r of filtered) {
-      const key = dayKey(new Date(r.onboardedAt));
-      const b = buckets.get(key) ?? { revenue: 0, internalCost: 0 };
-      b.revenue += r.revenue;
-      b.internalCost += r.internalCost;
-      buckets.set(key, b);
-    }
-
-    return Array.from(buckets.keys())
-      .sort()
-      .map((key) => {
-        const b = buckets.get(key)!;
-        return { key, label: dayLabel(key), revenue: b.revenue, marginValue: b.revenue - b.internalCost };
-      });
-  }, [rows, client]);
-
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
@@ -347,8 +310,8 @@ export default function RevenueBreakdownChart({ rows }: { rows: RevenueDataRow[]
         </select>
       </div>
 
-      <ChartCard title="Daily Financial Performance" sub="Revenue and margin value, day by day">
-        <FinancialPerformanceChart days={days} />
+      <ChartCard title="Monthly Financial Performance" sub="Revenue and margin value, month on month">
+        <FinancialPerformanceChart months={months} />
       </ChartCard>
 
       <ChartCard title="Onboarding Volume vs. Unit Economics" sub="Creators onboarded (bar) against average cost per creator (line)">
