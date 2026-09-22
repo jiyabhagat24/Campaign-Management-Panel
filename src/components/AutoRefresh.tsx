@@ -7,25 +7,37 @@ import { useRouter } from "next/navigation";
 // Server Actions already call revalidatePath() on write, but that only
 // busts the cache for the NEXT request — it does nothing for a tab someone
 // already has open (e.g. a Campaign Manager watching a campaign while a
-// Client onboards a creator elsewhere). This polls a lightweight
-// router.refresh() in the background so every page under (app) picks up
-// other people's changes within a few seconds, without a full reload.
+// Client onboards a creator elsewhere).
 //
-// Two guards keep this from being disruptive:
-//  - Paused while the tab isn't visible (no point refreshing a background tab).
+// This used to call router.refresh() directly on every tick, which reruns
+// every Server Component query on the open page for every tab, every 8s —
+// at 50 concurrent users that's a large, constant load even when nothing
+// changed. It now polls a cheap /api/heartbeat (one indexed row lookup)
+// instead, and only pays for the real router.refresh() when the heartbeat
+// timestamp actually advances — i.e. only when something genuinely changed
+// somewhere in the app since the last check.
+//
+// Same two guards as before:
+//  - Paused while the tab isn't visible (no point checking a background tab).
 //  - Skipped on any tick where the user currently has a text/number input,
 //    textarea, or select focused — refresh mid-keystroke would blow away
 //    whatever they haven't blurred/saved yet (most editable cells here are
 //    uncontrolled inputs keyed off server-provided defaultValue).
-const REFRESH_INTERVAL_MS = 8000;
+const POLL_INTERVAL_MS = 8000;
 
 export default function AutoRefresh() {
   const router = useRouter();
   const routerRef = useRef(router);
   routerRef.current = router;
+  // null until the first successful heartbeat — that first response is just
+  // the baseline, never triggers a refresh (nothing "changed" relative to
+  // a baseline we haven't recorded yet).
+  const lastSeen = useRef<string | null>(null);
 
   useEffect(() => {
-    const tick = () => {
+    let cancelled = false;
+
+    const tick = async () => {
       if (document.hidden) return;
       const active = document.activeElement;
       const tag = active?.tagName;
@@ -35,11 +47,26 @@ export default function AutoRefresh() {
         tag === "SELECT" ||
         (active instanceof HTMLElement && active.isContentEditable);
       if (isEditing) return;
-      routerRef.current.refresh();
+
+      try {
+        const res = await fetch("/api/heartbeat", { cache: "no-store" });
+        if (!res.ok || cancelled) return;
+        const { latest } = (await res.json()) as { latest: string | null };
+        if (latest && latest !== lastSeen.current) {
+          const isFirstCheck = lastSeen.current === null;
+          lastSeen.current = latest;
+          if (!isFirstCheck) routerRef.current.refresh();
+        }
+      } catch {
+        // Network hiccup — just try again next tick, no need to surface this.
+      }
     };
 
-    const id = setInterval(tick, REFRESH_INTERVAL_MS);
-    return () => clearInterval(id);
+    const id = setInterval(tick, POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
   }, []);
 
   return null;

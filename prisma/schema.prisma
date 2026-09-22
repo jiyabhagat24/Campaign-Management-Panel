@@ -222,7 +222,6 @@ model Campaign {
   activity             ActivityLog[]
   clientAccess         CampaignClientAccess[]
   teamMembers          CampaignTeamMember[]
-  languageRequirements CampaignLanguageRequirement[] // deprecated — see platformBriefs
   platformBriefs       CampaignPlatformBrief[]
   escalations          Escalation[]
   chaseLogs            ChaseLog[]
@@ -242,17 +241,6 @@ model Campaign {
 // CampaignPlatformLanguageRequirement (scoped to a CampaignPlatformBrief
 // instead of directly to a Campaign), left in place only so the one
 // campaign created before platform-scoped briefs existed keeps its data.
-model CampaignLanguageRequirement {
-  id                String   @id @default(cuid())
-  campaignId        String
-  campaign          Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  language          String
-  creatorsRequired  Int
-  createdAt         DateTime @default(now())
-
-  @@index([campaignId])
-}
-
 // One brief per platform within a campaign — e.g. an "Atomberg" campaign
 // can have a separate Instagram brief (Lifestyle/Comic category, 1 Collab
 // Reel + 1 MUR, ₹60-70K/creator, 20 creators across 6 languages) and a
