@@ -32,7 +32,6 @@ import {
   removeScriptLink,
   lookupInstagramProfileAction,
   lookupYoutubeChannelAction,
-  lookupExistingCreatorAcrossCampaigns,
   refreshCreatorSocialStats,
   updateCreatorShortlist,
   publishQuotedCost,
@@ -554,54 +553,6 @@ function AddCreatorForm({
   const [showInstagramModal, setShowInstagramModal] = useState(false);
   const [instagramAdded, setInstagramAdded] = useState(false);
 
-  // Sets a form field only if it isn't already filled — used so the
-  // cross-campaign DB fill (below) never clobbers something the user
-  // already typed, and so a later platform lookup never clobbers what the
-  // DB fill just set.
-  function setFieldIfEmpty(form: HTMLFormElement, name: string, value: number | string | null | undefined) {
-    if (value === null || value === undefined || value === "") return false;
-    const el = form.elements.namedItem(name) as HTMLInputElement | null;
-    if (!el || el.value.trim()) return false;
-    el.value = String(value);
-    return true;
-  }
-
-  // Cross-campaign DB check — same creator may already have been
-  // shortlisted on another campaign, with real numbers already on file.
-  // Checked first, before either platform lookup, so a repeat creator never
-  // needs a fresh fetch/manual entry at all. Returns whether it found and
-  // used a match.
-  async function tryCrossCampaignFill(form: HTMLFormElement, opts: { profileUrl?: string; youtubeUrl?: string }): Promise<boolean> {
-    const result = await lookupExistingCreatorAcrossCampaigns(opts);
-    if (!result.ok) return false;
-    const { data } = result;
-
-    setFieldIfEmpty(form, "name", data.name);
-    const handleInput = form.elements.namedItem("channelHandle") as HTMLInputElement | null;
-    if (handleInput && !handleInput.value.trim() && data.channelHandle) handleInput.value = data.channelHandle;
-
-    const filledIg = setFieldIfEmpty(form, "followers", data.followers);
-    setFieldIfEmpty(form, "avgViews", data.avgViews);
-    setFieldIfEmpty(form, "engagementRate", data.engagementRate);
-    const filledYt =
-      setFieldIfEmpty(form, "youtubeSubscribers", data.youtubeSubscribers) ||
-      setFieldIfEmpty(form, "youtubeLongMedianViews", data.youtubeLongMedianViews) ||
-      setFieldIfEmpty(form, "youtubeLongMedianERPercent", data.youtubeLongMedianERPercent) ||
-      setFieldIfEmpty(form, "youtubeShortsMedianViews", data.youtubeShortsMedianViews) ||
-      setFieldIfEmpty(form, "youtubeShortsMedianERPercent", data.youtubeShortsMedianERPercent);
-
-    if (filledIg) setInstagramAdded(true);
-    if (filledYt) setYoutubeAdded(true);
-
-    const msg = {
-      type: "success" as const,
-      text: `Already shortlisted before on "${data.campaign.name}" — pulled their saved stats from your database instead of a fresh fetch.`,
-    };
-    if (opts.profileUrl) setFetchMsg(msg);
-    if (opts.youtubeUrl) setYtFetchMsg(msg);
-    return true;
-  }
-
   async function handleAutoFill(rawUrl: string) {
     const url = rawUrl.trim();
     const form = formRef.current;
@@ -611,15 +562,12 @@ function AddCreatorForm({
     setFetching(true);
     setFetchMsg(null);
 
-    // DB first: this exact handle may already be a Creator row on another
-    // campaign. Only fall back to the Instagram cache (and from there, to
-    // manual entry — Instagram has no live API here) if nothing's on file.
-    const foundInDb = await tryCrossCampaignFill(form, { profileUrl: url });
-    if (foundInDb) {
-      setFetching(false);
-      return;
-    }
-
+    // Always live/cache, never a snapshot off an old campaign's Creator row
+    // — Audience Size/Median Views/Median ER% change over time, so a
+    // number pulled from whenever this creator was last shortlisted
+    // elsewhere would just be stale. InstagramProfileCache is itself kept
+    // current by the daily sync, so this is already "fetch from the real
+    // source, then persist" — see lookupInstagramProfileAction.
     const result = await lookupInstagramProfileAction(url);
     setFetching(false);
 
@@ -664,14 +612,12 @@ function AddCreatorForm({
     setYtFetching(true);
     setYtFetchMsg(null);
 
-    // DB first, same as Instagram above — only hit the live YouTube API
-    // (quota-limited) if this channel isn't already a Creator row somewhere.
-    const foundInDb = await tryCrossCampaignFill(form, { youtubeUrl: url });
-    if (foundInDb) {
-      setYtFetching(false);
-      return;
-    }
-
+    // Always live API (cached 24h, refreshed after that) — same reasoning
+    // as Instagram above: subscriber/median-view numbers move, so a number
+    // carried over from whenever this channel was last shortlisted on a
+    // different campaign would be stale by the time it's shown here.
+    // lookupYoutubeChannelAction fetches fresh and upserts the one cache
+    // row for this channel — it never creates a second entry for it.
     const result = await lookupYoutubeChannelAction(url);
     setYtFetching(false);
 
