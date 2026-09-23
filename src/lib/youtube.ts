@@ -34,6 +34,12 @@ export type YoutubeChannelStats = {
   longMedianERPercent: number | null;
   shortsMedianViews: number | null;
   shortsMedianERPercent: number | null;
+  // Channel's display name + @handle, pulled from the same snippet part
+  // already requested for every lookup — lets the Add Influencer form
+  // auto-fill Creator Name/handle from a pasted YouTube URL, the same way
+  // it already does for a pasted Instagram URL.
+  channelTitle: string | null;
+  channelHandle: string | null;
 };
 
 export class YoutubeLookupError extends Error {
@@ -112,7 +118,7 @@ export function normalizeYoutubeChannelUrl(rawInput: string): string {
 
 // Accepts /channel/UC..., /@handle, /c/Name, /user/Name, or a bare handle.
 // Resolves whichever form to a channelId + uploads playlist via the API.
-async function resolveChannel(rawInput: string): Promise<{ channelId: string; uploadsPlaylistId: string; subscribers: number | null }> {
+async function resolveChannel(rawInput: string): Promise<{ channelId: string; uploadsPlaylistId: string; subscribers: number | null; title: string | null; handle: string | null }> {
   const trimmed = rawInput.trim();
   if (!trimmed) throw new YoutubeLookupError("INVALID_URL", "Enter a YouTube channel URL.");
 
@@ -170,10 +176,13 @@ async function resolveChannel(rawInput: string): Promise<{ channelId: string; up
   const channel = json.items?.[0];
   if (!channel) throw new YoutubeLookupError("NOT_FOUND", "Couldn't find that YouTube channel.");
 
+  const customUrl: string | undefined = channel.snippet?.customUrl;
   return {
     channelId: channel.id,
     uploadsPlaylistId: channel.contentDetails?.relatedPlaylists?.uploads,
     subscribers: channel.statistics?.hiddenSubscriberCount ? null : (channel.statistics?.subscriberCount != null ? Number(channel.statistics.subscriberCount) : null),
+    title: channel.snippet?.title ?? null,
+    handle: customUrl ? (customUrl.startsWith("@") ? customUrl : `@${customUrl}`) : null,
   };
 }
 
@@ -453,10 +462,10 @@ async function statsForVideoIds(videoIds: string[]) {
 }
 
 export async function fetchYoutubeChannelStats(rawInput: string): Promise<YoutubeChannelStats> {
-  const { channelId, uploadsPlaylistId, subscribers } = await resolveChannel(rawInput);
+  const { channelId, uploadsPlaylistId, subscribers, title, handle } = await resolveChannel(rawInput);
 
   if (!uploadsPlaylistId) {
-    return { channelId, subscribers, longMedianViews: null, longMedianERPercent: null, shortsMedianViews: null, shortsMedianERPercent: null };
+    return { channelId, subscribers, longMedianViews: null, longMedianERPercent: null, shortsMedianViews: null, shortsMedianERPercent: null, channelTitle: title, channelHandle: handle };
   }
 
   const longPlaylistId = derivedPlaylistId(channelId, "LF");
@@ -495,5 +504,7 @@ export async function fetchYoutubeChannelStats(rawInput: string): Promise<Youtub
     longMedianERPercent: long.medianER,
     shortsMedianViews: shorts.medianViews,
     shortsMedianERPercent: shorts.medianER,
+    channelTitle: title,
+    channelHandle: handle,
   };
 }

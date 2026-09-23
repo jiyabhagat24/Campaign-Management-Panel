@@ -681,6 +681,15 @@ function AddCreatorForm({
     }
 
     const { data } = result;
+    // Auto-fill Creator Name/handle from the channel's own title/@handle —
+    // same as the Instagram lookup already does — but only if the user
+    // hasn't already typed something in, same rule as every other field
+    // here.
+    const nameInput = form.elements.namedItem("name") as HTMLInputElement | null;
+    if (nameInput && !nameInput.value.trim() && data.channelTitle) nameInput.value = data.channelTitle;
+    const handleInput = form.elements.namedItem("channelHandle") as HTMLInputElement | null;
+    if (handleInput && !handleInput.value.trim() && data.channelHandle) handleInput.value = data.channelHandle;
+
     const setHidden = (name: string, value: number | null | undefined) => {
       if (value === null || value === undefined) return;
       (form.elements.namedItem(name) as HTMLInputElement).value = String(value);

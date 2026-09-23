@@ -721,6 +721,13 @@ model YoutubeChannelCache {
   longMedianERPercent   Float?
   shortsMedianViews     Int? // median views across recent Shorts
   shortsMedianERPercent Float?
+  // Channel display name + @handle, from the same snippet part already
+  // fetched for every lookup — lets the Add Influencer form auto-fill
+  // Creator Name/handle from a pasted YouTube URL (see
+  // handleYoutubeAutoFill in CreatorKanban.tsx), same as Instagram already
+  // does from InstagramProfileCache.username.
+  channelTitle          String?
+  channelHandle         String?
   capturedAt            DateTime @default(now())
   updatedAt             DateTime @updatedAt
 }

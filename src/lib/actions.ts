@@ -1110,6 +1110,16 @@ const YOUTUBE_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 1 day — stays within the 
 // result fetched within the last day before hitting the live API, and if
 // YOUTUBE_API_KEY isn't set yet, falls back to any stale cache (or a clear
 // "not set up yet" message) instead of erroring the whole form.
+// Narrows a YoutubeChannelCache row to also carry channelTitle/channelHandle
+// for TS purposes. Those columns are real in schema.prisma (and will be real
+// in the generated client after the next deploy, since Vercel's postinstall
+// runs `prisma generate`) — this cast only covers the local dev client here
+// not having been regenerated against them yet (no network to Prisma's
+// binary host in this sandbox).
+function withYtMeta<T>(row: T): T & { channelTitle: string | null; channelHandle: string | null } {
+  return row as T & { channelTitle: string | null; channelHandle: string | null };
+}
+
 export async function lookupYoutubeChannelAction(channelUrl: string) {
   const user = await requireUser();
   if (isClient(user.role)) throw new Error("Clients cannot look up creators");
@@ -1120,7 +1130,7 @@ export async function lookupYoutubeChannelAction(channelUrl: string) {
 
   const cached = await prisma.youtubeChannelCache.findUnique({ where: { channelUrl: cacheKey } });
   const isFresh = cached && Date.now() - cached.updatedAt.getTime() < YOUTUBE_CACHE_TTL_MS;
-  if (isFresh) return { ok: true as const, data: cached, stale: false };
+  if (isFresh) return { ok: true as const, data: withYtMeta(cached), stale: false };
 
   try {
     const stats = await fetchYoutubeChannelStats(url);
@@ -1129,9 +1139,9 @@ export async function lookupYoutubeChannelAction(channelUrl: string) {
       create: { channelUrl: cacheKey, ...stats },
       update: { ...stats },
     });
-    return { ok: true as const, data: saved, stale: false };
+    return { ok: true as const, data: withYtMeta(saved), stale: false };
   } catch (err) {
-    if (cached) return { ok: true as const, data: cached, stale: true };
+    if (cached) return { ok: true as const, data: withYtMeta(cached), stale: true };
     const message = err instanceof YoutubeLookupError ? err.message : "Couldn't fetch YouTube data.";
     return { ok: false as const, error: message };
   }
