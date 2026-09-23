@@ -320,7 +320,7 @@ export default function CreatorKanban({
                 <table className="w-full table-fixed border-separate border-spacing-0 text-left text-sm">
                   <thead className="bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:bg-slate-800 dark:text-slate-400">
                     <tr>
-                      <th className="sticky left-0 top-0 z-40 w-[200px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Name</th>
+                      <th className="sticky left-0 top-0 z-40 w-[200px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Username</th>
                       <th className="sticky left-[200px] top-0 z-40 w-[230px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Socials</th>
                       <th className="sticky left-[430px] top-0 z-40 w-[260px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Deliverables</th>
                       <th className="sticky top-0 z-30 w-[220px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Rights of Usage</th>
@@ -391,7 +391,7 @@ export default function CreatorKanban({
               <table className="w-full table-fixed border-separate border-spacing-0 text-left text-sm">
                 <thead className="bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:bg-slate-800 dark:text-slate-400">
                   <tr>
-                    <th className="sticky left-0 top-0 z-40 w-[200px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Name</th>
+                    <th className="sticky left-0 top-0 z-40 w-[200px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Username</th>
                     <th className="sticky left-[200px] top-0 z-40 w-[230px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Socials</th>
                     <th className="sticky left-[430px] top-0 z-40 w-[260px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Deliverables</th>
                     <th className="sticky top-0 z-30 w-[220px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Rights of Usage</th>
