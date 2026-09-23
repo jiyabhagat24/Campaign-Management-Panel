@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { Role } from "@/lib/constants";
-import { canSeeInternalCost, canManageTeam, canManageClients, canSetCommercials, isClient, isSuperAdmin } from "@/lib/rbac";
+import { canSeeInternalCost, canManageTeam, canManageClients, canViewPricingQueue, isClient, isSuperAdmin } from "@/lib/rbac";
 import ThemeToggle from "@/components/ThemeToggle";
 import NotificationBell, { type NotificationItem } from "@/components/NotificationBell";
 import {
@@ -29,7 +29,8 @@ const NAV = [
   // page itself. What each of them actually sees there is further scoped
   // per campaign assignment (campaignVisibilityWhere in rbac.ts).
   { href: "/finance", label: "Finance", icon: Receipt, financeOnly: true },
-  // Campaign-Manager-only — Pricing Queue (task #15).
+  // Campaign Manager + IR Manager — Pricing Queue (task #15), see
+  // canViewPricingQueue in rbac.ts.
   { href: "/pricing-queue", label: "Pricing Queue", icon: DollarSign, pricingOnly: true },
   // Escalations (task #14) and Action Tracker (task #16) — internal-only,
   // not gated to a single role since any internal role can raise/own an
@@ -72,7 +73,7 @@ export default function Sidebar({ role, name, notifications, userId }: { role: R
     if ("teamOnly" in item && item.teamOnly && !canManageTeam(role)) return false;
     if ("clientsOnly" in item && item.clientsOnly && !canManageClients(role)) return false;
     if ("internalOnly" in item && item.internalOnly && isClient(role)) return false;
-    if ("pricingOnly" in item && item.pricingOnly && !canSetCommercials(role)) return false;
+    if ("pricingOnly" in item && item.pricingOnly && !canViewPricingQueue(role)) return false;
     return true;
   });
 

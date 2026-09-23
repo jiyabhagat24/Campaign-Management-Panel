@@ -50,6 +50,17 @@ export function canSetCommercials(role: Role) {
   return role === "CAMPAIGN_MANAGER";
 }
 
+// Who can see the /pricing-queue page (and its Sidebar link) — a read-only
+// worklist of rows waiting to be priced, not the pricing action itself.
+// Deliberately separate from canSetCommercials: IR Manager needs visibility
+// into what's stuck waiting on a Campaign Manager (they own escalations —
+// see assignEscalationOwner/claimEscalation — and the SLA sweep already
+// pings them when a row sits 48h+ unpriced), but still can't set Quoted/
+// Final Cost themselves — that stays Campaign-Manager-exclusive above.
+export function canViewPricingQueue(role: Role) {
+  return canSetCommercials(role) || role === "IR_MANAGER";
+}
+
 // IR Intern: works shortlisting/onboarding rows like an IR Executive, and
 // sees full cost/margin same as everyone internal, but never approves or
 // sets commercials.

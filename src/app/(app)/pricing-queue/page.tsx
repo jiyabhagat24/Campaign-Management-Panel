@@ -2,18 +2,21 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { currentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { canSetCommercials, campaignVisibilityWhere, isSuperAdmin } from "@/lib/rbac";
+import { canViewPricingQueue, campaignVisibilityWhere, isSuperAdmin } from "@/lib/rbac";
 import { DollarSign } from "lucide-react";
 
 // Task #15 — Pricing Queue: every shortlist row still waiting on a Campaign
 // Manager's vet decision (In Pricing → Published/Rejected, spec State
-// Machine), Campaign-Manager-only per Page Permissions. Not a new table —
-// just the existing Creator rows with internalCost set and no quotedCost
-// yet, i.e. IR has submitted a row for pricing but nobody's vetted it.
+// Machine). Viewable by Campaign Manager and IR Manager (canViewPricingQueue)
+// — the actual pricing action still only ever happens from a campaign's own
+// Shortlist tab, still gated to Campaign Manager there (canSetCommercials).
+// Not a new table — just the existing Creator rows with internalCost set and
+// no quotedCost yet, i.e. IR has submitted a row for pricing but nobody's
+// vetted it.
 export default async function PricingQueuePage() {
   const user = await currentUser();
   if (!user) redirect("/login");
-  if (!canSetCommercials(user.role) && !isSuperAdmin(user.id)) redirect("/dashboard");
+  if (!canViewPricingQueue(user.role) && !isSuperAdmin(user.id)) redirect("/dashboard");
 
   const rows = await prisma.creator.findMany({
     where: {
