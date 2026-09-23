@@ -2213,28 +2213,29 @@ function OnboardingCreatorRow({
         )}
       </td>
 
-      {/* Language/Location/Category — same fields as Shortlist, carried
-          over and still editable here (a creator's targeting metadata can
-          keep being corrected after they've onboarded). */}
+      {/* Language/Location/Category — carried over from Shortlist, but
+          locked once a creator's onboarded: only editable from the
+          Shortlist tab (see canOperateShortlist gate there), static text
+          here. */}
       <TagDropdownCell
         value={creator.language}
         options={INDIAN_LANGUAGES}
         placeholder="Select language…"
-        editable={!isClientView && (canOperateShortlist(role) || superAdmin)}
+        editable={false}
         onSave={(v) => withRefresh(updateCreatorShortlist(creator.id, { language: v }))}
       />
       <TagDropdownCell
         value={creator.location}
         options={MAJOR_INDIAN_CITIES}
         placeholder="Select location…"
-        editable={!isClientView && (canOperateShortlist(role) || superAdmin)}
+        editable={false}
         onSave={(v) => withRefresh(updateCreatorShortlist(creator.id, { location: v }))}
       />
       <TagDropdownCell
         value={creator.category}
         options={CONTENT_CATEGORIES}
         placeholder="Select category…"
-        editable={!isClientView && (canOperateShortlist(role) || superAdmin)}
+        editable={false}
         onSave={(v) => withRefresh(updateCreatorShortlist(creator.id, { category: v }))}
       />
 
