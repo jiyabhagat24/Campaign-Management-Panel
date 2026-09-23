@@ -2736,36 +2736,55 @@ function TagDropdownCell({
     }
   };
 
+  // One box at a time, not a select plus a second input stacked/crammed
+  // next to it — picking "Others" swaps the select out for a text input in
+  // the exact same spot, with a small x to go back to the dropdown.
   return (
-    <td className="whitespace-nowrap border-b border-slate-100 px-5 py-4 dark:border-slate-800">
-      <select
-        value={otherMode ? "Others" : current}
-        onChange={(e) => {
-          if (e.target.value === "Others") {
-            setOtherMode(true);
-          } else {
-            setOtherMode(false);
-            save(e.target.value);
-          }
-        }}
-        className="w-28 rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
-      >
-        <option value="">{placeholder}</option>
-        {options.map((o) => (
-          <option key={o} value={o}>
-            {o}
-          </option>
-        ))}
-        <option value="Others">Others</option>
-      </select>
-      {otherMode && (
-        <input
-          defaultValue={isKnown ? "" : current}
-          placeholder="Type value"
-          autoFocus
-          onBlur={(e) => save(e.target.value)}
-          className="mt-1 w-28 rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
-        />
+    <td className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
+      {otherMode ? (
+        <div className="flex items-center gap-1">
+          <input
+            defaultValue={isKnown ? "" : current}
+            placeholder="Type value"
+            autoFocus
+            onBlur={(e) => save(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+            }}
+            className="w-28 rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+          />
+          <button
+            type="button"
+            onClick={() => {
+              setOtherMode(false);
+              save("");
+            }}
+            title="Back to dropdown"
+            className="shrink-0 text-slate-300 hover:text-slate-600 dark:text-slate-600 dark:hover:text-slate-300"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </div>
+      ) : (
+        <select
+          value={current}
+          onChange={(e) => {
+            if (e.target.value === "Others") {
+              setOtherMode(true);
+            } else {
+              save(e.target.value);
+            }
+          }}
+          className="w-28 rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+        >
+          <option value="">{placeholder}</option>
+          {options.map((o) => (
+            <option key={o} value={o}>
+              {o}
+            </option>
+          ))}
+          <option value="Others">Others</option>
+        </select>
       )}
     </td>
   );
