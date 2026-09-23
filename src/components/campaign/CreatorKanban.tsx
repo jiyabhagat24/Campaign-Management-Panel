@@ -1620,16 +1620,11 @@ function ShortlistCreatorRow({
         )}
       </td>
       <td className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
-        {isClientView ? (
-          <input
-            defaultValue={creator.clientRemark ?? ""}
-            placeholder="Remark"
-            onBlur={(e) => withRefresh(setCreatorClientDecision(creator.id, { clientRemark: e.target.value || null }))}
-            className="w-28 rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
-          />
-        ) : (
-          <span className="block truncate text-xs text-slate-600 dark:text-slate-400" title={creator.clientRemark ?? undefined}>{creator.clientRemark || "—"}</span>
-        )}
+        <RemarkCell
+          value={creator.clientRemark}
+          editable={isClientView}
+          onSave={(v) => withRefresh(setCreatorClientDecision(creator.id, { clientRemark: v }))}
+        />
       </td>
       <EditableNumberCell
         value={creator.finalQuotedCost}
@@ -2827,6 +2822,93 @@ function TagDropdownCell({
         />
       )}
     </td>
+  );
+}
+
+// Splits free text on URLs (http(s):// or bare www.) and renders the URL
+// portions as real clickable links, leaving everything else as plain text.
+// Used by RemarkCell so a client's typed-in remark ("see brief here:
+// https://...") doesn't just sit there as dead text for the IR team.
+function linkifyText(text: string): React.ReactNode[] {
+  const urlRegex = /((?:https?:\/\/|www\.)\S+)/gi;
+  return text.split(urlRegex).map((part, i) => {
+    if (!part) return null;
+    if (/^(?:https?:\/\/|www\.)/i.test(part)) {
+      // Trailing punctuation (a period/comma ending the sentence, a closing
+      // paren) shouldn't be swallowed into the link itself.
+      const trailingMatch = part.match(/[.,)\]]+$/);
+      const trailing = trailingMatch ? trailingMatch[0] : "";
+      const urlPart = trailing ? part.slice(0, -trailing.length) : part;
+      const href = /^https?:\/\//i.test(urlPart) ? urlPart : `https://${urlPart}`;
+      return (
+        <span key={i}>
+          <a
+            href={href}
+            target="_blank"
+            rel="noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="text-indigo-600 underline decoration-indigo-300 hover:decoration-indigo-600 dark:text-indigo-400 dark:decoration-indigo-700"
+          >
+            {urlPart}
+          </a>
+          {trailing}
+        </span>
+      );
+    }
+    return <span key={i}>{part}</span>;
+  });
+}
+
+// Client's Remark — free text that often has a link pasted into it (a brief,
+// a moodboard, a reference video). View mode renders it with linkifyText so
+// any URL is clickable; edit mode (client only — see setCreatorClientDecision
+// permission gate) is a plain text input, same save-on-blur pattern as every
+// other inline-editable cell in this file.
+function RemarkCell({
+  value,
+  editable,
+  onSave,
+}: {
+  value: string | null;
+  editable: boolean;
+  onSave: (value: string | null) => void | Promise<any>;
+}) {
+  const [editing, setEditing] = useState(false);
+
+  if (editable && editing) {
+    return (
+      <input
+        autoFocus
+        defaultValue={value ?? ""}
+        placeholder="Remark — paste a link and it'll be clickable"
+        onBlur={(e) => {
+          onSave(e.target.value.trim() || null);
+          setEditing(false);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+        }}
+        className="w-40 rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+      />
+    );
+  }
+
+  return (
+    <div className="flex items-start gap-1.5">
+      <span className="block max-w-[200px] whitespace-pre-wrap break-words text-xs text-slate-600 dark:text-slate-400">
+        {value ? linkifyText(value) : "—"}
+      </span>
+      {editable && (
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          className="shrink-0 text-slate-300 hover:text-indigo-600 dark:text-slate-600 dark:hover:text-indigo-400"
+          title="Edit remark"
+        >
+          <Pencil className="h-3 w-3" />
+        </button>
+      )}
+    </div>
   );
 }
 
