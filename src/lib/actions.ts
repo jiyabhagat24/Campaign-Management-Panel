@@ -846,6 +846,9 @@ export async function updateCreatorShortlist(
     finalQuotedCost: number | null;
     rightsOfUsage: boolean;
     usageDurationDays: number | null;
+    language: string | null;
+    location: string | null;
+    category: string | null;
   }>
 ) {
   const user = await requireUser();

@@ -58,6 +58,33 @@ export const CONTENT_CATEGORIES = [
   "Business / Startup",
 ];
 
+// Major Indian cities a creator is typically based in — used by the
+// per-creator Location dropdown on the Shortlist/Onboarding tables
+// (CreatorKanban.tsx), not by this campaign-brief editor itself. Kept here
+// alongside INDIAN_LANGUAGES/CONTENT_CATEGORIES since it's the same
+// dropdown-plus-"Others"-escape-hatch shape and those two already live in
+// this file. Not exhaustive by design, same reasoning as the language list.
+export const MAJOR_INDIAN_CITIES = [
+  "Mumbai",
+  "Delhi",
+  "Bengaluru",
+  "Hyderabad",
+  "Chennai",
+  "Kolkata",
+  "Pune",
+  "Ahmedabad",
+  "Jaipur",
+  "Surat",
+  "Lucknow",
+  "Chandigarh",
+  "Kochi",
+  "Indore",
+  "Bhopal",
+  "Nagpur",
+  "Coimbatore",
+  "Goa",
+];
+
 export type PlatformBriefValue = {
   platform: string;
   category: string;

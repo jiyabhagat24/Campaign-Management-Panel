@@ -16,6 +16,7 @@ import {
 } from "@/lib/constants";
 import StatusBadge from "@/components/StatusBadge";
 import CampaignReport from "@/components/campaign/CampaignReport";
+import { INDIAN_LANGUAGES, CONTENT_CATEGORIES, MAJOR_INDIAN_CITIES } from "@/components/campaign/PlatformBriefsEditor";
 import {
   addCreator,
   addDeliverable,
@@ -170,6 +171,12 @@ export type Creator = {
   ballOwner?: string | null;
   pauseRequestedAt?: string | Date | null;
   pauseConfirmedAt?: string | Date | null;
+  // Targeting metadata, editable inline from the Shortlist/Onboarding
+  // tables — dropdown of common values plus an "Others" free-text escape
+  // hatch (see TagDropdownCell below).
+  language?: string | null;
+  location?: string | null;
+  category?: string | null;
   negotiationRounds: NegotiationRound[];
   deliverables: Deliverable[];
   shortlistDeliverables: ShortlistDeliverableRow[];
@@ -320,6 +327,9 @@ export default function CreatorKanban({
                       <th className="sticky top-0 z-30 w-[180px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Median Views</th>
                       <th className="sticky top-0 z-30 w-[150px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Median ER%</th>
                       <th className="sticky top-0 z-30 w-[120px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Insights</th>
+                      <th className="sticky top-0 z-30 w-[140px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Language</th>
+                      <th className="sticky top-0 z-30 w-[140px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Location</th>
+                      <th className="sticky top-0 z-30 w-[140px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Category</th>
                       {canSeeCost && <th className="sticky top-0 z-30 w-[170px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Internal Cost</th>}
                       {/* Quoted Cost is the price quoted to the client, so
                           clients do see this column — only IR Intern is
@@ -359,7 +369,7 @@ export default function CreatorKanban({
                     ))}
                     {shortlist.length === 0 && (
                       <tr>
-                        <td colSpan={canSeeCost ? 16 : 15} className="px-5 py-12 text-center text-slate-400 dark:text-slate-500">
+                        <td colSpan={canSeeCost ? 19 : 18} className="px-5 py-12 text-center text-slate-400 dark:text-slate-500">
                           <Users className="mx-auto h-8 w-8 text-slate-300 dark:text-slate-600 mb-2" />
                           <p className="text-sm font-medium">No influencers shortlisted yet.</p>
                         </td>
@@ -388,6 +398,9 @@ export default function CreatorKanban({
                     <th className="sticky top-0 z-30 w-[180px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Median Views</th>
                     <th className="sticky top-0 z-30 w-[150px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Median ER%</th>
                     <th className="sticky top-0 z-30 w-[120px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Insights</th>
+                    <th className="sticky top-0 z-30 w-[140px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Language</th>
+                    <th className="sticky top-0 z-30 w-[140px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Location</th>
+                    <th className="sticky top-0 z-30 w-[140px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Category</th>
                     {/* IR team/TBM eyes only — never shown to the client, see
                         canSeeCost gating on the cell below. */}
                     {canSeeCost && <th className="sticky top-0 z-30 w-[170px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Internal Cost</th>}
@@ -425,7 +438,7 @@ export default function CreatorKanban({
                   ))}
                   {onboarding.length === 0 && (
                     <tr>
-                      <td colSpan={canSeeCost ? 23 : 22} className="px-5 py-12 text-center text-slate-400 dark:text-slate-500">
+                      <td colSpan={canSeeCost ? 26 : 25} className="px-5 py-12 text-center text-slate-400 dark:text-slate-500">
                         <Users className="mx-auto h-8 w-8 text-slate-300 dark:text-slate-600 mb-2" />
                         <p className="text-sm font-medium">No influencers onboarded yet.</p>
                       </td>
@@ -1425,6 +1438,27 @@ function ShortlistCreatorRow({
           />
         )}
       </td>
+      <TagDropdownCell
+        value={creator.language}
+        options={INDIAN_LANGUAGES}
+        placeholder="Select language…"
+        editable={!isClientView && (canOperateShortlist(role) || superAdmin)}
+        onSave={(v) => withRefresh(updateCreatorShortlist(creator.id, { language: v }))}
+      />
+      <TagDropdownCell
+        value={creator.location}
+        options={MAJOR_INDIAN_CITIES}
+        placeholder="Select location…"
+        editable={!isClientView && (canOperateShortlist(role) || superAdmin)}
+        onSave={(v) => withRefresh(updateCreatorShortlist(creator.id, { location: v }))}
+      />
+      <TagDropdownCell
+        value={creator.category}
+        options={CONTENT_CATEGORIES}
+        placeholder="Select category…"
+        editable={!isClientView && (canOperateShortlist(role) || superAdmin)}
+        onSave={(v) => withRefresh(updateCreatorShortlist(creator.id, { category: v }))}
+      />
       {canSeeCost && (
         <EditableNumberCell
           value={creator.internalCost ?? null}
@@ -2161,6 +2195,31 @@ function OnboardingCreatorRow({
         )}
       </td>
 
+      {/* Language/Location/Category — same fields as Shortlist, carried
+          over and still editable here (a creator's targeting metadata can
+          keep being corrected after they've onboarded). */}
+      <TagDropdownCell
+        value={creator.language}
+        options={INDIAN_LANGUAGES}
+        placeholder="Select language…"
+        editable={!isClientView && (canOperateShortlist(role) || superAdmin)}
+        onSave={(v) => withRefresh(updateCreatorShortlist(creator.id, { language: v }))}
+      />
+      <TagDropdownCell
+        value={creator.location}
+        options={MAJOR_INDIAN_CITIES}
+        placeholder="Select location…"
+        editable={!isClientView && (canOperateShortlist(role) || superAdmin)}
+        onSave={(v) => withRefresh(updateCreatorShortlist(creator.id, { location: v }))}
+      />
+      <TagDropdownCell
+        value={creator.category}
+        options={CONTENT_CATEGORIES}
+        placeholder="Select category…"
+        editable={!isClientView && (canOperateShortlist(role) || superAdmin)}
+        onSave={(v) => withRefresh(updateCreatorShortlist(creator.id, { category: v }))}
+      />
+
       {/* Internal Cost — IR team/TBM eyes only, same field carried over
           from Shortlisting (one source of truth for what a creator costs).
           Never rendered for a client (canSeeCost is false for them). */}
@@ -2614,6 +2673,86 @@ function OnboardingCreatorRow({
 // Plain-text display when not editable, an inline number input (save on
 // blur) when it is — used for every IR-entered numeric field in the
 // shortlist table so those cells don't need a form/submit round trip.
+// Small dropdown-with-"Others"-escape-hatch cell for the per-creator
+// Language/Location/Category fields (Shortlist + Onboarding tables). Same
+// "select from list, or pick Others to type a free-text value" UX as
+// LanguageField/CategoryField in PlatformBriefsEditor.tsx, adapted to a
+// compact table cell that saves on change/blur (no separate save button —
+// matches every other inline-editable cell in this file).
+function TagDropdownCell({
+  value,
+  options,
+  placeholder,
+  editable,
+  onSave,
+}: {
+  value: string | null | undefined;
+  options: readonly string[];
+  placeholder: string;
+  editable: boolean;
+  onSave: (value: string | null) => void | Promise<any>;
+}) {
+  const router = useRouter();
+  const current = value ?? "";
+  const isKnown = current === "" || options.includes(current);
+  const [otherMode, setOtherMode] = useState(!isKnown);
+
+  if (!editable) {
+    return (
+      <td className="whitespace-nowrap border-b border-slate-100 px-5 py-4 text-xs font-semibold text-slate-700 dark:border-slate-800 dark:text-slate-300">
+        {current || "—"}
+      </td>
+    );
+  }
+
+  const save = async (next: string) => {
+    try {
+      const result: any = await onSave(next === "" ? null : next);
+      if (result && typeof result === "object" && result.error) {
+        window.alert(result.error);
+      } else {
+        router.refresh();
+      }
+    } catch (err: any) {
+      window.alert(err?.message ?? "Failed to save — value was not stored.");
+    }
+  };
+
+  return (
+    <td className="whitespace-nowrap border-b border-slate-100 px-5 py-4 dark:border-slate-800">
+      <select
+        value={otherMode ? "Others" : current}
+        onChange={(e) => {
+          if (e.target.value === "Others") {
+            setOtherMode(true);
+          } else {
+            setOtherMode(false);
+            save(e.target.value);
+          }
+        }}
+        className="w-28 rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+      >
+        <option value="">{placeholder}</option>
+        {options.map((o) => (
+          <option key={o} value={o}>
+            {o}
+          </option>
+        ))}
+        <option value="Others">Others</option>
+      </select>
+      {otherMode && (
+        <input
+          defaultValue={isKnown ? "" : current}
+          placeholder="Type value"
+          autoFocus
+          onBlur={(e) => save(e.target.value)}
+          className="mt-1 w-28 rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+        />
+      )}
+    </td>
+  );
+}
+
 function EditableNumberCell({
   value,
   editable,

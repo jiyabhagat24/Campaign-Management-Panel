@@ -308,6 +308,13 @@ model Creator {
   youtubeShortsMedianViews    Int?
   youtubeShortsMedianERPercent Float?
   category        String?
+  // Targeting fields, editable inline from the Shortlist/Onboarding tables
+  // (see CreatorKanban.tsx) — a dropdown of common values plus an "Others"
+  // free-text escape hatch, same UX as the campaign-level Language/Category
+  // pickers in PlatformBriefsEditor.tsx. language reuses INDIAN_LANGUAGES,
+  // location has its own list of major Indian cities.
+  language String?
+  location String?
 
   // The margin guardrail: two fields, separated by design. internalCost must
   // NEVER be sent to a client-facing route/email — enforced in
