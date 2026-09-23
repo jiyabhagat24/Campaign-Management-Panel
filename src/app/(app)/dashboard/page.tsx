@@ -48,6 +48,18 @@ export default async function DashboardPage() {
     orderBy: { updatedAt: "desc" },
   });
 
+  // Computed up front (was previously computed further down, after rows/
+  // financeRows/revenueRows already existed) so every cost-derived number
+  // below can be zeroed out for whoever shouldn't see it, rather than
+  // computed in full and merely left unrendered. PortfolioDashboardClient
+  // is a Client Component, so any real number handed to it as a prop is
+  // serialized into the page's own payload and reaches the browser
+  // regardless of whether the JSX conditionally renders it — "hidden in
+  // the UI" is not "never sent". Client and IR Intern are excluded from
+  // INTERNAL_COST_ROLES, so this keeps internal cost out of their browser
+  // entirely, not just off their screen.
+  const showFinance = !isClient(user.role) && canSeeInternalCost(user.role);
+
   const rows: DashboardCampaignRow[] = campaigns.map((c) => {
     const brandSolutionsPoc = c.teamMembers.find((t) => t.roleOnCampaign === "BRAND_SOLUTIONS")?.user.name ?? null;
     const campaignManager = c.teamMembers.find((t) => t.roleOnCampaign === "CAMPAIGN_MANAGER")?.user.name ?? null;
@@ -137,17 +149,17 @@ export default async function DashboardPage() {
       // this into a number way bigger than what's actually locked in,
       // same mistake the Finance Table row below used to make. Matches
       // the ONBOARDED-only filter the campaign report CSV already uses.
-      internalValue: onboardedCreators.reduce((s, cr) => s + (cr.internalCost ?? 0), 0),
+      internalValue: showFinance ? onboardedCreators.reduce((s, cr) => s + (cr.internalCost ?? 0), 0) : 0,
       quotedValue,
       openFlags,
-      financeYetToBeInvoiced: invoiceStatus === "NOT_INVOICED" ? quotedValue : 0,
-      financeYetToBeReceived: invoiceStatus === "INVOICED" ? quotedValue : 0,
-      financeValueOfClearedDue: invoiceStatus === "PAID" ? quotedValue : 0,
+      financeYetToBeInvoiced: showFinance ? (invoiceStatus === "NOT_INVOICED" ? quotedValue : 0) : 0,
+      financeYetToBeReceived: showFinance ? (invoiceStatus === "INVOICED" ? quotedValue : 0) : 0,
+      financeValueOfClearedDue: showFinance ? (invoiceStatus === "PAID" ? quotedValue : 0) : 0,
       // What TBM still owes onboarded creators — their own Payout Amount
       // (internalCost) wherever payoutPaymentStatus hasn't reached PAID yet.
-      financeCreatorPayablePending: onboardedCreators
-        .filter((cr) => cr.payoutPaymentStatus !== "PAID")
-        .reduce((s, cr) => s + (cr.internalCost ?? 0), 0),
+      financeCreatorPayablePending: showFinance
+        ? onboardedCreators.filter((cr) => cr.payoutPaymentStatus !== "PAID").reduce((s, cr) => s + (cr.internalCost ?? 0), 0)
+        : 0,
       financeAgencyFee: c.financeAgencyFee,
     };
   });
@@ -159,9 +171,13 @@ export default async function DashboardPage() {
   // `campaigns` fetch above, no second query. Only ACTIVE/COMPLETED
   // campaigns show here — a paused or cancelled campaign's numbers
   // shouldn't appear in the live finance picture (FINANCE_VISIBLE_STATUSES).
-  const financeRows: FinanceCampaignRow[] = campaigns
-    .filter((c) => (FINANCE_VISIBLE_STATUSES as string[]).includes(c.status))
-    .map((c) => {
+  // Not computed at all for whoever can't see it (rather than computed and
+  // left unrendered) — see the showFinance comment above.
+  const financeRows: FinanceCampaignRow[] = !showFinance
+    ? []
+    : campaigns
+        .filter((c) => (FINANCE_VISIBLE_STATUSES as string[]).includes(c.status))
+        .map((c) => {
     const brandSolutionsPoc = c.teamMembers.find((t) => t.roleOnCampaign === "BRAND_SOLUTIONS")?.user.name ?? null;
     return {
       id: c.id,
@@ -188,7 +204,6 @@ export default async function DashboardPage() {
         })),
     };
   });
-  const showFinance = !isClient(user.role) && canSeeInternalCost(user.role);
 
   // Revenue Breakdown Chart — one row per ONBOARDED creator with a real
   // onboarding date. Revenue is that creator's own Final Quoted Cost (the
@@ -202,9 +217,11 @@ export default async function DashboardPage() {
   // after some creators already onboarded shouldn't keep inflating this
   // chart's revenue/margin, same reasoning that already applies to the
   // Finance Table and the four summary cards above.
-  const revenueRows: RevenueDataRow[] = campaigns
-    .filter((c) => (FINANCE_VISIBLE_STATUSES as string[]).includes(c.status))
-    .flatMap((c) => {
+  const revenueRows: RevenueDataRow[] = !showFinance
+    ? []
+    : campaigns
+        .filter((c) => (FINANCE_VISIBLE_STATUSES as string[]).includes(c.status))
+        .flatMap((c) => {
     const onboarded = c.creators.filter((cr) => cr.status === "ONBOARDED" && cr.onboardedAt);
     return onboarded.map((cr) => ({
       brand: c.brand,
