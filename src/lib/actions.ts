@@ -6,7 +6,7 @@ import bcrypt from "bcryptjs";
 import { requireUser } from "@/lib/auth";
 import { logActivity } from "@/lib/activity";
 import { notify } from "@/lib/notify";
-import { canApproveCommercialEdit, canSetCommercials, canSeeInternalCost, canManageTeam, canManageClients, canCreateCampaign, canDeleteCampaign, canOperateShortlist, isClient, isSuperAdmin } from "@/lib/rbac";
+import { canApproveCommercialEdit, canSetCommercials, canSeeInternalCost, canManageTeam, canManageClients, canCreateCampaign, canDeleteCampaign, canOperateShortlist, isCreatorPOC, isClient, isSuperAdmin } from "@/lib/rbac";
 import {
   DEFAULT_SLA,
   type Stage,
@@ -1492,6 +1492,9 @@ export async function triggerPause(creatorId: string, reason: string) {
   if (!reason.trim()) throw new Error("A reason is required to request a pause.");
 
   const creator = await prisma.creator.findUniqueOrThrow({ where: { id: creatorId } });
+  if (!isCreatorPOC(user.id, creator) && !isSuperAdmin(user.id)) {
+    throw new Error("Only this creator's assigned POC can request a pause.");
+  }
   if (creator.pauseRequestedAt && !creator.pauseConfirmedAt) {
     throw new Error("A pause is already pending confirmation for this creator.");
   }
@@ -1548,6 +1551,9 @@ export async function resumeFromPause(creatorId: string) {
   if (isClient(user.role)) throw new Error("Clients cannot resume a paused creator.");
 
   const creator = await prisma.creator.findUniqueOrThrow({ where: { id: creatorId } });
+  if (!isCreatorPOC(user.id, creator) && !isSuperAdmin(user.id)) {
+    throw new Error("Only this creator's assigned POC can resume a paused creator.");
+  }
   if (!creator.pauseConfirmedAt) throw new Error("This creator isn't in a confirmed pause.");
 
   const blockedMs = Date.now() - creator.pauseConfirmedAt.getTime();
@@ -1632,9 +1638,12 @@ export async function assignCreatorPOC(creatorId: string, userId: string | null)
 
 // Go-live deadline is editable post-onboard only with a logged reason —
 // the reason lives in the ActivityLog entry, not a dedicated column.
+// Per spec Page Permissions, this is Campaign Manager's own distinct grant
+// on the Onboarded table ("Edit deadline, SPOC, pause confirm") — not the
+// assigned POC's (see isCreatorPOC / canExecute for execution actions).
 export async function updateCreatorDeadline(creatorId: string, newDeadline: string, reason: string) {
   const user = await requireUser();
-  if (isClient(user.role)) throw new Error("Clients cannot change the go-live deadline");
+  if (!canSetCommercials(user.role) && !isSuperAdmin(user.id)) throw new Error("Only a Campaign Manager can change the go-live deadline.");
   if (!reason.trim()) throw new Error("A reason is required to change the deadline");
 
   const creator = await prisma.creator.findUniqueOrThrow({ where: { id: creatorId } });
@@ -1728,6 +1737,9 @@ export async function addDeliverable(creatorId: string, formData: FormData) {
   const title = String(formData.get("title") ?? "").trim() || null;
 
   const creator = await prisma.creator.findUniqueOrThrow({ where: { id: creatorId } });
+  if (!isCreatorPOC(user.id, creator) && !isSuperAdmin(user.id)) {
+    throw new Error("Only this creator's assigned POC can add deliverables.");
+  }
   const deliverable = await prisma.deliverable.create({ data: { creatorId, platform, title: title ?? undefined } });
 
   await logActivity({
@@ -1745,6 +1757,12 @@ export async function updateDeliverableTitle(deliverableId: string, title: strin
   const user = await requireUser();
   if (isClient(user.role)) throw new Error("Clients cannot edit deliverables");
 
+  const owner = await prisma.deliverable.findUnique({ where: { id: deliverableId }, select: { creator: { select: { pocUserId: true } } } });
+  if (!owner) throw new Error("Deliverable not found");
+  if (!isCreatorPOC(user.id, owner.creator) && !isSuperAdmin(user.id)) {
+    throw new Error("Only this creator's assigned POC can edit deliverables.");
+  }
+
   const deliverable = await prisma.deliverable.update({
     where: { id: deliverableId },
     data: { title: title.trim() || null },
@@ -1758,6 +1776,9 @@ export async function deleteDeliverable(deliverableId: string) {
   if (isClient(user.role)) throw new Error("Clients cannot delete deliverables");
 
   const deliverable = await prisma.deliverable.findUniqueOrThrow({ where: { id: deliverableId }, include: { creator: true } });
+  if (!isCreatorPOC(user.id, deliverable.creator) && !isSuperAdmin(user.id)) {
+    throw new Error("Only this creator's assigned POC can delete deliverables.");
+  }
   await prisma.deliverable.delete({ where: { id: deliverableId } });
 
   await logActivity({
@@ -1800,8 +1821,11 @@ export async function updateProductStatus(deliverableId: string, productStatus: 
 // instead of one repeated per deliverable.
 export async function updateCreatorProductStatus(creatorId: string, productStatus: string, productEta?: string) {
   const user = await requireUser();
-  const creator = await prisma.creator.findUnique({ where: { id: creatorId }, select: { campaignId: true } });
+  const creator = await prisma.creator.findUnique({ where: { id: creatorId }, select: { campaignId: true, pocUserId: true } });
   if (!creator) throw new Error("Creator not found");
+  if (!isCreatorPOC(user.id, creator) && !isSuperAdmin(user.id)) {
+    throw new Error("Only this creator's assigned POC can update execution status.");
+  }
 
   await prisma.deliverable.updateMany({
     where: { creatorId },
@@ -1822,6 +1846,11 @@ export async function updateCreatorProductStatus(creatorId: string, productStatu
 export async function updateScriptStatus(deliverableId: string, scriptStatus: string, scriptDocUrl?: string) {
   const user = await requireUser();
   if (scriptDocUrl && !isValidUrl(scriptDocUrl)) throw new Error("Script link must be a valid URL.");
+  const owner = await prisma.deliverable.findUnique({ where: { id: deliverableId }, select: { creator: { select: { pocUserId: true } } } });
+  if (!owner) throw new Error("Deliverable not found");
+  if (!isCreatorPOC(user.id, owner.creator) && !isSuperAdmin(user.id)) {
+    throw new Error("Only this creator's assigned POC can update script status.");
+  }
   const isApproving = scriptStatus === "APPROVED";
   const deliverable = await prisma.deliverable.update({
     where: { id: deliverableId },
@@ -1858,8 +1887,11 @@ export async function updateScriptApprovalDeadline(creatorId: string, deadline: 
   const user = await requireUser();
   if (isClient(user.role)) throw new Error("Clients cannot set this deadline");
 
-  const creator = await prisma.creator.findUnique({ where: { id: creatorId }, select: { campaignId: true } });
+  const creator = await prisma.creator.findUnique({ where: { id: creatorId }, select: { campaignId: true, pocUserId: true } });
   if (!creator) throw new Error("Creator not found");
+  if (!isCreatorPOC(user.id, creator) && !isSuperAdmin(user.id)) {
+    throw new Error("Only this creator's assigned POC can set this deadline.");
+  }
 
   await prisma.deliverable.updateMany({
     where: { creatorId },
@@ -1875,8 +1907,11 @@ export async function updateVideoDraftDeadline(creatorId: string, deadline: stri
   const user = await requireUser();
   if (isClient(user.role)) throw new Error("Clients cannot set this deadline");
 
-  const creator = await prisma.creator.findUnique({ where: { id: creatorId }, select: { campaignId: true } });
+  const creator = await prisma.creator.findUnique({ where: { id: creatorId }, select: { campaignId: true, pocUserId: true } });
   if (!creator) throw new Error("Creator not found");
+  if (!isCreatorPOC(user.id, creator) && !isSuperAdmin(user.id)) {
+    throw new Error("Only this creator's assigned POC can set this deadline.");
+  }
 
   await prisma.deliverable.updateMany({
     where: { creatorId },
@@ -1887,6 +1922,11 @@ export async function updateVideoDraftDeadline(creatorId: string, deadline: stri
 
 export async function updateContentStatus(deliverableId: string, contentStatus: string) {
   const user = await requireUser();
+  const owner = await prisma.deliverable.findUnique({ where: { id: deliverableId }, select: { creator: { select: { pocUserId: true } } } });
+  if (!owner) throw new Error("Deliverable not found");
+  if (!isCreatorPOC(user.id, owner.creator) && !isSuperAdmin(user.id)) {
+    throw new Error("Only this creator's assigned POC can update content status.");
+  }
   const isApproving = contentStatus === "APPROVED";
   const deliverable = await prisma.deliverable.update({
     where: { id: deliverableId },
@@ -1927,6 +1967,12 @@ export async function addLiveLink(deliverableId: string, liveLink: string) {
   const user = await requireUser();
   if (isClient(user.role)) throw new Error("Clients cannot add live links");
   if (!isValidUrl(liveLink)) throw new Error("Live link must be a valid URL.");
+
+  const owner = await prisma.deliverable.findUnique({ where: { id: deliverableId }, select: { creator: { select: { pocUserId: true } } } });
+  if (!owner) throw new Error("Deliverable not found");
+  if (!isCreatorPOC(user.id, owner.creator) && !isSuperAdmin(user.id)) {
+    throw new Error("Only this creator's assigned POC can add live links.");
+  }
 
   const deliverable = await prisma.deliverable.update({
     where: { id: deliverableId },
@@ -1971,9 +2017,12 @@ export async function removeLiveLink(deliverableId: string) {
 
   const existing = await prisma.deliverable.findUnique({
     where: { id: deliverableId },
-    select: { liveLink: true, creatorId: true, creator: { select: { campaignId: true, ballOwner: true } } },
+    select: { liveLink: true, creatorId: true, creator: { select: { campaignId: true, ballOwner: true, pocUserId: true } } },
   });
   if (!existing) throw new Error("Deliverable not found");
+  if (!isCreatorPOC(user.id, existing.creator) && !isSuperAdmin(user.id)) {
+    throw new Error("Only this creator's assigned POC can remove live links.");
+  }
   if (!existing.liveLink) return;
 
   await prisma.deliverable.update({
@@ -2016,9 +2065,12 @@ export async function removeScriptLink(deliverableId: string) {
 
   const existing = await prisma.deliverable.findUnique({
     where: { id: deliverableId },
-    select: { scriptDocUrl: true, creator: { select: { campaignId: true } } },
+    select: { scriptDocUrl: true, creator: { select: { campaignId: true, pocUserId: true } } },
   });
   if (!existing) throw new Error("Deliverable not found");
+  if (!isCreatorPOC(user.id, existing.creator) && !isSuperAdmin(user.id)) {
+    throw new Error("Only this creator's assigned POC can remove script links.");
+  }
   if (!existing.scriptDocUrl) return;
 
   await prisma.deliverable.update({ where: { id: deliverableId }, data: { scriptDocUrl: null } });

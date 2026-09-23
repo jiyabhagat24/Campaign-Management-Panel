@@ -434,6 +434,7 @@ export default function CreatorKanban({
                       canSeeCost={canSeeCost}
                       role={role}
                       superAdmin={superAdmin}
+                      canExecute={superAdmin || (!!currentUserId && c.pocUserId === currentUserId)}
                     />
                   ))}
                   {onboarding.length === 0 && (
@@ -1787,6 +1788,7 @@ function OnboardingCreatorRow({
   canSeeCost,
   role,
   superAdmin = false,
+  canExecute,
 }: {
   creator: Creator;
   isClientView: boolean;
@@ -1797,6 +1799,15 @@ function OnboardingCreatorRow({
   canSeeCost: boolean;
   role: Role;
   superAdmin?: boolean;
+  // Per spec Page Permissions: day-to-day execution on this table (status
+  // selects, deliverables, live/script links, script/video deadlines,
+  // pause request/resume) is this creator's assigned POC only — see
+  // isCreatorPOC in rbac.ts, enforced server-side in every action below;
+  // this just keeps the UI honest so a non-POC internal user sees disabled
+  // controls instead of a surprise error on submit. Deadline/SPOC/pause
+  // confirm stay Campaign-Manager-gated separately (canSetCost below),
+  // unaffected by this.
+  canExecute: boolean;
 }) {
   const [showInsights, setShowInsights] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -2068,7 +2079,7 @@ function OnboardingCreatorRow({
             </button>
           )}
           {refreshMsg && <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400">{refreshMsg}</span>}
-          {!isClientView && creator.status !== "BLOCKED" && !creator.pauseRequestedAt && (
+          {!isClientView && canExecute && creator.status !== "BLOCKED" && !creator.pauseRequestedAt && (
             <button
               type="button"
               onClick={handleTriggerPause}
@@ -2094,7 +2105,7 @@ function OnboardingCreatorRow({
               )}
             </div>
           )}
-          {!isClientView && creator.status === "BLOCKED" && creator.pauseConfirmedAt && (
+          {!isClientView && canExecute && creator.status === "BLOCKED" && creator.pauseConfirmedAt && (
             <button
               type="button"
               onClick={handleResumeFromPause}
@@ -2111,7 +2122,7 @@ function OnboardingCreatorRow({
         <div className="flex flex-col items-start gap-1">
           {creator.deliverables.map((d) => (
             <span key={d.id} className="inline-flex w-full items-center gap-1 rounded-lg bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
-              {isClientView ? (
+              {isClientView || !canExecute ? (
                 <span className="min-w-0 flex-1 truncate">{d.title || (PLATFORM_LABELS[d.platform as keyof typeof PLATFORM_LABELS] ?? d.platform)}</span>
               ) : (
                 <input
@@ -2123,7 +2134,7 @@ function OnboardingCreatorRow({
                   className="min-w-0 flex-1 border-none bg-transparent p-0 text-[11px] font-semibold text-slate-700 placeholder:text-slate-500 focus:outline-none dark:text-slate-300 dark:placeholder:text-slate-400"
                 />
               )}
-              {!isClientView && (
+              {!isClientView && canExecute && (
                 <button
                   type="button"
                   onClick={() => {
@@ -2137,7 +2148,7 @@ function OnboardingCreatorRow({
             </span>
           ))}
           {creator.deliverables.length === 0 && <span className="text-xs text-slate-400 dark:text-slate-500">—</span>}
-          {!isClientView && (
+          {!isClientView && canExecute && (
             <select
               value=""
               onChange={(e) => {
@@ -2323,7 +2334,7 @@ function OnboardingCreatorRow({
       <td className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
         {creator.deliverables.length === 0 ? (
           <span className="text-xs text-slate-400 dark:text-slate-500">—</span>
-        ) : isClientView ? (
+        ) : isClientView || !canExecute ? (
           <StatusBadge status={creator.deliverables[0].productStatus ?? "—"} />
         ) : (
           <select
@@ -2346,7 +2357,7 @@ function OnboardingCreatorRow({
       <td className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
         {creator.deliverables.length === 0 ? (
           <span className="text-xs text-slate-400 dark:text-slate-500">—</span>
-        ) : isClientView ? (
+        ) : isClientView || !canExecute ? (
           <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
             {creator.deliverables[0].productEta ? new Date(creator.deliverables[0].productEta).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—"}
           </span>
@@ -2371,7 +2382,7 @@ function OnboardingCreatorRow({
                 {creator.deliverables.length > 1 && (
                   <span className="w-7 shrink-0 text-[10px] font-bold uppercase text-slate-400 dark:text-slate-500">{platformShortLabel(d.platform)}</span>
                 )}
-                {isClientView ? (
+                {isClientView || !canExecute ? (
                   <StatusBadge status={d.scriptStatus ?? "—"} />
                 ) : (
                   <select
@@ -2406,7 +2417,7 @@ function OnboardingCreatorRow({
         ) : (
           <div className="flex flex-col gap-1">
             {creator.deliverables.map((d) =>
-              isClientView || (d.scriptDocUrl && !editingScriptLinkIds.has(d.id)) ? (
+              isClientView || !canExecute || (d.scriptDocUrl && !editingScriptLinkIds.has(d.id)) ? (
                 <div key={d.id} className="flex items-center gap-1.5">
                   {d.scriptDocUrl ? (
                     <a href={d.scriptDocUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline">
@@ -2416,7 +2427,7 @@ function OnboardingCreatorRow({
                   ) : (
                     <span className="text-xs text-slate-400 dark:text-slate-500">—</span>
                   )}
-                  {!isClientView && d.scriptDocUrl && (
+                  {!isClientView && canExecute && d.scriptDocUrl && (
                     <button
                       onClick={() => setEditingScriptLinkIds((prev) => new Set(prev).add(d.id))}
                       className="text-slate-300 hover:text-indigo-600 dark:text-slate-600 dark:hover:text-indigo-400"
@@ -2425,7 +2436,7 @@ function OnboardingCreatorRow({
                       <Pencil className="h-3 w-3" />
                     </button>
                   )}
-                  {!isClientView && d.scriptDocUrl && (
+                  {!isClientView && canExecute && d.scriptDocUrl && (
                     <button
                       onClick={() => {
                         if (confirm("Remove this script link?")) withRefresh(removeScriptLink(d.id));
@@ -2473,7 +2484,7 @@ function OnboardingCreatorRow({
       <td className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
         {creator.deliverables.length === 0 ? (
           <span className="text-xs text-slate-400 dark:text-slate-500">—</span>
-        ) : isClientView ? (
+        ) : isClientView || !canExecute ? (
           <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
             {creator.deliverables[0].scriptApprovalDeadline ? new Date(creator.deliverables[0].scriptApprovalDeadline).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—"}
           </span>
@@ -2498,7 +2509,7 @@ function OnboardingCreatorRow({
                 {creator.deliverables.length > 1 && (
                   <span className="w-7 shrink-0 text-[10px] font-bold uppercase text-slate-400 dark:text-slate-500">{platformShortLabel(d.platform)}</span>
                 )}
-                {isClientView ? (
+                {isClientView || !canExecute ? (
                   <StatusBadge status={d.status === "LIVE" ? "LIVE" : d.contentStatus ?? "—"} />
                 ) : (
                   <select
@@ -2530,7 +2541,7 @@ function OnboardingCreatorRow({
         ) : (
           <div className="flex flex-col gap-1">
             {creator.deliverables.map((d) =>
-              isClientView || (d.liveLink && !editingLiveLinkIds.has(d.id)) ? (
+              isClientView || !canExecute || (d.liveLink && !editingLiveLinkIds.has(d.id)) ? (
                 <div key={d.id} className="flex items-center gap-1.5">
                   {d.liveLink ? (
                     <a href={d.liveLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline">
@@ -2540,7 +2551,7 @@ function OnboardingCreatorRow({
                   ) : (
                     <span className="text-xs text-slate-400 dark:text-slate-500">—</span>
                   )}
-                  {!isClientView && d.liveLink && (
+                  {!isClientView && canExecute && d.liveLink && (
                     <button
                       onClick={() => setEditingLiveLinkIds((prev) => new Set(prev).add(d.id))}
                       className="text-slate-300 hover:text-indigo-600 dark:text-slate-600 dark:hover:text-indigo-400"
@@ -2549,7 +2560,7 @@ function OnboardingCreatorRow({
                       <Pencil className="h-3 w-3" />
                     </button>
                   )}
-                  {!isClientView && d.liveLink && (
+                  {!isClientView && canExecute && d.liveLink && (
                     <button
                       onClick={() => {
                         if (confirm("Remove this live link? The deliverable drops back to Content Approved and its tracked views/likes/comments are cleared.")) {
@@ -2599,7 +2610,7 @@ function OnboardingCreatorRow({
       <td className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
         {creator.deliverables.length === 0 ? (
           <span className="text-xs text-slate-400 dark:text-slate-500">—</span>
-        ) : isClientView ? (
+        ) : isClientView || !canExecute ? (
           <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
             {creator.deliverables[0].videoDraftDeadline ? new Date(creator.deliverables[0].videoDraftDeadline).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—"}
           </span>
@@ -2620,7 +2631,7 @@ function OnboardingCreatorRow({
             <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
               {effectiveDeadline ? effectiveDeadline.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—"}
             </span>
-            {!isClientView && (
+            {!isClientView && (role === "CAMPAIGN_MANAGER" || superAdmin) && (
               <button onClick={openDeadlineEditor} className="text-slate-300 hover:text-indigo-600 dark:text-slate-600 dark:hover:text-indigo-400" title="Change deadline (reason required)">
                 <Pencil className="h-3 w-3" />
               </button>

@@ -32,6 +32,20 @@ export function canEditShortlistAndStatus(role: Role) {
   return role !== "CLIENT";
 }
 
+// Per spec Page Permissions: on the Onboarded table, day-to-day execution
+// (product/script/content status, deliverables, live links, deadlines,
+// requesting/resuming a pause) belongs exclusively to whoever is assigned
+// as that specific creator's POC (assignCreatorPOC, Campaign-Manager-set) —
+// not to a role in general. Brand Solutions/IR Manager/CXO get "View all"
+// on that same page, Campaign Manager's own distinct grant there is
+// deadline/SPOC/pause-confirm (see confirmPause, unaffected by this), and a
+// creator with no POC assigned yet simply can't be executed on until one is
+// — that's a real workflow requirement, not an oversight. superAdmin still
+// bypasses this like every other gate in the app.
+export function isCreatorPOC(userId: string, creator: { pocUserId: string | null }): boolean {
+  return Boolean(creator.pocUserId && creator.pocUserId === userId);
+}
+
 // Per spec Page Permissions: Shortlisting row creation/editing (adding a
 // creator, its socials/deliverables/internal cost/etc.) belongs to IR
 // Executive and IR Intern only — "Create and edit, own rows" / "own and
