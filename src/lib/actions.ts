@@ -1137,6 +1137,59 @@ export async function lookupYoutubeChannelAction(channelUrl: string) {
   }
 }
 
+// Cross-campaign creator lookup — called from the Add Influencer form
+// alongside the Instagram/YouTube cache lookups above. Those two only know
+// about *platform* stats (synced sheet / live API); this instead checks
+// whether this exact handle was already shortlisted on some OTHER campaign,
+// and if so hands back whatever that earlier Creator row has, so a repeat
+// creator doesn't need Audience Size/Median Views/Median ER% re-entered or
+// re-fetched by hand every time they're pitched on a new campaign. Only
+// fills gaps client-side (see tryCrossCampaignFill in CreatorKanban.tsx) —
+// never overwrites a value the platform lookups (or the user) already set.
+export async function lookupExistingCreatorAcrossCampaigns(input: { profileUrl?: string; youtubeUrl?: string }) {
+  const user = await requireUser();
+  if (isClient(user.role)) throw new Error("Clients cannot look up creators");
+
+  const or: Array<Record<string, unknown>> = [];
+  const igUsername = input.profileUrl ? extractInstagramUsername(input.profileUrl) : null;
+  if (igUsername) {
+    or.push({ channelHandle: { equals: `@${igUsername}`, mode: "insensitive" } });
+  }
+  if (input.profileUrl) {
+    or.push({ profileUrl: { equals: input.profileUrl, mode: "insensitive" } });
+  }
+  const ytHandle = input.youtubeUrl?.match(/youtube\.com\/@([^/?#]+)/i)?.[1] ?? null;
+  if (ytHandle) {
+    or.push({ channelHandle: { equals: `@${ytHandle}`, mode: "insensitive" } });
+  }
+  if (input.youtubeUrl) {
+    or.push({ youtubeUrl: { equals: input.youtubeUrl, mode: "insensitive" } });
+  }
+  if (or.length === 0) return { ok: false as const };
+
+  const existing = await prisma.creator.findFirst({
+    where: { status: { not: "REJECTED" }, OR: or },
+    orderBy: { updatedAt: "desc" },
+    select: {
+      name: true,
+      channelHandle: true,
+      followers: true,
+      avgViews: true,
+      engagementRate: true,
+      youtubeSubscribers: true,
+      youtubeLongMedianViews: true,
+      youtubeLongMedianERPercent: true,
+      youtubeShortsMedianViews: true,
+      youtubeShortsMedianERPercent: true,
+      category: true,
+      campaign: { select: { name: true } },
+    },
+  });
+
+  if (!existing) return { ok: false as const };
+  return { ok: true as const, data: existing };
+}
+
 type CreatorRecord = Awaited<ReturnType<typeof prisma.creator.findUniqueOrThrow>>;
 
 // Core refresh logic, shared by the manual "Refresh stats" button (one
