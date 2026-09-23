@@ -27,6 +27,8 @@ import {
   updateVideoDraftDeadline,
   deleteDeliverable,
   addLiveLink,
+  removeLiveLink,
+  removeScriptLink,
   lookupInstagramProfileAction,
   lookupYoutubeChannelAction,
   refreshCreatorSocialStats,
@@ -1752,6 +1754,7 @@ function OnboardingCreatorRow({
   // deliverable id since a creator can have more than one live deliverable
   // (e.g. multiple Shorts) each needing its own independent edit toggle.
   const [editingLiveLinkIds, setEditingLiveLinkIds] = useState<Set<string>>(new Set());
+  const [editingScriptLinkIds, setEditingScriptLinkIds] = useState<Set<string>>(new Set());
   const router = useRouter();
 
   // Every inline edit below saves via a server action directly (not a <form
@@ -2314,15 +2317,19 @@ function OnboardingCreatorRow({
         )}
       </td>
 
-      {/* Script Link — per deliverable */}
+      {/* Script Link — per deliverable. Mirrors the Video Link cell's
+          pattern above: a set link shows read-only as an "Open" link with a
+          pencil to switch that one row into an editable input, plus a
+          trash icon to clear it outright — was previously always a bare
+          editable input with no delete affordance. */}
       <td className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
         {creator.deliverables.length === 0 ? (
           <span className="text-xs text-slate-400 dark:text-slate-500">—</span>
         ) : (
           <div className="flex flex-col gap-1">
             {creator.deliverables.map((d) =>
-              isClientView ? (
-                <div key={d.id}>
+              isClientView || (d.scriptDocUrl && !editingScriptLinkIds.has(d.id)) ? (
+                <div key={d.id} className="flex items-center gap-1.5">
                   {d.scriptDocUrl ? (
                     <a href={d.scriptDocUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline">
                       <span>Open</span>
@@ -2331,17 +2338,44 @@ function OnboardingCreatorRow({
                   ) : (
                     <span className="text-xs text-slate-400 dark:text-slate-500">—</span>
                   )}
+                  {!isClientView && d.scriptDocUrl && (
+                    <button
+                      onClick={() => setEditingScriptLinkIds((prev) => new Set(prev).add(d.id))}
+                      className="text-slate-300 hover:text-indigo-600 dark:text-slate-600 dark:hover:text-indigo-400"
+                      title="Edit script link"
+                    >
+                      <Pencil className="h-3 w-3" />
+                    </button>
+                  )}
+                  {!isClientView && d.scriptDocUrl && (
+                    <button
+                      onClick={() => {
+                        if (confirm("Remove this script link?")) withRefresh(removeScriptLink(d.id));
+                      }}
+                      className="text-slate-300 hover:text-rose-600 dark:text-slate-600 dark:hover:text-rose-400"
+                      title="Delete script link"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  )}
                 </div>
               ) : (
                 <input
                   key={d.id}
                   type="url"
+                  autoFocus={editingScriptLinkIds.has(d.id)}
                   defaultValue={d.scriptDocUrl ?? ""}
                   placeholder="Drive link"
                   onBlur={async (e) => {
-                    if (e.target.value === (d.scriptDocUrl ?? "")) return;
+                    const next = e.target.value.trim();
+                    setEditingScriptLinkIds((prev) => {
+                      const copy = new Set(prev);
+                      copy.delete(d.id);
+                      return copy;
+                    });
+                    if (next === (d.scriptDocUrl ?? "")) return;
                     try {
-                      await withRefresh(updateScriptStatus(d.id, d.scriptStatus ?? "", e.target.value));
+                      await withRefresh(updateScriptStatus(d.id, d.scriptStatus ?? "", next));
                     } catch (err: any) {
                       window.alert(err?.message ?? "Failed to save — value was not stored.");
                       e.target.value = d.scriptDocUrl ?? "";
@@ -2435,6 +2469,19 @@ function OnboardingCreatorRow({
                       title="Edit video link"
                     >
                       <Pencil className="h-3 w-3" />
+                    </button>
+                  )}
+                  {!isClientView && d.liveLink && (
+                    <button
+                      onClick={() => {
+                        if (confirm("Remove this live link? The deliverable drops back to Content Approved and its tracked views/likes/comments are cleared.")) {
+                          withRefresh(removeLiveLink(d.id));
+                        }
+                      }}
+                      className="text-slate-300 hover:text-rose-600 dark:text-slate-600 dark:hover:text-rose-400"
+                      title="Delete video link"
+                    >
+                      <Trash2 className="h-3 w-3" />
                     </button>
                   )}
                 </div>

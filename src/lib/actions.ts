@@ -1945,6 +1945,83 @@ export async function addLiveLink(deliverableId: string, liveLink: string) {
   revalidatePath(`/campaigns/${deliverable.creator.campaignId}`);
 }
 
+// Undo of addLiveLink above — clears the link and everything that came
+// with it (liveDate, and the tracked metrics, since they belonged to a link
+// that no longer exists), and moves the deliverable's stage back one step
+// to CONTENT_APPROVED rather than leaving it stuck on LIVE with nothing
+// live. If removing this was the deliverable that had flipped the
+// creator's ball to CLOSED (every deliverable live), that's no longer
+// true, so ball owner reverts to TBM.
+export async function removeLiveLink(deliverableId: string) {
+  const user = await requireUser();
+  if (isClient(user.role)) throw new Error("Clients cannot remove live links");
+
+  const existing = await prisma.deliverable.findUnique({
+    where: { id: deliverableId },
+    select: { liveLink: true, creatorId: true, creator: { select: { campaignId: true, ballOwner: true } } },
+  });
+  if (!existing) throw new Error("Deliverable not found");
+  if (!existing.liveLink) return;
+
+  await prisma.deliverable.update({
+    where: { id: deliverableId },
+    data: {
+      liveLink: null,
+      liveDate: null,
+      views: null,
+      likes: null,
+      comments: null,
+      shares: null,
+      lastTrackedAt: null,
+      status: "CONTENT_APPROVED",
+    },
+  });
+
+  if (existing.creator.ballOwner === "CLOSED") {
+    await prisma.creator.update({ where: { id: existing.creatorId }, data: { ballOwner: "TBM" } });
+  }
+
+  await logActivity({
+    campaignId: existing.creator.campaignId,
+    actorId: user.id,
+    actorName: user.name,
+    action: "LIVE_LINK_REMOVED",
+    entityType: "Deliverable",
+    entityId: deliverableId,
+    meta: {},
+  });
+  revalidatePath(`/campaigns/${existing.creator.campaignId}`);
+}
+
+// Same undo pattern as removeLiveLink above, for the Script Link field —
+// clears scriptDocUrl only. Deliberately leaves scriptStatus and the frozen
+// scriptApprovedSnapshotUrl/scriptApprovedAt alone: removing a mistakenly
+// pasted link shouldn't also erase an already-recorded approval snapshot.
+export async function removeScriptLink(deliverableId: string) {
+  const user = await requireUser();
+  if (isClient(user.role)) throw new Error("Clients cannot remove script links");
+
+  const existing = await prisma.deliverable.findUnique({
+    where: { id: deliverableId },
+    select: { scriptDocUrl: true, creator: { select: { campaignId: true } } },
+  });
+  if (!existing) throw new Error("Deliverable not found");
+  if (!existing.scriptDocUrl) return;
+
+  await prisma.deliverable.update({ where: { id: deliverableId }, data: { scriptDocUrl: null } });
+
+  await logActivity({
+    campaignId: existing.creator.campaignId,
+    actorId: user.id,
+    actorName: user.name,
+    action: "SCRIPT_LINK_REMOVED",
+    entityType: "Deliverable",
+    entityId: deliverableId,
+    meta: {},
+  });
+  revalidatePath(`/campaigns/${existing.creator.campaignId}`);
+}
+
 // Manual metric refresh stub — production build should call this from a
 // scheduled job per deliverable with status LIVE (see src/lib/tracking.ts).
 export async function refreshDeliverableMetrics(
