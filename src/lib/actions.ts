@@ -153,6 +153,8 @@ export async function createCampaign(formData: FormData) {
 
   const businessType = String(formData.get("businessType") ?? "").trim() || null;
   const campaignType = String(formData.get("campaignType") ?? "").trim() || null;
+  const campaignObjective = String(formData.get("campaignObjective") ?? "").trim() || null;
+  const targetAudience = String(formData.get("targetAudience") ?? "").trim() || null;
   const productCategory = String(formData.get("productCategory") ?? "").trim() || null;
   const sku = String(formData.get("sku") ?? "").trim() || null;
   const clientWebsiteUrl = String(formData.get("clientWebsiteUrl") ?? "").trim() || null;
@@ -219,6 +221,8 @@ export async function createCampaign(formData: FormData) {
       platformMix: platformMix ?? undefined,
       businessType: businessType ?? undefined,
       campaignType: campaignType ?? undefined,
+      campaignObjective: campaignObjective ?? undefined,
+      targetAudience: targetAudience ?? undefined,
       clientWebsiteUrl: clientWebsiteUrl ?? undefined,
       productUrl: productUrl ?? undefined,
       productCategory: productCategory ?? undefined,

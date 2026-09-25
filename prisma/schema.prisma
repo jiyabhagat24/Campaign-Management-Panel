@@ -154,6 +154,10 @@ model Campaign {
   // at creation, not stepped through like the pipeline stage.
   businessType String? // NEW | EXISTING
   campaignType String? // PITCHING | ONBOARDED
+  // Free text on the New Campaign form, right after Campaign Type — e.g.
+  // campaignObjective "Awareness", targetAudience "Women 25-35, Tier-1 cities".
+  campaignObjective String?
+  targetAudience    String?
 
   budgetQuoted   Float? // client-facing total budget
   platformMix    String? // csv summary e.g. "YouTube, Instagram"
