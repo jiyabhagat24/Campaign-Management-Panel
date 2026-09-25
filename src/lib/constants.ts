@@ -78,6 +78,18 @@ export const CAMPAIGN_TYPE_LABELS: Record<CampaignType, string> = {
   ONBOARDED: "Onboarded Stage",
 };
 
+// Association Type on the New Campaign form — how TBM is commercially
+// engaged with the client for this campaign, decided at creation. Deliberately
+// separate from FEE_TYPES/financeFeeType below (TBM's own agency-fee
+// margin, internal-cost-gated, set later on the Finance tab) — this is the
+// client-facing commercial structure, set by whoever creates the campaign.
+export const ASSOCIATION_TYPES = ["PROJECT", "RETAINER"] as const;
+export type AssociationType = (typeof ASSOCIATION_TYPES)[number];
+export const ASSOCIATION_TYPE_LABELS: Record<AssociationType, string> = {
+  PROJECT: "Project Basis",
+  RETAINER: "Retainer Basis",
+};
+
 // Which campaign statuses count toward the money figures shown on the
 // dashboard summary cards, the Finance Table, and the /finance page
 // (creator payouts + client invoicing) — explicit product call: a campaign

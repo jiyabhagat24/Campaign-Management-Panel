@@ -159,6 +159,16 @@ model Campaign {
   campaignObjective String?
   targetAudience    String?
 
+  // Association Type on the New Campaign form, next to Total Budget — see
+  // constants.ts ASSOCIATION_TYPES. PROJECT stores a %, RETAINER stores a
+  // flat ₹ amount, never both. Distinct from financeFeeType/
+  // financeAgencyFeePercent/financeRetainerFee further down, which is TBM's
+  // own internal agency-fee margin (internal-cost-gated, set on the Finance
+  // tab) — this is the client-facing commercial structure, set at creation.
+  associationType            String? // PROJECT | RETAINER
+  associationPercent         Float? // used when associationType is PROJECT
+  associationRetainerAmount  Float? // used when associationType is RETAINER
+
   budgetQuoted   Float? // client-facing total budget
   platformMix    String? // csv summary e.g. "YouTube, Instagram"
   startDate      DateTime?

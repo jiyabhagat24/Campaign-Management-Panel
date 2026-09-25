@@ -21,6 +21,7 @@ import {
   INVOICE_STATUSES,
   PAYOUT_PAYMENT_STATUSES,
   FEE_TYPES,
+  ASSOCIATION_TYPES,
 } from "@/lib/constants";
 import { extractInstagramUsername } from "@/lib/instagram";
 import {
@@ -155,6 +156,15 @@ export async function createCampaign(formData: FormData) {
   const campaignType = String(formData.get("campaignType") ?? "").trim() || null;
   const campaignObjective = String(formData.get("campaignObjective") ?? "").trim() || null;
   const targetAudience = String(formData.get("targetAudience") ?? "").trim() || null;
+
+  // Association Type — PROJECT stores a %, RETAINER stores a flat ₹
+  // amount, never both (see ASSOCIATION_TYPES in constants.ts).
+  const associationTypeRaw = String(formData.get("associationType") ?? "").trim();
+  const associationType = (ASSOCIATION_TYPES as readonly string[]).includes(associationTypeRaw) ? associationTypeRaw : null;
+  const associationPercent = associationType === "PROJECT" ? Number(formData.get("associationPercent") ?? 0) || null : null;
+  const associationRetainerAmount =
+    associationType === "RETAINER" ? Number(formData.get("associationRetainerAmount") ?? 0) || null : null;
+
   const productCategory = String(formData.get("productCategory") ?? "").trim() || null;
   const sku = String(formData.get("sku") ?? "").trim() || null;
   const clientWebsiteUrl = String(formData.get("clientWebsiteUrl") ?? "").trim() || null;
@@ -223,6 +233,9 @@ export async function createCampaign(formData: FormData) {
       campaignType: campaignType ?? undefined,
       campaignObjective: campaignObjective ?? undefined,
       targetAudience: targetAudience ?? undefined,
+      associationType: associationType ?? undefined,
+      associationPercent: associationPercent ?? undefined,
+      associationRetainerAmount: associationRetainerAmount ?? undefined,
       clientWebsiteUrl: clientWebsiteUrl ?? undefined,
       productUrl: productUrl ?? undefined,
       productCategory: productCategory ?? undefined,
