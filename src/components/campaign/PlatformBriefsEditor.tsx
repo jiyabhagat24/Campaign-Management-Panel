@@ -108,26 +108,83 @@ export const emptyPlatformBrief = (platform: string): PlatformBriefValue => ({
   languageRequirements: emptyLanguageRows(),
 });
 
-// Category combobox (native input+datalist) — one box to pick a suggestion
-// from or type straight into, instead of a select that swaps out for a
-// separate free-text box.
+// Category multi-select — `value` is a comma-separated string (same
+// storage shape SkuField uses), rendered as toggleable pills, same visual
+// pattern as the Platforms checkbox-pills above. A campaign's Instagram
+// brief is rarely just one category (e.g. "Beauty, Lifestyle"), so this
+// needed to allow more than one pick; the small text box below still lets
+// you add anything not in CONTENT_CATEGORIES.
 function CategoryField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const listId = useId();
+  const selected = value ? value.split(",").map((s) => s.trim()).filter(Boolean) : [];
+  const [customInput, setCustomInput] = useState("");
+  const extras = selected.filter((c) => !CONTENT_CATEGORIES.includes(c));
+
+  function toggle(cat: string) {
+    const next = selected.includes(cat) ? selected.filter((c) => c !== cat) : [...selected, cat];
+    onChange(next.join(", "));
+  }
+
+  function addCustom() {
+    const v = customInput.trim();
+    if (v && !selected.includes(v)) onChange([...selected, v].join(", "));
+    setCustomInput("");
+  }
+
   return (
     <div>
       <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Category</label>
-      <input
-        list={listId}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder="Select or type a category"
-        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:placeholder:text-slate-500"
-      />
-      <datalist id={listId}>
-        {CONTENT_CATEGORIES.map((c) => (
-          <option key={c} value={c} />
+      <div className="flex flex-wrap gap-1.5">
+        {CONTENT_CATEGORIES.map((c) => {
+          const active = selected.includes(c);
+          return (
+            <button
+              key={c}
+              type="button"
+              onClick={() => toggle(c)}
+              className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+                active
+                  ? "border-indigo-400 bg-indigo-50 text-indigo-700 dark:border-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-300"
+                  : "border-slate-300 bg-white text-slate-600 hover:border-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"
+              }`}
+            >
+              {c}
+            </button>
+          );
+        })}
+        {extras.map((c) => (
+          <button
+            key={c}
+            type="button"
+            onClick={() => toggle(c)}
+            className="inline-flex items-center gap-1 rounded-full border border-indigo-400 bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700 dark:border-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-300"
+          >
+            {c}
+            <X className="h-3 w-3" />
+          </button>
         ))}
-      </datalist>
+      </div>
+      <div className="mt-1.5 flex items-center gap-2">
+        <input
+          value={customInput}
+          onChange={(e) => setCustomInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              e.stopPropagation();
+              addCustom();
+            }
+          }}
+          placeholder="Add another category…"
+          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:placeholder:text-slate-500"
+        />
+        <button
+          type="button"
+          onClick={addCustom}
+          className="shrink-0 text-xs font-semibold text-indigo-600 hover:underline dark:text-indigo-400"
+        >
+          Add
+        </button>
+      </div>
     </div>
   );
 }
@@ -237,17 +294,16 @@ export default function PlatformBriefsEditor({
         >
           <p className="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">{brief.platform} brief</p>
 
-          <div className="grid grid-cols-2 gap-3">
-            <CategoryField value={brief.category} onChange={(v) => updateBrief(brief.platform, { category: v })} />
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Deliverables</label>
-              <input
-                value={brief.deliverables}
-                onChange={(e) => updateBrief(brief.platform, { deliverables: e.target.value })}
-                placeholder="e.g. 1 Collab Reel + 1 Month Usage Rights"
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:placeholder:text-slate-500"
-              />
-            </div>
+          <CategoryField value={brief.category} onChange={(v) => updateBrief(brief.platform, { category: v })} />
+
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Deliverables</label>
+            <input
+              value={brief.deliverables}
+              onChange={(e) => updateBrief(brief.platform, { deliverables: e.target.value })}
+              placeholder="e.g. 1 Collab Reel + 1 Month Usage Rights"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:placeholder:text-slate-500"
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-3">

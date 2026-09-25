@@ -1482,6 +1482,7 @@ function ShortlistCreatorRow({
         placeholder="Select category…"
         editable={!isClientView && (canOperateShortlist(role) || superAdmin)}
         onSave={(v) => withRefresh(updateCreatorShortlist(creator.id, { category: v }))}
+        multiple
       />
       {canSeeCost && (
         <EditableNumberCell
@@ -2704,27 +2705,33 @@ function OnboardingCreatorRow({
 // blur) when it is — used for every IR-entered numeric field in the
 // shortlist table so those cells don't need a form/submit round trip.
 // Combobox (native input+datalist) cell for the per-creator
-// Language/Location/Category fields (Shortlist + Onboarding tables) — one
-// box to pick a suggestion from or type straight into, same pattern as
-// LanguageField/CategoryField in PlatformBriefsEditor.tsx, adapted to a
-// compact table cell that saves on blur (matches every other inline-
-// editable cell in this file).
+// Language/Location fields (Shortlist + Onboarding tables) — one box to
+// pick a suggestion from or type straight into, same pattern as
+// LanguageField in PlatformBriefsEditor.tsx, adapted to a compact table
+// cell that saves on blur (matches every other inline-editable cell in
+// this file). `multiple` (used for Category — see CategoryField in
+// PlatformBriefsEditor.tsx for the same multi-pick behavior on the brief
+// form) swaps the input for a checkbox popover instead, since a comma-
+// separated value is a pick-many field, not a type-one field.
 function TagDropdownCell({
   value,
   options,
   placeholder,
   editable,
   onSave,
+  multiple,
 }: {
   value: string | null | undefined;
   options: readonly string[];
   placeholder: string;
   editable: boolean;
   onSave: (value: string | null) => void | Promise<any>;
+  multiple?: boolean;
 }) {
   const router = useRouter();
   const listId = useId();
   const current = value ?? "";
+  const [open, setOpen] = useState(false);
 
   if (!editable) {
     return (
@@ -2746,6 +2753,53 @@ function TagDropdownCell({
       window.alert(err?.message ?? "Failed to save — value was not stored.");
     }
   };
+
+  if (multiple) {
+    const selected = current ? current.split(",").map((s) => s.trim()).filter(Boolean) : [];
+    const toggle = (opt: string) => {
+      const next = selected.includes(opt) ? selected.filter((o) => o !== opt) : [...selected, opt];
+      save(next.join(", "));
+    };
+    return (
+      <td className="relative border-b border-slate-100 px-5 py-4 dark:border-slate-800">
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          title={current}
+          className="w-28 truncate rounded-lg border border-slate-200 px-2 py-1 text-left text-xs font-medium focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+        >
+          {current || placeholder}
+        </button>
+        {/* ponytail: closes on its own "Done" click, not on outside click —
+            add a click-outside listener if this proves confusing in practice. */}
+        {open && (
+          <div className="absolute z-10 mt-1 max-h-48 w-48 overflow-y-auto rounded-lg border border-slate-200 bg-white p-2 shadow-lg dark:border-slate-700 dark:bg-slate-900">
+            {options.map((o) => (
+              <label
+                key={o}
+                className="flex items-center gap-2 rounded px-1.5 py-1 text-xs text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800"
+              >
+                <input
+                  type="checkbox"
+                  checked={selected.includes(o)}
+                  onChange={() => toggle(o)}
+                  className="h-3.5 w-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                {o}
+              </label>
+            ))}
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="mt-1 w-full rounded-lg bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300"
+            >
+              Done
+            </button>
+          </div>
+        )}
+      </td>
+    );
+  }
 
   return (
     <td className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
