@@ -5,6 +5,7 @@ import { updateCampaignDetails } from "@/lib/actions";
 import PlatformBriefsEditor, { type PlatformBriefValue } from "./PlatformBriefsEditor";
 import BrandAvatar from "./BrandAvatar";
 import { Pencil, Calendar, Clock, IndianRupee, AlertTriangle, Link as LinkIcon } from "lucide-react";
+import { focusNextFieldOnEnter } from "@/lib/utils";
 
 export type CampaignHeaderPlatformBrief = {
   id: string;
@@ -252,6 +253,7 @@ export default function CampaignHeaderEditor({
           setSaving(false);
         }
       }}
+      onKeyDown={focusNextFieldOnEnter}
       className="space-y-4"
     >
       <div className="grid grid-cols-2 gap-4">

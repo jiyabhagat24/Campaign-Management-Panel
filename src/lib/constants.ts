@@ -61,6 +61,23 @@ export const CAMPAIGN_STATUS_LABELS: Record<CampaignStatus, string> = {
   CANCELLED: "Cancelled",
 };
 
+// Set once on the New Campaign form (Business Type / Campaign Type
+// dropdowns) — distinct from CAMPAIGN_STATUSES/STAGES below, which track the
+// campaign as it moves through the pipeline after creation.
+export const BUSINESS_TYPES = ["NEW", "EXISTING"] as const;
+export type BusinessType = (typeof BUSINESS_TYPES)[number];
+export const BUSINESS_TYPE_LABELS: Record<BusinessType, string> = {
+  NEW: "New",
+  EXISTING: "Existing",
+};
+
+export const CAMPAIGN_TYPES = ["PITCHING", "ONBOARDED"] as const;
+export type CampaignType = (typeof CAMPAIGN_TYPES)[number];
+export const CAMPAIGN_TYPE_LABELS: Record<CampaignType, string> = {
+  PITCHING: "Pitching Stage",
+  ONBOARDED: "Onboarded Stage",
+};
+
 // Which campaign statuses count toward the money figures shown on the
 // dashboard summary cards, the Finance Table, and the /finance page
 // (creator payouts + client invoicing) — explicit product call: a campaign

@@ -147,11 +147,24 @@ model Campaign {
   status  String @default("DRAFT") // see constants.ts CAMPAIGN_STATUSES — DRAFT | ASSIGNED | ACTIVE | ON_HOLD | CLOSED | CANCELLED
   stage   String @default("BRIEF") // legacy 11-stage field, still used by /pipeline
 
+  // Set on the New Campaign form — see constants.ts BUSINESS_TYPES/CAMPAIGN_TYPES.
+  // Distinct from `stage` above (the 11-stage pipeline): businessType is
+  // "is this a new or existing client relationship" and campaignType is
+  // "is this still being pitched or already onboarded", both decided once
+  // at creation, not stepped through like the pipeline stage.
+  businessType String? // NEW | EXISTING
+  campaignType String? // PITCHING | ONBOARDED
+
   budgetQuoted   Float? // client-facing total budget
   platformMix    String? // csv summary e.g. "YouTube, Instagram"
   startDate      DateTime?
-  endDate        DateTime?
+  endDate        DateTime? // "Campaign Closure Deadline" on the New Campaign form — date-only, must be in the future at creation
   goLiveDeadline DateTime? // computed default: onboard date + slaOnboardToGoLiveDays
+
+  // "Shortlisting Deadline" on the New Campaign form — date + time (unlike
+  // endDate/goLiveDeadline above, which are date-only), must be in the
+  // future at creation.
+  shortlistingDeadline DateTime?
 
   clientWebsiteUrl String? // the client brand's website — reference link for whoever's briefing creators
   productUrl       String? // link to the specific product page being promoted, if there is one — kept as the first entry of productUrls below for backward compatibility with CampaignHeaderEditor's single-link display; new campaigns write both

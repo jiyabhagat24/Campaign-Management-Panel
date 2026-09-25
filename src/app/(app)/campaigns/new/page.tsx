@@ -4,8 +4,10 @@ import { canCreateCampaign, isSuperAdmin } from "@/lib/rbac";
 import { createCampaign } from "@/lib/actions";
 import BackLink from "@/components/BackLink";
 import { PlatformBriefsFormField } from "@/components/campaign/PlatformBriefsEditor";
-import { ProductLinksField, ProductCategoryField } from "@/components/campaign/ProductLinksField";
+import { ProductLinksField, ProductCategoryField, SkuField } from "@/components/campaign/ProductLinksField";
 import CreateCampaignButton from "@/components/campaign/CreateCampaignButton";
+import EnterMovesFocusForm from "@/components/campaign/EnterMovesFocusForm";
+import { BUSINESS_TYPES, BUSINESS_TYPE_LABELS, CAMPAIGN_TYPES, CAMPAIGN_TYPE_LABELS } from "@/lib/constants";
 
 async function create(formData: FormData) {
   "use server";
@@ -21,11 +23,19 @@ export default async function NewCampaignPage() {
   // URL instead of only hiding the button.
   if (!canCreateCampaign(user.role) && !isSuperAdmin(user.id)) redirect("/campaigns");
 
+  // `min` on the two deadline inputs below blocks picking a past date/time
+  // in the native picker — actions.ts re-checks this server-side too, since
+  // min is only a UI hint (a typed-in date isn't stopped by it).
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const minDate = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  const minDateTime = `${minDate}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+
   return (
     <div className="p-8">
       <BackLink label="Back" fallbackHref="/campaigns" />
       <h1 className="mt-2 text-lg font-semibold text-ink dark:text-white">New campaign</h1>
-      <form action={create} className="mt-6 max-w-xl space-y-4 rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+      <EnterMovesFocusForm action={create} className="mt-6 max-w-xl space-y-4 rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">Campaign name</label>
@@ -38,37 +48,49 @@ export default async function NewCampaignPage() {
         </div>
 
         <div className="grid grid-cols-2 gap-4">
-          <ProductCategoryField name="productCategory" />
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
-              SKU <span className="font-normal text-slate-400 dark:text-slate-500">(optional)</span>
-            </label>
-            <input name="sku" placeholder='e.g. Apple MacBook — Air, Pro, Neo' className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:placeholder:text-slate-500" />
+            <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">Business Type</label>
+            <select name="businessType" defaultValue="" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200">
+              <option value="">Select…</option>
+              {BUSINESS_TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {BUSINESS_TYPE_LABELS[t]}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">Campaign Type</label>
+            <select name="campaignType" defaultValue="" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200">
+              <option value="">Select…</option>
+              {CAMPAIGN_TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {CAMPAIGN_TYPE_LABELS[t]}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 
-        <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">Product</label>
-          <input name="product" placeholder="e.g. Ceiling Fan" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:placeholder:text-slate-500" />
-        </div>
+        <ProductCategoryField name="productCategory" />
+        <SkuField name="sku" />
 
         <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Client website URL <span className="font-normal text-slate-400 dark:text-slate-500">(optional)</span>
-          </label>
+          <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">Client website URL</label>
           <input name="clientWebsiteUrl" type="url" placeholder="https://brand.com" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:placeholder:text-slate-500" />
         </div>
 
         <ProductLinksField name="productUrls" />
 
-        <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Go-live deadline <span className="font-normal text-slate-400 dark:text-slate-500">(target)</span>
-          </label>
-          <input name="goLiveDeadline" type="date" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200" />
-          <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-            "Came in" date is stamped automatically to today — no need to set it.
-          </p>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">Shortlisting Deadline</label>
+            <input name="shortlistingDeadline" type="datetime-local" min={minDateTime} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200" />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">Campaign Closure Deadline</label>
+            <input name="campaignClosureDeadline" type="date" min={minDate} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200" />
+          </div>
         </div>
 
         {/* Tick which platform(s) this campaign runs on — each ticked
@@ -79,9 +101,7 @@ export default async function NewCampaignPage() {
         <PlatformBriefsFormField name="platformBriefsJson" />
 
         <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Brief <span className="font-normal text-slate-400 dark:text-slate-500">(optional — can add later)</span>
-          </label>
+          <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">Brief</label>
           <textarea name="brief" rows={4} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:placeholder:text-slate-500" placeholder="Objective, mandatories, timelines, anything not captured above..." />
         </div>
 
@@ -91,7 +111,7 @@ export default async function NewCampaignPage() {
         </div>
 
         <CreateCampaignButton />
-      </form>
+      </EnterMovesFocusForm>
     </div>
   );
 }

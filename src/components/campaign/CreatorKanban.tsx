@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Role } from "@/lib/constants";
 import { canSetCommercials, canApproveCommercialEdit, canOperateShortlist, isSuperAdmin } from "@/lib/rbac";
@@ -172,8 +172,8 @@ export type Creator = {
   pauseRequestedAt?: string | Date | null;
   pauseConfirmedAt?: string | Date | null;
   // Targeting metadata, editable inline from the Shortlist/Onboarding
-  // tables — dropdown of common values plus an "Others" free-text escape
-  // hatch (see TagDropdownCell below).
+  // tables — combobox of common values that also takes free text (see
+  // TagDropdownCell below).
   language?: string | null;
   location?: string | null;
   category?: string | null;
@@ -2703,12 +2703,12 @@ function OnboardingCreatorRow({
 // Plain-text display when not editable, an inline number input (save on
 // blur) when it is — used for every IR-entered numeric field in the
 // shortlist table so those cells don't need a form/submit round trip.
-// Small dropdown-with-"Others"-escape-hatch cell for the per-creator
-// Language/Location/Category fields (Shortlist + Onboarding tables). Same
-// "select from list, or pick Others to type a free-text value" UX as
+// Combobox (native input+datalist) cell for the per-creator
+// Language/Location/Category fields (Shortlist + Onboarding tables) — one
+// box to pick a suggestion from or type straight into, same pattern as
 // LanguageField/CategoryField in PlatformBriefsEditor.tsx, adapted to a
-// compact table cell that saves on change/blur (no separate save button —
-// matches every other inline-editable cell in this file).
+// compact table cell that saves on blur (matches every other inline-
+// editable cell in this file).
 function TagDropdownCell({
   value,
   options,
@@ -2723,9 +2723,8 @@ function TagDropdownCell({
   onSave: (value: string | null) => void | Promise<any>;
 }) {
   const router = useRouter();
+  const listId = useId();
   const current = value ?? "";
-  const isKnown = current === "" || options.includes(current);
-  const [otherMode, setOtherMode] = useState(!isKnown);
 
   if (!editable) {
     return (
@@ -2748,56 +2747,23 @@ function TagDropdownCell({
     }
   };
 
-  // One box at a time, not a select plus a second input stacked/crammed
-  // next to it — picking "Others" swaps the select out for a text input in
-  // the exact same spot, with a small x to go back to the dropdown.
   return (
     <td className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
-      {otherMode ? (
-        <div className="flex items-center gap-1">
-          <input
-            defaultValue={isKnown ? "" : current}
-            placeholder="Type value"
-            autoFocus
-            onBlur={(e) => save(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-            }}
-            className="w-28 rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
-          />
-          <button
-            type="button"
-            onClick={() => {
-              setOtherMode(false);
-              save("");
-            }}
-            title="Back to dropdown"
-            className="shrink-0 text-slate-300 hover:text-slate-600 dark:text-slate-600 dark:hover:text-slate-300"
-          >
-            <X className="h-3 w-3" />
-          </button>
-        </div>
-      ) : (
-        <select
-          value={current}
-          onChange={(e) => {
-            if (e.target.value === "Others") {
-              setOtherMode(true);
-            } else {
-              save(e.target.value);
-            }
-          }}
-          className="w-28 rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
-        >
-          <option value="">{placeholder}</option>
-          {options.map((o) => (
-            <option key={o} value={o}>
-              {o}
-            </option>
-          ))}
-          <option value="Others">Others</option>
-        </select>
-      )}
+      <input
+        list={listId}
+        defaultValue={current}
+        placeholder={placeholder}
+        onBlur={(e) => save(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+        }}
+        className="w-28 rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+      />
+      <datalist id={listId}>
+        {options.map((o) => (
+          <option key={o} value={o} />
+        ))}
+      </datalist>
     </td>
   );
 }

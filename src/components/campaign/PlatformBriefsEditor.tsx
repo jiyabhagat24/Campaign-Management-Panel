@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Plus, X } from "lucide-react";
 
 // One campaign can run a completely different brief per platform — e.g.
@@ -33,8 +33,8 @@ export const INDIAN_LANGUAGES = [
   "Haryanvi",
 ];
 
-// Common content categories for shortlisting creators — plus a free-text
-// "Others" escape hatch (CategoryField below) for anything not listed.
+// Common content categories for shortlisting creators — CategoryField below
+// also takes free text for anything not listed here.
 export const CONTENT_CATEGORIES = [
   "Beauty",
   "Fashion",
@@ -59,11 +59,11 @@ export const CONTENT_CATEGORIES = [
 ];
 
 // Major Indian cities a creator is typically based in — used by the
-// per-creator Location dropdown on the Shortlist/Onboarding tables
+// per-creator Location combobox on the Shortlist/Onboarding tables
 // (CreatorKanban.tsx), not by this campaign-brief editor itself. Kept here
 // alongside INDIAN_LANGUAGES/CONTENT_CATEGORIES since it's the same
-// dropdown-plus-"Others"-escape-hatch shape and those two already live in
-// this file. Not exhaustive by design, same reasoning as the language list.
+// combobox-plus-free-text shape and those two already live in this file.
+// Not exhaustive by design, same reasoning as the language list.
 export const MAJOR_INDIAN_CITIES = [
   "Mumbai",
   "Delhi",
@@ -108,90 +108,47 @@ export const emptyPlatformBrief = (platform: string): PlatformBriefValue => ({
   languageRequirements: emptyLanguageRows(),
 });
 
-// Category dropdown with a free-text "Others" escape hatch. Its own
-// component (not inlined) so it can hold local state for "is Others
-// currently selected" — needed because the underlying value is just a
-// plain string; without this, typing into the Others box while the value
-// doesn't yet match anything in CONTENT_CATEGORIES would make the <select>
-// keep snapping back to the placeholder instead of staying on "Others".
+// Category combobox (native input+datalist) — one box to pick a suggestion
+// from or type straight into, instead of a select that swaps out for a
+// separate free-text box.
 function CategoryField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const isKnown = CONTENT_CATEGORIES.includes(value);
-  const [otherMode, setOtherMode] = useState(!isKnown && value !== "");
-
+  const listId = useId();
   return (
     <div>
       <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Category</label>
-      <select
-        value={otherMode ? "Others" : value}
-        onChange={(e) => {
-          if (e.target.value === "Others") {
-            setOtherMode(true);
-            onChange("");
-          } else {
-            setOtherMode(false);
-            onChange(e.target.value);
-          }
-        }}
-        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
-      >
-        <option value="">Select category…</option>
+      <input
+        list={listId}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="Select or type a category"
+        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:placeholder:text-slate-500"
+      />
+      <datalist id={listId}>
         {CONTENT_CATEGORIES.map((c) => (
-          <option key={c} value={c}>
-            {c}
-          </option>
+          <option key={c} value={c} />
         ))}
-        <option value="Others">Others</option>
-      </select>
-      {otherMode && (
-        <input
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="Type the category"
-          autoFocus
-          className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:placeholder:text-slate-500"
-        />
-      )}
+      </datalist>
     </div>
   );
 }
 
-// Same Others-escape-hatch pattern as CategoryField, for one language row.
+// Same combobox pattern as CategoryField, for one language row.
 function LanguageField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const isKnown = INDIAN_LANGUAGES.includes(value);
-  const [otherMode, setOtherMode] = useState(!isKnown && value !== "");
-
+  const listId = useId();
   return (
     <div className="flex-1">
-      <select
-        value={otherMode ? "Others" : value}
-        onChange={(e) => {
-          if (e.target.value === "Others") {
-            setOtherMode(true);
-            onChange("");
-          } else {
-            setOtherMode(false);
-            onChange(e.target.value);
-          }
-        }}
-        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
-      >
-        <option value="">Select language…</option>
+      <input
+        list={listId}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="Select or type a language"
+        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:placeholder:text-slate-500"
+      />
+      <datalist id={listId}>
         {INDIAN_LANGUAGES.map((lang) => (
-          <option key={lang} value={lang}>
-            {lang}
-          </option>
+          <option key={lang} value={lang} />
         ))}
-        <option value="Others">Others</option>
-      </select>
-      {otherMode && (
-        <input
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="Type the language"
-          autoFocus
-          className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:placeholder:text-slate-500"
-        />
-      )}
+      </datalist>
     </div>
   );
 }

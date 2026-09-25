@@ -151,7 +151,8 @@ export async function createCampaign(formData: FormData) {
   const budgetQuoted = Number(formData.get("budgetQuoted") ?? 0) || null;
   if (!name || !brand) throw new Error("Name and brand are required");
 
-  const product = String(formData.get("product") ?? "").trim() || null;
+  const businessType = String(formData.get("businessType") ?? "").trim() || null;
+  const campaignType = String(formData.get("campaignType") ?? "").trim() || null;
   const productCategory = String(formData.get("productCategory") ?? "").trim() || null;
   const sku = String(formData.get("sku") ?? "").trim() || null;
   const clientWebsiteUrl = String(formData.get("clientWebsiteUrl") ?? "").trim() || null;
@@ -173,15 +174,32 @@ export async function createCampaign(formData: FormData) {
   }
   const productUrl = productUrls[0] ?? null;
 
+  // Shortlisting Deadline (date + time) and Campaign Closure Deadline
+  // (date only) — both optional, but if set must be in the future. The
+  // form's `min` attribute already blocks this in the native picker; this
+  // re-checks it since a typed-in date bypasses `min`.
+  const shortlistingDeadlineRaw = String(formData.get("shortlistingDeadline") ?? "").trim();
+  const shortlistingDeadline = shortlistingDeadlineRaw ? new Date(shortlistingDeadlineRaw) : null;
+  if (shortlistingDeadline && shortlistingDeadline.getTime() < Date.now()) {
+    throw new Error("Shortlisting deadline must be in the future.");
+  }
+  // Date-only field — compared as a calendar date string (not an exact
+  // instant), same as the form's own `min`, so picking today doesn't get
+  // rejected just because midnight has passed.
+  const campaignClosureDeadlineRaw = String(formData.get("campaignClosureDeadline") ?? "").trim();
+  const campaignClosureDeadline = campaignClosureDeadlineRaw ? new Date(campaignClosureDeadlineRaw) : null;
+  const now = new Date();
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  if (campaignClosureDeadlineRaw && campaignClosureDeadlineRaw < todayStr) {
+    throw new Error("Campaign closure deadline must be in the future.");
+  }
+
   // "Came in" is no longer a manual pick — it's stamped to the moment the
   // campaign is actually created, so it always matches reality instead of
-  // whatever date someone happened to type in. goLiveDeadline is still a
-  // manual target: onboardCreator (further down) will tighten it
-  // automatically to whichever's sooner once a creator actually gets
-  // onboarded, same as before this field existed.
+  // whatever date someone happened to type in. goLiveDeadline is no longer
+  // set manually either — onboardCreator (further down) computes it once a
+  // creator actually gets onboarded.
   const startDate = new Date();
-  const goLiveDeadlineRaw = String(formData.get("goLiveDeadline") ?? "").trim();
-  const goLiveDeadline = goLiveDeadlineRaw ? new Date(goLiveDeadlineRaw) : null;
 
   // One brief per ticked platform (PlatformBriefsFormField serializes its
   // state to this hidden JSON field) — an Instagram brief and a YouTube
@@ -199,23 +217,16 @@ export async function createCampaign(formData: FormData) {
       brief,
       budgetQuoted: budgetQuoted ?? undefined,
       platformMix: platformMix ?? undefined,
-      product: product ?? undefined,
+      businessType: businessType ?? undefined,
+      campaignType: campaignType ?? undefined,
       clientWebsiteUrl: clientWebsiteUrl ?? undefined,
       productUrl: productUrl ?? undefined,
-      // productCategory/sku/productUrls are real columns in schema.prisma
-      // (and will be in the generated client after the next deploy, same as
-      // every other field added this session) but this sandbox's local
-      // Prisma client couldn't be regenerated against them (no network to
-      // Prisma's binary host here) — spread bypasses the resulting stale
-      // excess-property check, same workaround used for YoutubeChannelCache
-      // above.
-      ...({
-        productCategory: productCategory ?? undefined,
-        sku: sku ?? undefined,
-        productUrls: productUrls.length ? JSON.stringify(productUrls) : undefined,
-      } as any),
+      productCategory: productCategory ?? undefined,
+      sku: sku ?? undefined,
+      productUrls: productUrls.length ? JSON.stringify(productUrls) : undefined,
+      shortlistingDeadline: shortlistingDeadline ?? undefined,
+      endDate: campaignClosureDeadline ?? undefined,
       startDate: startDate ?? undefined,
-      goLiveDeadline: goLiveDeadline ?? undefined,
       platformBriefs: platformBriefs.length ? { create: platformBriefs.map(toPlatformBriefCreateInput) } : undefined,
       createdById: user.id,
       slaClientFeedbackHours: DEFAULT_SLA.clientFeedbackHours,
