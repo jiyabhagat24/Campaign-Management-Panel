@@ -152,10 +152,26 @@ export async function createCampaign(formData: FormData) {
   if (!name || !brand) throw new Error("Name and brand are required");
 
   const product = String(formData.get("product") ?? "").trim() || null;
+  const productCategory = String(formData.get("productCategory") ?? "").trim() || null;
+  const sku = String(formData.get("sku") ?? "").trim() || null;
   const clientWebsiteUrl = String(formData.get("clientWebsiteUrl") ?? "").trim() || null;
-  const productUrl = String(formData.get("productUrl") ?? "").trim() || null;
   if (clientWebsiteUrl && !isValidUrl(clientWebsiteUrl)) throw new Error("Client website must be a valid URL.");
-  if (productUrl && !isValidUrl(productUrl)) throw new Error("Product URL must be a valid URL.");
+
+  // Multiple product links (ProductLinksField serializes its state to this
+  // hidden JSON field) — productUrl (singular) is kept in sync with the
+  // first one for backward compatibility with CampaignHeaderEditor's
+  // existing single-link display/edit.
+  let productUrls: string[] = [];
+  try {
+    const parsed = JSON.parse(String(formData.get("productUrls") ?? "[]"));
+    if (Array.isArray(parsed)) productUrls = parsed.map((v) => String(v).trim()).filter(Boolean);
+  } catch {
+    productUrls = [];
+  }
+  for (const url of productUrls) {
+    if (!isValidUrl(url)) throw new Error("Every product URL must be a valid URL.");
+  }
+  const productUrl = productUrls[0] ?? null;
 
   // "Came in" is no longer a manual pick — it's stamped to the moment the
   // campaign is actually created, so it always matches reality instead of
@@ -186,6 +202,18 @@ export async function createCampaign(formData: FormData) {
       product: product ?? undefined,
       clientWebsiteUrl: clientWebsiteUrl ?? undefined,
       productUrl: productUrl ?? undefined,
+      // productCategory/sku/productUrls are real columns in schema.prisma
+      // (and will be in the generated client after the next deploy, same as
+      // every other field added this session) but this sandbox's local
+      // Prisma client couldn't be regenerated against them (no network to
+      // Prisma's binary host here) — spread bypasses the resulting stale
+      // excess-property check, same workaround used for YoutubeChannelCache
+      // above.
+      ...({
+        productCategory: productCategory ?? undefined,
+        sku: sku ?? undefined,
+        productUrls: productUrls.length ? JSON.stringify(productUrls) : undefined,
+      } as any),
       startDate: startDate ?? undefined,
       goLiveDeadline: goLiveDeadline ?? undefined,
       platformBriefs: platformBriefs.length ? { create: platformBriefs.map(toPlatformBriefCreateInput) } : undefined,

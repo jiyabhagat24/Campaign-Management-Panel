@@ -154,7 +154,21 @@ model Campaign {
   goLiveDeadline DateTime? // computed default: onboard date + slaOnboardToGoLiveDays
 
   clientWebsiteUrl String? // the client brand's website — reference link for whoever's briefing creators
-  productUrl       String? // link to the specific product page being promoted, if there is one
+  productUrl       String? // link to the specific product page being promoted, if there is one — kept as the first entry of productUrls below for backward compatibility with CampaignHeaderEditor's single-link display; new campaigns write both
+
+  // Product Category / SKU — entered on the New Campaign form (Brand
+  // Solutions). Distinct from `product` above (deprecated single-string
+  // field) and CampaignPlatformBrief.category (content category, e.g.
+  // Beauty/Fashion) — these describe the physical product itself, e.g.
+  // productCategory "MacBook", sku "Air, Pro, Neo" (free text, not a fixed
+  // list — a brand's own SKU naming varies too much for a dropdown).
+  productCategory String?
+  sku             String?
+  // Multiple product page links, JSON-encoded string array — pasted via the
+  // "+ Add another link" control on the New Campaign form (one campaign can
+  // point at several product pages/listings). productUrl above still holds
+  // just the first one, for the existing single-link header editor.
+  productUrls String?
 
   // ---------- Structured brief (Atomberg-style brief format) ----------
   // v1 of this — Product only. Deliverables/Category/budget-per-creator/
