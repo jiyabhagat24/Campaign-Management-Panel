@@ -123,6 +123,18 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
             goLiveDeadline: campaign.goLiveDeadline ? campaign.goLiveDeadline.toISOString() : null,
             brief: campaign.brief,
             platformBriefs: campaign.platformBriefs,
+            businessType: campaign.businessType,
+            campaignType: campaign.campaignType,
+            campaignObjective: campaign.campaignObjective,
+            targetAudience: campaign.targetAudience,
+            productCategory: campaign.productCategory,
+            sku: campaign.sku,
+            productUrls: campaign.productUrls,
+            shortlistingDeadline: campaign.shortlistingDeadline ? campaign.shortlistingDeadline.toISOString() : null,
+            endDate: campaign.endDate ? campaign.endDate.toISOString() : null,
+            associationType: campaign.associationType,
+            associationPercent: campaign.associationPercent,
+            associationRetainerAmount: campaign.associationRetainerAmount,
           }}
           canEdit={canCreateCampaign(user.role) || isSuperAdmin(user.id)}
           breached={breached}

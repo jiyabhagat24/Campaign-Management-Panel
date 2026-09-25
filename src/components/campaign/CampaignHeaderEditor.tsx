@@ -6,6 +6,14 @@ import PlatformBriefsEditor, { type PlatformBriefValue } from "./PlatformBriefsE
 import BrandAvatar from "./BrandAvatar";
 import { Pencil, Calendar, Clock, IndianRupee, AlertTriangle, Link as LinkIcon } from "lucide-react";
 import { focusNextFieldOnEnter } from "@/lib/utils";
+import {
+  BUSINESS_TYPE_LABELS,
+  CAMPAIGN_TYPE_LABELS,
+  ASSOCIATION_TYPE_LABELS,
+  type BusinessType,
+  type CampaignType,
+  type AssociationType,
+} from "@/lib/constants";
 
 export type CampaignHeaderPlatformBrief = {
   id: string;
@@ -31,6 +39,21 @@ export type CampaignHeaderData = {
   goLiveDeadline: string | null; // ISO
   brief: string | null;
   platformBriefs: CampaignHeaderPlatformBrief[];
+  // Set on the New Campaign form — display-only gist below, not yet
+  // editable from this panel (editing one just leaves the others as-is,
+  // updateCampaignDetails only ever writes the fields it's given).
+  businessType: string | null;
+  campaignType: string | null;
+  campaignObjective: string | null;
+  targetAudience: string | null;
+  productCategory: string | null;
+  sku: string | null;
+  productUrls: string | null; // JSON-encoded string array
+  shortlistingDeadline: string | null; // ISO
+  endDate: string | null; // ISO — "Campaign Closure Deadline"
+  associationType: string | null;
+  associationPercent: number | null;
+  associationRetainerAmount: number | null;
 };
 
 const toDateInputValue = (iso: string | null) => (iso ? iso.slice(0, 10) : "");
@@ -140,6 +163,21 @@ export default function CampaignHeaderEditor({
                     <LinkIcon className="h-3 w-3" /> Product page
                   </a>
                 )}
+                {/* productUrl above is just the first entry of productUrls —
+                    show any extra ones the New Campaign form's "+ Add
+                    another link" collected. */}
+                {(() => {
+                  let extraUrls: string[] = [];
+                  try {
+                    const parsed = campaign.productUrls ? JSON.parse(campaign.productUrls) : [];
+                    if (Array.isArray(parsed)) extraUrls = parsed.slice(1);
+                  } catch {}
+                  return extraUrls.map((u, i) => (
+                    <a key={i} href={u} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-medium text-indigo-600 hover:underline dark:text-indigo-400">
+                      <LinkIcon className="h-3 w-3" /> Product link {i + 2}
+                    </a>
+                  ));
+                })()}
               </div>
             )}
 
@@ -187,6 +225,87 @@ export default function CampaignHeaderEditor({
                     )}
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* Gist of everything set on the New Campaign form that isn't
+                shown elsewhere above — Business/Campaign Type, Objective,
+                Target Audience, Product Category, SKU, the two extra
+                deadlines, and Association Type. Display-only here; these
+                aren't yet editable from this panel (see CampaignHeaderData
+                above). */}
+            {(campaign.businessType ||
+              campaign.campaignType ||
+              campaign.productCategory ||
+              campaign.sku ||
+              campaign.associationType ||
+              campaign.shortlistingDeadline ||
+              campaign.endDate ||
+              campaign.campaignObjective ||
+              campaign.targetAudience) && (
+              <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-800/40">
+                <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Campaign Details</p>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {campaign.businessType && (
+                    <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+                      {BUSINESS_TYPE_LABELS[campaign.businessType as BusinessType] ?? campaign.businessType}
+                    </span>
+                  )}
+                  {campaign.campaignType && (
+                    <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+                      {CAMPAIGN_TYPE_LABELS[campaign.campaignType as CampaignType] ?? campaign.campaignType}
+                    </span>
+                  )}
+                  {campaign.productCategory && (
+                    <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+                      {campaign.productCategory}
+                    </span>
+                  )}
+                  {campaign.sku && (
+                    <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+                      SKU: {campaign.sku}
+                    </span>
+                  )}
+                  {campaign.associationType && (
+                    <span className="rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[11px] font-bold text-indigo-700 dark:border-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-300">
+                      {ASSOCIATION_TYPE_LABELS[campaign.associationType as AssociationType] ?? campaign.associationType}
+                      {campaign.associationType === "PROJECT" && campaign.associationPercent != null && `: ${campaign.associationPercent}%`}
+                      {campaign.associationType === "RETAINER" &&
+                        campaign.associationRetainerAmount != null &&
+                        `: ₹${campaign.associationRetainerAmount.toLocaleString("en-IN")}`}
+                    </span>
+                  )}
+                  {campaign.shortlistingDeadline && (
+                    <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+                      Shortlisting by{" "}
+                      {new Date(campaign.shortlistingDeadline).toLocaleString("en-IN", {
+                        day: "numeric",
+                        month: "short",
+                        hour: "numeric",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                  )}
+                  {campaign.endDate && (
+                    <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+                      Closure: {new Date(campaign.endDate).toLocaleDateString("en-IN")}
+                    </span>
+                  )}
+                </div>
+                {(campaign.campaignObjective || campaign.targetAudience) && (
+                  <div className="mt-1.5 space-y-0.5 text-xs text-slate-600 dark:text-slate-400">
+                    {campaign.campaignObjective && (
+                      <p>
+                        <span className="font-semibold text-slate-500 dark:text-slate-400">Objective:</span> {campaign.campaignObjective}
+                      </p>
+                    )}
+                    {campaign.targetAudience && (
+                      <p>
+                        <span className="font-semibold text-slate-500 dark:text-slate-400">Target audience:</span> {campaign.targetAudience}
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
