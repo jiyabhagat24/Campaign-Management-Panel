@@ -21,7 +21,8 @@ import {
   INVOICE_STATUSES,
   PAYOUT_PAYMENT_STATUSES,
   FEE_TYPES,
-  ASSOCIATION_TYPES,
+  BUSINESS_TYPES,
+  CAMPAIGN_TYPES,
 } from "@/lib/constants";
 import { extractInstagramUsername } from "@/lib/instagram";
 import {
@@ -157,13 +158,15 @@ export async function createCampaign(formData: FormData) {
   const campaignObjective = String(formData.get("campaignObjective") ?? "").trim() || null;
   const targetAudience = String(formData.get("targetAudience") ?? "").trim() || null;
 
-  // Association Type — PROJECT stores a %, RETAINER stores a flat ₹
-  // amount, never both (see ASSOCIATION_TYPES in constants.ts).
-  const associationTypeRaw = String(formData.get("associationType") ?? "").trim();
-  const associationType = (ASSOCIATION_TYPES as readonly string[]).includes(associationTypeRaw) ? associationTypeRaw : null;
-  const associationPercent = associationType === "PROJECT" ? Number(formData.get("associationPercent") ?? 0) || null : null;
-  const associationRetainerAmount =
-    associationType === "RETAINER" ? Number(formData.get("associationRetainerAmount") ?? 0) || null : null;
+  // Association Type on the New Campaign form — same field as Fee
+  // type/Agency Fee on the Finance tab (FinanceRow.tsx), just entered here
+  // instead of later. PERCENTAGE stores a %, RETAINER stores a flat ₹
+  // amount, never both.
+  const financeFeeTypeRaw = String(formData.get("financeFeeType") ?? "").trim();
+  const financeFeeType = (FEE_TYPES as readonly string[]).includes(financeFeeTypeRaw) ? financeFeeTypeRaw : null;
+  const financeAgencyFeePercent =
+    financeFeeType === "PERCENTAGE" ? Number(formData.get("financeAgencyFeePercent") ?? 0) || null : null;
+  const financeRetainerFee = financeFeeType === "RETAINER" ? Number(formData.get("financeRetainerFee") ?? 0) || null : null;
 
   const productCategory = String(formData.get("productCategory") ?? "").trim() || null;
   const sku = String(formData.get("sku") ?? "").trim() || null;
@@ -233,9 +236,9 @@ export async function createCampaign(formData: FormData) {
       campaignType: campaignType ?? undefined,
       campaignObjective: campaignObjective ?? undefined,
       targetAudience: targetAudience ?? undefined,
-      associationType: associationType ?? undefined,
-      associationPercent: associationPercent ?? undefined,
-      associationRetainerAmount: associationRetainerAmount ?? undefined,
+      financeFeeType: financeFeeType ?? undefined,
+      financeAgencyFeePercent: financeAgencyFeePercent ?? undefined,
+      financeRetainerFee: financeRetainerFee ?? undefined,
       clientWebsiteUrl: clientWebsiteUrl ?? undefined,
       productUrl: productUrl ?? undefined,
       productCategory: productCategory ?? undefined,
@@ -394,14 +397,24 @@ export async function updateCampaignDetails(
   data: {
     name: string;
     brand: string;
-    product: string | null;
     clientWebsiteUrl: string | null;
-    productUrl: string | null;
+    productUrls: string[];
     budgetQuoted: number | null;
     startDate: string | null; // "YYYY-MM-DD" or null
     goLiveDeadline: string | null; // "YYYY-MM-DD" or null
     brief: string | null;
     platformBriefs: RawPlatformBrief[];
+    // Same field set as the New Campaign form (createCampaign) — kept in
+    // sync so editing a campaign isn't stuck on the old, smaller field set
+    // it was created with.
+    businessType: string | null;
+    campaignType: string | null;
+    campaignObjective: string | null;
+    targetAudience: string | null;
+    productCategory: string | null;
+    sku: string | null;
+    shortlistingDeadline: string | null; // "YYYY-MM-DDTHH:mm" or null
+    endDate: string | null; // "YYYY-MM-DD" or null — "Campaign Closure Deadline"
   }
 ) {
   const user = await requireUser();
@@ -412,9 +425,19 @@ export async function updateCampaignDetails(
   if (!name || !brand) throw new Error("Name and brand are required.");
 
   const clientWebsiteUrl = data.clientWebsiteUrl?.trim() || null;
-  const productUrl = data.productUrl?.trim() || null;
+  const productUrls = data.productUrls.map((u) => u.trim()).filter(Boolean);
   if (clientWebsiteUrl && !isValidUrl(clientWebsiteUrl)) throw new Error("Client website must be a valid URL.");
-  if (productUrl && !isValidUrl(productUrl)) throw new Error("Product URL must be a valid URL.");
+  for (const url of productUrls) {
+    if (!isValidUrl(url)) throw new Error("Every product URL must be a valid URL.");
+  }
+  const productUrl = productUrls[0] ?? null;
+
+  if (data.businessType && !(BUSINESS_TYPES as readonly string[]).includes(data.businessType)) {
+    throw new Error("Invalid business type.");
+  }
+  if (data.campaignType && !(CAMPAIGN_TYPES as readonly string[]).includes(data.campaignType)) {
+    throw new Error("Invalid campaign type.");
+  }
 
   const platformBriefs = sanitizePlatformBriefs(data.platformBriefs);
   const platformMix = platformBriefs.length ? platformBriefs.map((p) => p.platform).join(", ") : null;
@@ -429,14 +452,22 @@ export async function updateCampaignDetails(
     data: {
       name,
       brand,
-      product: data.product?.trim() || null,
       clientWebsiteUrl,
       productUrl,
+      productUrls: productUrls.length ? JSON.stringify(productUrls) : null,
       platformMix,
       budgetQuoted: data.budgetQuoted,
       startDate: data.startDate ? new Date(data.startDate) : null,
       goLiveDeadline: data.goLiveDeadline ? new Date(data.goLiveDeadline) : null,
       brief: data.brief?.trim() || null,
+      businessType: data.businessType || null,
+      campaignType: data.campaignType || null,
+      campaignObjective: data.campaignObjective?.trim() || null,
+      targetAudience: data.targetAudience?.trim() || null,
+      productCategory: data.productCategory?.trim() || null,
+      sku: data.sku?.trim() || null,
+      shortlistingDeadline: data.shortlistingDeadline ? new Date(data.shortlistingDeadline) : null,
+      endDate: data.endDate ? new Date(data.endDate) : null,
       platformBriefs: platformBriefs.length ? { create: platformBriefs.map(toPlatformBriefCreateInput) } : undefined,
     },
   });

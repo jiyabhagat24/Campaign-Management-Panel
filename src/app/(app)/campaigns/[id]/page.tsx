@@ -132,9 +132,6 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
             productUrls: campaign.productUrls,
             shortlistingDeadline: campaign.shortlistingDeadline ? campaign.shortlistingDeadline.toISOString() : null,
             endDate: campaign.endDate ? campaign.endDate.toISOString() : null,
-            associationType: campaign.associationType,
-            associationPercent: campaign.associationPercent,
-            associationRetainerAmount: campaign.associationRetainerAmount,
           }}
           canEdit={canCreateCampaign(user.role) || isSuperAdmin(user.id)}
           breached={breached}

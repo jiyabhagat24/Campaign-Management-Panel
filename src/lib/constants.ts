@@ -78,18 +78,6 @@ export const CAMPAIGN_TYPE_LABELS: Record<CampaignType, string> = {
   ONBOARDED: "Onboarded Stage",
 };
 
-// Association Type on the New Campaign form — how TBM is commercially
-// engaged with the client for this campaign, decided at creation. Deliberately
-// separate from FEE_TYPES/financeFeeType below (TBM's own agency-fee
-// margin, internal-cost-gated, set later on the Finance tab) — this is the
-// client-facing commercial structure, set by whoever creates the campaign.
-export const ASSOCIATION_TYPES = ["PROJECT", "RETAINER"] as const;
-export type AssociationType = (typeof ASSOCIATION_TYPES)[number];
-export const ASSOCIATION_TYPE_LABELS: Record<AssociationType, string> = {
-  PROJECT: "Project Basis",
-  RETAINER: "Retainer Basis",
-};
-
 // Which campaign statuses count toward the money figures shown on the
 // dashboard summary cards, the Finance Table, and the /finance page
 // (creator payouts + client invoicing) — explicit product call: a campaign
@@ -112,12 +100,19 @@ export const INVOICE_STATUS_LABELS: Record<InvoiceStatus, string> = {
 };
 
 // How a campaign is billed — a cut of spend or a flat recurring retainer,
-// never both (see Campaign.financeFeeType).
+// never both (see Campaign.financeFeeType). Also the "Association Type" on
+// the New Campaign form ("Project Basis" == PERCENTAGE, "Retainer Basis" ==
+// RETAINER) — same field, two label sets for two contexts (creation-time
+// framing vs the Finance tab's own wording), not two separate concepts.
 export const FEE_TYPES = ["PERCENTAGE", "RETAINER"] as const;
 export type FeeType = (typeof FEE_TYPES)[number];
 export const FEE_TYPE_LABELS: Record<FeeType, string> = {
   PERCENTAGE: "Agency Fee %",
   RETAINER: "Retainer Fee",
+};
+export const ASSOCIATION_TYPE_LABELS: Record<FeeType, string> = {
+  PERCENTAGE: "Project Basis",
+  RETAINER: "Retainer Basis",
 };
 
 // Finance & Invoicing — Creator side payouts (section A of the sheet's

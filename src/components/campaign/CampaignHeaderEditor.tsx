@@ -4,16 +4,18 @@ import { useState } from "react";
 import { updateCampaignDetails } from "@/lib/actions";
 import PlatformBriefsEditor, { type PlatformBriefValue } from "./PlatformBriefsEditor";
 import BrandAvatar from "./BrandAvatar";
-import { Pencil, Calendar, Clock, IndianRupee, AlertTriangle, Link as LinkIcon } from "lucide-react";
+import { Pencil, Calendar, Clock, IndianRupee, AlertTriangle, Link as LinkIcon, Plus, X } from "lucide-react";
 import { focusNextFieldOnEnter } from "@/lib/utils";
+import MultiSelectBox from "./MultiSelectBox";
 import {
+  BUSINESS_TYPES,
   BUSINESS_TYPE_LABELS,
+  CAMPAIGN_TYPES,
   CAMPAIGN_TYPE_LABELS,
-  ASSOCIATION_TYPE_LABELS,
   type BusinessType,
   type CampaignType,
-  type AssociationType,
 } from "@/lib/constants";
+import { PRODUCT_CATEGORIES } from "./ProductLinksField";
 
 export type CampaignHeaderPlatformBrief = {
   id: string;
@@ -39,9 +41,10 @@ export type CampaignHeaderData = {
   goLiveDeadline: string | null; // ISO
   brief: string | null;
   platformBriefs: CampaignHeaderPlatformBrief[];
-  // Set on the New Campaign form — display-only gist below, not yet
-  // editable from this panel (editing one just leaves the others as-is,
-  // updateCampaignDetails only ever writes the fields it's given).
+  // Same fields the New Campaign form collects — editable here too now
+  // (see the edit-mode form below), except Association Type/Agency Fee,
+  // which stays exclusively in FinanceRow (same field, internal-cost-
+  // gated there — see AssociationTypeField.tsx).
   businessType: string | null;
   campaignType: string | null;
   campaignObjective: string | null;
@@ -51,12 +54,18 @@ export type CampaignHeaderData = {
   productUrls: string | null; // JSON-encoded string array
   shortlistingDeadline: string | null; // ISO
   endDate: string | null; // ISO — "Campaign Closure Deadline"
-  associationType: string | null;
-  associationPercent: number | null;
-  associationRetainerAmount: number | null;
 };
 
 const toDateInputValue = (iso: string | null) => (iso ? iso.slice(0, 10) : "");
+const toDateTimeInputValue = (iso: string | null) => (iso ? iso.slice(0, 16) : "");
+
+const toEditableProductUrls = (productUrl: string | null, productUrlsJson: string | null): string[] => {
+  try {
+    const parsed = productUrlsJson ? JSON.parse(productUrlsJson) : [];
+    if (Array.isArray(parsed) && parsed.length) return parsed.map((v) => String(v));
+  } catch {}
+  return productUrl ? [productUrl] : [""];
+};
 
 const toEditableBriefs = (briefs: CampaignHeaderPlatformBrief[]): PlatformBriefValue[] =>
   briefs.map((b) => ({
@@ -97,14 +106,21 @@ export default function CampaignHeaderEditor({
 
   const [name, setName] = useState(campaign.name);
   const [brand, setBrand] = useState(campaign.brand);
-  const [product, setProduct] = useState(campaign.product ?? "");
   const [clientWebsiteUrl, setClientWebsiteUrl] = useState(campaign.clientWebsiteUrl ?? "");
-  const [productUrl, setProductUrl] = useState(campaign.productUrl ?? "");
+  const [productUrls, setProductUrls] = useState<string[]>(() => toEditableProductUrls(campaign.productUrl, campaign.productUrls));
   const [budgetQuoted, setBudgetQuoted] = useState(campaign.budgetQuoted?.toString() ?? "");
   const [startDate, setStartDate] = useState(toDateInputValue(campaign.startDate));
   const [goLiveDeadline, setGoLiveDeadline] = useState(toDateInputValue(campaign.goLiveDeadline));
   const [brief, setBrief] = useState(campaign.brief ?? "");
   const [platformBriefs, setPlatformBriefs] = useState<PlatformBriefValue[]>(() => toEditableBriefs(campaign.platformBriefs));
+  const [businessType, setBusinessType] = useState(campaign.businessType ?? "");
+  const [campaignType, setCampaignType] = useState(campaign.campaignType ?? "");
+  const [campaignObjective, setCampaignObjective] = useState(campaign.campaignObjective ?? "");
+  const [targetAudience, setTargetAudience] = useState(campaign.targetAudience ?? "");
+  const [productCategory, setProductCategory] = useState(campaign.productCategory ?? "");
+  const [sku, setSku] = useState(campaign.sku ?? "");
+  const [shortlistingDeadline, setShortlistingDeadline] = useState(toDateTimeInputValue(campaign.shortlistingDeadline));
+  const [campaignClosureDeadline, setCampaignClosureDeadline] = useState(toDateInputValue(campaign.endDate));
 
   if (!editing) {
     return (
@@ -230,17 +246,16 @@ export default function CampaignHeaderEditor({
 
             {/* Gist of everything set on the New Campaign form that isn't
                 shown elsewhere above — Business/Campaign Type, Objective,
-                Target Audience, Product Category, SKU, the two extra
-                deadlines, and Association Type. Display-only here; these
-                aren't yet editable from this panel (see CampaignHeaderData
-                above). */}
+                Target Audience, Product Category, SKU. Association Type/
+                Agency Fee stays out of this always-visible block on purpose
+                — it's the same internal-cost-gated field as FinanceRow's
+                Fee type, shown/edited there only. The two extra deadlines
+                (Shortlisting, Closure) show in the right-side date column
+                instead, next to Came in. */}
             {(campaign.businessType ||
               campaign.campaignType ||
               campaign.productCategory ||
               campaign.sku ||
-              campaign.associationType ||
-              campaign.shortlistingDeadline ||
-              campaign.endDate ||
               campaign.campaignObjective ||
               campaign.targetAudience) && (
               <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-800/40">
@@ -264,31 +279,6 @@ export default function CampaignHeaderEditor({
                   {campaign.sku && (
                     <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
                       SKU: {campaign.sku}
-                    </span>
-                  )}
-                  {campaign.associationType && (
-                    <span className="rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[11px] font-bold text-indigo-700 dark:border-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-300">
-                      {ASSOCIATION_TYPE_LABELS[campaign.associationType as AssociationType] ?? campaign.associationType}
-                      {campaign.associationType === "PROJECT" && campaign.associationPercent != null && `: ${campaign.associationPercent}%`}
-                      {campaign.associationType === "RETAINER" &&
-                        campaign.associationRetainerAmount != null &&
-                        `: ₹${campaign.associationRetainerAmount.toLocaleString("en-IN")}`}
-                    </span>
-                  )}
-                  {campaign.shortlistingDeadline && (
-                    <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
-                      Shortlisting by{" "}
-                      {new Date(campaign.shortlistingDeadline).toLocaleString("en-IN", {
-                        day: "numeric",
-                        month: "short",
-                        hour: "numeric",
-                        minute: "2-digit",
-                      })}
-                    </span>
-                  )}
-                  {campaign.endDate && (
-                    <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
-                      Closure: {new Date(campaign.endDate).toLocaleDateString("en-IN")}
                     </span>
                   )}
                 </div>
@@ -319,6 +309,29 @@ export default function CampaignHeaderEditor({
               {campaign.startDate ? new Date(campaign.startDate).toLocaleDateString("en-IN") : "—"}
             </span>
           </div>
+
+          {campaign.shortlistingDeadline && (
+            <div className="flex items-center gap-2 text-xs font-medium text-slate-600 bg-slate-50 border border-slate-200/70 rounded-xl px-3 py-2 dark:bg-slate-800/50 dark:border-slate-700 dark:text-slate-300">
+              <Clock className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+              <span>Shortlisting by:</span>
+              <span className="font-bold text-slate-900 dark:text-white">
+                {new Date(campaign.shortlistingDeadline).toLocaleString("en-IN", {
+                  day: "numeric",
+                  month: "short",
+                  hour: "numeric",
+                  minute: "2-digit",
+                })}
+              </span>
+            </div>
+          )}
+
+          {campaign.endDate && (
+            <div className="flex items-center gap-2 text-xs font-medium text-slate-600 bg-slate-50 border border-slate-200/70 rounded-xl px-3 py-2 dark:bg-slate-800/50 dark:border-slate-700 dark:text-slate-300">
+              <Calendar className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+              <span>Closure:</span>
+              <span className="font-bold text-slate-900 dark:text-white">{new Date(campaign.endDate).toLocaleDateString("en-IN")}</span>
+            </div>
+          )}
 
           <div
             className={`flex items-center gap-2 text-xs font-medium border rounded-xl px-3 py-2 ${
@@ -357,14 +370,21 @@ export default function CampaignHeaderEditor({
           await updateCampaignDetails(campaign.id, {
             name,
             brand,
-            product: product || null,
             clientWebsiteUrl: clientWebsiteUrl || null,
-            productUrl: productUrl || null,
+            productUrls,
             budgetQuoted: budgetQuoted ? Number(budgetQuoted) : null,
             startDate: startDate || null,
             goLiveDeadline: goLiveDeadline || null,
             brief: brief || null,
             platformBriefs,
+            businessType: businessType || null,
+            campaignType: campaignType || null,
+            campaignObjective: campaignObjective || null,
+            targetAudience: targetAudience || null,
+            productCategory: productCategory || null,
+            sku: sku || null,
+            shortlistingDeadline: shortlistingDeadline || null,
+            endDate: campaignClosureDeadline || null,
           });
           window.location.reload();
         } catch (err) {
@@ -388,13 +408,59 @@ export default function CampaignHeaderEditor({
 
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Product</label>
-          <input value={product} onChange={(e) => setProduct(e.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200" />
+          <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Business Type</label>
+          <select value={businessType} onChange={(e) => setBusinessType(e.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200">
+            <option value="">Select…</option>
+            {BUSINESS_TYPES.map((t) => (
+              <option key={t} value={t}>
+                {BUSINESS_TYPE_LABELS[t]}
+              </option>
+            ))}
+          </select>
         </div>
         <div>
-          <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Final cost / total budget (₹)</label>
-          <input value={budgetQuoted} onChange={(e) => setBudgetQuoted(e.target.value)} type="number" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200" />
+          <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Campaign Type</label>
+          <select value={campaignType} onChange={(e) => setCampaignType(e.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200">
+            <option value="">Select…</option>
+            {CAMPAIGN_TYPES.map((t) => (
+              <option key={t} value={t}>
+                {CAMPAIGN_TYPE_LABELS[t]}
+              </option>
+            ))}
+          </select>
         </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Campaign Objective</label>
+          <input value={campaignObjective} onChange={(e) => setCampaignObjective(e.target.value)} placeholder="e.g. Awareness" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200" />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Target Audience</label>
+          <input value={targetAudience} onChange={(e) => setTargetAudience(e.target.value)} placeholder="e.g. Women 25-35, Tier-1 cities" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200" />
+        </div>
+      </div>
+
+      <div>
+        <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Product Category</label>
+        <MultiSelectBox
+          options={PRODUCT_CATEGORIES}
+          value={productCategory}
+          onChange={setProductCategory}
+          placeholder="Select categories…"
+          className="w-full truncate rounded-lg border border-slate-300 bg-white px-3 py-2 text-left text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+        />
+      </div>
+
+      {/* ponytail: plain text, not SkuField's nested add/remove group UI —
+          that UI is built for a fresh FormData submit, not for parsing an
+          existing "Group: type, type; Group2: type" string back into
+          editable groups. Upgrade if editing SKUs here turns out to be
+          common. */}
+      <div>
+        <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">SKU</label>
+        <input value={sku} onChange={(e) => setSku(e.target.value)} placeholder="e.g. MacBook: Air, Pro, Neo" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200" />
       </div>
 
       <div className="grid grid-cols-2 gap-4">
@@ -403,9 +469,44 @@ export default function CampaignHeaderEditor({
           <input value={clientWebsiteUrl} onChange={(e) => setClientWebsiteUrl(e.target.value)} type="url" placeholder="https://brand.com" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200" />
         </div>
         <div>
-          <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Product URL</label>
-          <input value={productUrl} onChange={(e) => setProductUrl(e.target.value)} type="url" placeholder="https://brand.com/product" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200" />
+          <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Final cost / total budget (₹)</label>
+          <input value={budgetQuoted} onChange={(e) => setBudgetQuoted(e.target.value)} type="number" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200" />
         </div>
+      </div>
+
+      <div>
+        <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Product URL</label>
+        <div className="space-y-2">
+          {productUrls.map((url, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <input
+                type="url"
+                value={url}
+                onChange={(e) => setProductUrls((prev) => prev.map((u, idx) => (idx === i ? e.target.value : u)))}
+                placeholder="https://brand.com/product"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+              />
+              {productUrls.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => setProductUrls((prev) => prev.filter((_, idx) => idx !== i))}
+                  className="shrink-0 text-slate-300 hover:text-rose-600 dark:text-slate-600 dark:hover:text-rose-400"
+                  title="Remove this link"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => setProductUrls((prev) => [...prev, ""])}
+          className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:underline dark:text-indigo-400"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          <span>Add another link</span>
+        </button>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
@@ -416,6 +517,17 @@ export default function CampaignHeaderEditor({
         <div>
           <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Go-live deadline (target)</label>
           <input value={goLiveDeadline} onChange={(e) => setGoLiveDeadline(e.target.value)} type="date" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Shortlisting Deadline</label>
+          <input value={shortlistingDeadline} onChange={(e) => setShortlistingDeadline(e.target.value)} type="datetime-local" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200" />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Campaign Closure Deadline</label>
+          <input value={campaignClosureDeadline} onChange={(e) => setCampaignClosureDeadline(e.target.value)} type="date" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200" />
         </div>
       </div>
 
