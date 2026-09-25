@@ -17,6 +17,7 @@ import {
 import StatusBadge from "@/components/StatusBadge";
 import CampaignReport from "@/components/campaign/CampaignReport";
 import { INDIAN_LANGUAGES, CONTENT_CATEGORIES, MAJOR_INDIAN_CITIES } from "@/components/campaign/PlatformBriefsEditor";
+import MultiSelectBox from "@/components/campaign/MultiSelectBox";
 import {
   addCreator,
   addDeliverable,
@@ -2711,8 +2712,8 @@ function OnboardingCreatorRow({
 // cell that saves on blur (matches every other inline-editable cell in
 // this file). `multiple` (used for Category — see CategoryField in
 // PlatformBriefsEditor.tsx for the same multi-pick behavior on the brief
-// form) swaps the input for a native multi-select dropdown instead, since
-// a comma-separated value is a pick-many field, not a type-one field.
+// form) swaps the input for a MultiSelectBox instead, since a comma-
+// separated value is a pick-many field, not a type-one field.
 function TagDropdownCell({
   value,
   options,
@@ -2754,22 +2755,15 @@ function TagDropdownCell({
   };
 
   if (multiple) {
-    const selected = current ? current.split(",").map((s) => s.trim()).filter(Boolean) : [];
     return (
       <td className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
-        <select
-          multiple
-          value={selected}
-          onChange={(e) => save(Array.from(e.target.selectedOptions, (o) => o.value).join(", "))}
-          size={4}
-          className="w-28 rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
-        >
-          {options.map((o) => (
-            <option key={o} value={o}>
-              {o}
-            </option>
-          ))}
-        </select>
+        <MultiSelectBox
+          options={options}
+          value={current}
+          onChange={save}
+          placeholder={placeholder}
+          className="w-28 truncate rounded-lg border border-slate-200 px-2 py-1 text-left text-xs font-medium focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+        />
       </td>
     );
   }

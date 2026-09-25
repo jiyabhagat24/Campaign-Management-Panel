@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Plus, X } from "lucide-react";
+import MultiSelectBox from "./MultiSelectBox";
 
 // Broad product verticals for the New Campaign form's Product Category
 // field — deliberately different from CONTENT_CATEGORIES in
@@ -24,32 +25,24 @@ export const PRODUCT_CATEGORIES = [
   "Pets",
 ];
 
-// Product Category dropdown, native multi-select (ctrl/cmd-click to pick
-// more than one) — a campaign's product can span more than one vertical
-// (e.g. "Tech & Electronics, Baby & Kids"). Value is comma-separated,
-// submitted via the hidden input below since a multi-select's own value
-// isn't a plain form-encodable string.
+// Product Category — a box that opens a checkbox dropdown on click (see
+// MultiSelectBox); a campaign's product can span more than one vertical
+// (e.g. "Tech & Electronics, Baby & Kids"), and the box shows the picks
+// comma-separated once closed.
 export function ProductCategoryField({ name, initial }: { name: string; initial?: string }) {
   const [value, setValue] = useState(initial ?? "");
-  const selected = value ? value.split(",").map((s) => s.trim()).filter(Boolean) : [];
 
   return (
     <div>
       <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">Product Category</label>
-      <select
-        multiple
-        value={selected}
-        onChange={(e) => setValue(Array.from(e.target.selectedOptions, (o) => o.value).join(", "))}
-        size={6}
-        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
-      >
-        {PRODUCT_CATEGORIES.map((c) => (
-          <option key={c} value={c}>
-            {c}
-          </option>
-        ))}
-      </select>
-      <input type="hidden" name={name} value={value} />
+      <MultiSelectBox
+        options={PRODUCT_CATEGORIES}
+        value={value}
+        onChange={setValue}
+        placeholder="Select categories…"
+        name={name}
+        className="w-full truncate rounded-lg border border-slate-300 bg-white px-3 py-2 text-left text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+      />
     </div>
   );
 }

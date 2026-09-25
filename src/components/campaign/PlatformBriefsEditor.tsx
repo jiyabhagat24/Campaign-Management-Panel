@@ -2,6 +2,7 @@
 
 import { useId, useState } from "react";
 import { Plus, X } from "lucide-react";
+import MultiSelectBox from "./MultiSelectBox";
 
 // One campaign can run a completely different brief per platform — e.g.
 // Atomberg's Instagram brief (Lifestyle/Comic, 1 Collab Reel + 1 MUR,
@@ -113,24 +114,16 @@ export const emptyPlatformBrief = (platform: string): PlatformBriefValue => ({
 // uses). A campaign's Instagram brief is rarely just one category (e.g.
 // "Beauty, Lifestyle").
 function CategoryField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const selected = value ? value.split(",").map((s) => s.trim()).filter(Boolean) : [];
-
   return (
     <div>
       <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Category</label>
-      <select
-        multiple
-        value={selected}
-        onChange={(e) => onChange(Array.from(e.target.selectedOptions, (o) => o.value).join(", "))}
-        size={5}
-        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
-      >
-        {CONTENT_CATEGORIES.map((c) => (
-          <option key={c} value={c}>
-            {c}
-          </option>
-        ))}
-      </select>
+      <MultiSelectBox
+        options={CONTENT_CATEGORIES}
+        value={value}
+        onChange={onChange}
+        placeholder="Select categories…"
+        className="w-full truncate rounded-lg border border-slate-300 bg-white px-3 py-2 text-left text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+      />
     </div>
   );
 }
