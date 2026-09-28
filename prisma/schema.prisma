@@ -237,6 +237,21 @@ model Campaign {
   // Closed Cost" — no separate field needed, same number.
   financeInvoiced Boolean @default(false)
 
+  // ---------- Reporting (Step 24) ----------
+  // Campaign Manager's narrative added to the auto-generated numbers on the
+  // Campaign Report tab — free text, written once the campaign's actually
+  // being reported on. reportPublished is the real publish gate: the client
+  // sees a "not published yet" placeholder on their Report tab until this
+  // flips true, and publishCampaignReport (actions.ts) refuses to flip it
+  // while any live deliverable still has no tracking refresh at all
+  // (lastTrackedAt null) — publishing a report full of stale/never-pulled
+  // numbers defeats the point of gating it in the first place.
+  insightCommentary  String?
+  campaignLearnings  String?
+  recommendation     String?
+  reportPublished    Boolean   @default(false)
+  reportPublishedAt  DateTime?
+
   // SLA config (brief slide 15), overridable per campaign
   slaClientFeedbackHours    Int @default(48)
   slaScriptFromCreatorDays  Int @default(5)

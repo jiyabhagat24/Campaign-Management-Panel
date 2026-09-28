@@ -201,6 +201,11 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
         isClientView={isClientView}
         internalUsers={internalUsers}
         activityLogs={activityLogs as any}
+        reportPublished={Boolean((campaign as any).reportPublished)}
+        reportPublishedAt={(campaign as any).reportPublishedAt ? new Date((campaign as any).reportPublishedAt).toISOString() : null}
+        insightCommentary={(campaign as any).insightCommentary ?? null}
+        campaignLearnings={(campaign as any).campaignLearnings ?? null}
+        recommendation={(campaign as any).recommendation ?? null}
       />
     </div>
   );

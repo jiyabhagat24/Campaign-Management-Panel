@@ -417,6 +417,99 @@ export async function updateCampaignBrief(campaignId: string, brief: string) {
   revalidatePath(`/campaigns/${campaignId}`);
 }
 
+// Step 24 — the Campaign Manager's narrative on the Report tab (three free-
+// text blocks shown above the auto-generated numbers, editable at any time,
+// independent of the publish gate below).
+export async function saveCampaignReportCommentary(
+  campaignId: string,
+  fields: { insightCommentary: string | null; campaignLearnings: string | null; recommendation: string | null }
+) {
+  const user = await requireUser();
+  if (!canSetCommercials(user.role) && !isSuperAdmin(user.id)) throw new Error("Only a Campaign Manager can edit the report commentary.");
+
+  await prisma.campaign.update({
+    where: { id: campaignId },
+    data: {
+      insightCommentary: fields.insightCommentary?.trim() || null,
+      campaignLearnings: fields.campaignLearnings?.trim() || null,
+      recommendation: fields.recommendation?.trim() || null,
+    } as any,
+  });
+
+  revalidatePath(`/campaigns/${campaignId}`);
+  revalidatePath(`/campaigns/${campaignId}/report`);
+}
+
+// Step 24's publish gate: "A report cannot be published to the client until
+// every live deliverable has had at least one tracking refresh." Blocks
+// until every deliverable with a liveLink also has a non-null
+// lastTrackedAt — i.e. someone has pulled real numbers at least once,
+// rather than the client seeing zeros or stale defaults on day one of going
+// live. Once published, the client's own Report tab actually renders the
+// numbers instead of a "not published yet" placeholder (see CampaignReport).
+export async function publishCampaignReport(campaignId: string) {
+  const user = await requireUser();
+  if (!canSetCommercials(user.role) && !isSuperAdmin(user.id)) throw new Error("Only a Campaign Manager can publish the report.");
+
+  const liveNeverTracked = await prisma.deliverable.count({
+    where: { creator: { campaignId }, liveLink: { not: null }, lastTrackedAt: null },
+  });
+  if (liveNeverTracked > 0) {
+    throw new Error(
+      `${liveNeverTracked} live deliverable${liveNeverTracked === 1 ? "" : "s"} ${liveNeverTracked === 1 ? "hasn't" : "haven't"} had a tracking refresh yet — refresh every live deliverable's numbers before publishing.`
+    );
+  }
+
+  const campaign = await prisma.campaign.update({
+    where: { id: campaignId },
+    data: { reportPublished: true, reportPublishedAt: new Date() } as any,
+    select: { name: true },
+  });
+
+  await logActivity({
+    campaignId,
+    actorId: user.id,
+    actorName: user.name,
+    action: "REPORT_PUBLISHED",
+    entityType: "Campaign",
+    entityId: campaignId,
+  });
+
+  const clientAccess = await prisma.campaignClientAccess.findFirst({ where: { campaignId } });
+  if (clientAccess) {
+    await notify({
+      clientId: clientAccess.clientId,
+      channel: "INSTANT",
+      title: `Your report is ready: ${campaign.name}`,
+      body: `${user.name} published the campaign report for ${campaign.name}.`,
+    });
+  }
+
+  revalidatePath(`/campaigns/${campaignId}`);
+  revalidatePath(`/campaigns/${campaignId}/report`);
+}
+
+// Pull a published report back to draft — e.g. a mistake was found after
+// publishing. No tracking-freshness check on the way back in, only on the
+// way out.
+export async function unpublishCampaignReport(campaignId: string) {
+  const user = await requireUser();
+  if (!canSetCommercials(user.role) && !isSuperAdmin(user.id)) throw new Error("Only a Campaign Manager can unpublish the report.");
+
+  await prisma.campaign.update({ where: { id: campaignId }, data: { reportPublished: false } as any });
+  await logActivity({
+    campaignId,
+    actorId: user.id,
+    actorName: user.name,
+    action: "REPORT_UNPUBLISHED",
+    entityType: "Campaign",
+    entityId: campaignId,
+  });
+
+  revalidatePath(`/campaigns/${campaignId}`);
+  revalidatePath(`/campaigns/${campaignId}/report`);
+}
+
 // Single "edit the whole thing" action backing CampaignHeaderEditor — every
 // field shown in the campaign page's hero card (name/brand/structured
 // brief/dates/budgets/free-text brief/language breakdown) in one save,
