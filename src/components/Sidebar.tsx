@@ -98,8 +98,12 @@ export default function Sidebar({ role, name, notifications, userId }: { role: R
         </div>
       </div>
 
-      {/* Navigation */}
-      <div className="flex-1 px-3 py-3">
+      {/* Navigation — min-h-0 is required alongside flex-1 for a flex child
+          to actually shrink and scroll instead of stretching the sidebar
+          (and pushing the footer user card off-screen) as more nav items
+          get added over time. Header/footer stay fixed; only this list
+          scrolls. */}
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
         <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">
           Main Navigation
         </p>
