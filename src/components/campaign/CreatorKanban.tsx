@@ -367,7 +367,17 @@ export default function CreatorKanban({
   // (see rejectCreator) — kept in the DB for history, just dropped off
   // this board. CLIENT_REJECTED is left visible since the team may still
   // need to act on/negotiate a client's rejection.
-  const shortlist = creatorList.filter((c) => creatorKanbanColumn(c.status) === "SHORTLIST" && c.status !== "REJECTED");
+  // Page Permissions matrix: Brand Solutions gets "View published rows
+  // only" on Shortlisting — an unvetted row IR just submitted (no
+  // Quoted Cost published yet) isn't theirs to see. Campaign Manager/IR
+  // Manager/IR Executive/IR Intern/superAdmin still see every row,
+  // published or not (that's the whole point of the pricing workflow).
+  const shortlist = creatorList.filter(
+    (c) =>
+      creatorKanbanColumn(c.status) === "SHORTLIST" &&
+      c.status !== "REJECTED" &&
+      (role !== "BRAND_SOLUTIONS" || superAdmin || c.quotedCostPublished)
+  );
   // BLOCKED (paused-in-execution, Gate G6) stays on the Onboarding tab
   // alongside ONBOARDED — see creatorKanbanColumn in constants.ts.
   const onboarding = creatorList.filter((c) => c.status === "ONBOARDED" || c.status === "BLOCKED");
