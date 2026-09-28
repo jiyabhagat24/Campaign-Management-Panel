@@ -34,9 +34,16 @@ export const INTERNAL_ROLES = ROLES.filter((r) => r !== "CLIENT") as Exclude<Rol
 // Campaign *visibility* itself (which campaigns a non-CXO role can even
 // open) is a separate scope, see campaignVisibilityWhere in rbac.ts.
 export const INTERNAL_COST_ROLES: Role[] = ROLES.filter((r) => r !== "CLIENT" && r !== "IR_INTERN");
-// Only the Campaign Manager sets/approves commercials (see canSetCommercials
-// in rbac.ts) — narrowed from an earlier 4-role set per spec.
-export const COMMERCIAL_APPROVER_ROLES: Role[] = ["CAMPAIGN_MANAGER"];
+// Who approves a Campaign Manager's request to reopen a locked quoted/final
+// cost (Step 13's real two-person check — see requestCommercialEdit/
+// requestFinalCostEdit + approveCommercialEditRequest/
+// approveFinalCostEditRequest in actions.ts). Deliberately Brand Solutions,
+// not Campaign Manager — canSetCommercials (CM-only) already covers who
+// *requests* the change; this is the second, different person who signs
+// off before it actually applies. Previously this constant was mistakenly
+// set to CAMPAIGN_MANAGER, which let the same CM role request and approve
+// its own edit in one step — that's the bug Step 13 fixes.
+export const COMMERCIAL_APPROVER_ROLES: Role[] = ["BRAND_SOLUTIONS"];
 
 // Campaign.status vocabulary — a plain string column (see model comment),
 // so no migration was needed to change this. Task #11: migrated to the

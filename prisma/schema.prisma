@@ -411,6 +411,21 @@ model Creator {
   finalQuotedCost   Float?
   clientFinalIntent String? // client-set; ONBOARD here (or on clientIntent) promotes this creator
 
+  // ---------- Locked-quote dual approval (Step 13) ----------
+  // A Campaign Manager can no longer write straight to quotedCost/
+  // finalQuotedCost once it's locked (see requestCommercialEdit/
+  // requestFinalCostEdit in actions.ts) — they land here instead, and only
+  // a *different* Brand Solutions user calling approveCommercialEditRequest/
+  // approveFinalCostEditRequest actually writes the real column. Two
+  // separate pending slots since the quoted (pre-close) and final (locked)
+  // costs are two distinct locked fields with two distinct request flows.
+  pendingQuotedCostEdit                  Float?
+  pendingQuotedCostEditReason            String?
+  pendingQuotedCostEditRequestedByUserId String?
+  pendingFinalCostEdit                   Float?
+  pendingFinalCostEditReason             String?
+  pendingFinalCostEditRequestedByUserId  String?
+
   rightsOfUsage     Boolean @default(false)
   usageDurationDays Int? // usage window in days, counted from the deliverable's live date
 

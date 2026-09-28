@@ -24,6 +24,9 @@ export function canSeeInternalCost(role: Role) {
   return INTERNAL_COST_ROLES.includes(role);
 }
 
+// Who can approve a pending locked-quote reopen request (Step 13) — Brand
+// Solutions, a different person from the Campaign Manager who requested it
+// (see COMMERCIAL_APPROVER_ROLES in constants.ts for why).
 export function canApproveCommercialEdit(role: Role) {
   return COMMERCIAL_APPROVER_ROLES.includes(role);
 }
@@ -178,11 +181,26 @@ export function filterCreatorsForShortlistScope<T extends { sourcedByUserId: str
 // The margin guardrail (brief slide 07): strip internal cost + rejection
 // reasons meant for internal eyes before anything reaches a client-facing
 // render, export, or email. Call this at the boundary, not ad hoc in the UI.
+// Also strips the Step 13 pending-quote-edit fields (requested amount +
+// reason) — that back-and-forth is an internal CM/Brand-Solutions approval
+// step, not something a client should see mid-negotiation even though the
+// final locked cost itself is client-facing.
+const CLIENT_HIDDEN_FIELDS = [
+  "pendingQuotedCostEdit",
+  "pendingQuotedCostEditReason",
+  "pendingQuotedCostEditRequestedByUserId",
+  "pendingFinalCostEdit",
+  "pendingFinalCostEditReason",
+  "pendingFinalCostEditRequestedByUserId",
+] as const;
+
 export function serializeCreatorForClient<T extends { internalCost: number | null }>(
   creator: T
 ): Omit<T, "internalCost"> {
   const { internalCost, ...rest } = creator;
-  return rest;
+  const out = rest as any;
+  for (const field of CLIENT_HIDDEN_FIELDS) delete out[field];
+  return out;
 }
 
 // Gate G1: a creator row with no vet decision (Campaign Manager never

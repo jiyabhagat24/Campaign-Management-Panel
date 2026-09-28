@@ -42,6 +42,8 @@ import {
   assignCreatorPOC,
   updateCreatorDeadline,
   requestFinalCostEdit,
+  approveFinalCostEditRequest,
+  rejectFinalCostEditRequest,
   rejectCreator,
   triggerPause,
   confirmPause,
@@ -158,6 +160,11 @@ export type Creator = {
   clientRemark: string | null;
   finalQuotedCost: number | null;
   clientFinalIntent: string | null;
+  // Step 13 dual-approval — a pending request set by requestFinalCostEdit,
+  // cleared once a (different) Brand Solutions user approves/rejects it.
+  pendingFinalCostEdit?: number | null;
+  pendingFinalCostEditReason?: string | null;
+  pendingFinalCostEditRequestedByUserId?: string | null;
   rightsOfUsage: boolean;
   usageDurationDays: number | null;
   onboardedAt: string | Date | null;
@@ -436,6 +443,7 @@ export default function CreatorKanban({
                       role={role}
                       superAdmin={superAdmin}
                       canExecute={superAdmin || (!!currentUserId && c.pocUserId === currentUserId)}
+                      currentUserId={currentUserId}
                     />
                   ))}
                   {onboarding.length === 0 && (
@@ -1791,6 +1799,7 @@ function OnboardingCreatorRow({
   role,
   superAdmin = false,
   canExecute,
+  currentUserId,
 }: {
   creator: Creator;
   isClientView: boolean;
@@ -1801,6 +1810,7 @@ function OnboardingCreatorRow({
   canSeeCost: boolean;
   role: Role;
   superAdmin?: boolean;
+  currentUserId?: string;
   // Per spec Page Permissions: day-to-day execution on this table (status
   // selects, deliverables, live/script links, script/video deadlines,
   // pause request/resume) is this creator's assigned POC only — see
@@ -2017,7 +2027,33 @@ function OnboardingCreatorRow({
       setEditingCost(false);
       router.refresh();
     } catch (err: any) {
-      window.alert(err?.message ?? "Failed to save — value was not stored.");
+      window.alert(err?.message ?? "Failed to submit the request — nothing was changed.");
+    }
+  }
+
+  const [costApprovalBusy, setCostApprovalBusy] = useState(false);
+  async function approvePendingCost() {
+    setCostApprovalBusy(true);
+    try {
+      await approveFinalCostEditRequest(creator.id);
+      router.refresh();
+    } catch (err: any) {
+      window.alert(err?.message ?? "Failed to approve.");
+    } finally {
+      setCostApprovalBusy(false);
+    }
+  }
+
+  async function rejectPendingCost() {
+    const note = window.prompt("Reason for rejecting this cost change (optional):") ?? "";
+    setCostApprovalBusy(true);
+    try {
+      await rejectFinalCostEditRequest(creator.id, note);
+      router.refresh();
+    } catch (err: any) {
+      window.alert(err?.message ?? "Failed to reject.");
+    } finally {
+      setCostApprovalBusy(false);
     }
   }
 
@@ -2268,7 +2304,44 @@ function OnboardingCreatorRow({
       {/* Final Quoted Cost — locked. Editing after lock requires a reason +
           dual CM/Brand-Solutions approval (requestFinalCostEdit). */}
       <td className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
-        {!editingCost ? (
+        {creator.pendingFinalCostEdit != null ? (
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-bold text-slate-900 dark:text-white">
+              {creator.finalQuotedCost != null ? `₹${creator.finalQuotedCost.toLocaleString("en-IN")}` : "—"}
+              <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500"> (closed)</span>
+            </span>
+            <span className="inline-flex w-fit items-center rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">
+              Pending: ₹{Number(creator.pendingFinalCostEdit).toLocaleString("en-IN")}
+            </span>
+            {creator.pendingFinalCostEditReason && (
+              <span className="text-[10px] text-slate-400 dark:text-slate-500">{creator.pendingFinalCostEditReason}</span>
+            )}
+            {!isClientView && canApproveCost && creator.pendingFinalCostEditRequestedByUserId !== currentUserId ? (
+              <div className="flex gap-1">
+                <button
+                  onClick={approvePendingCost}
+                  disabled={costApprovalBusy}
+                  className="rounded-lg bg-emerald-600 px-2 py-1 text-[10px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                >
+                  Approve
+                </button>
+                <button
+                  onClick={rejectPendingCost}
+                  disabled={costApprovalBusy}
+                  className="rounded-lg border border-slate-200 px-2 py-1 text-[10px] font-semibold text-slate-500 hover:text-rose-600 disabled:opacity-50 dark:border-slate-700 dark:text-slate-400"
+                >
+                  Reject
+                </button>
+              </div>
+            ) : (
+              !isClientView && (
+                <span className="text-[10px] text-slate-400 dark:text-slate-500">
+                  Awaiting a different Brand Solutions approval.
+                </span>
+              )
+            )}
+          </div>
+        ) : !editingCost ? (
           <div className="flex items-center gap-1.5">
             <span className="text-xs font-bold text-slate-900 dark:text-white">
               {creator.finalQuotedCost != null ? `₹${creator.finalQuotedCost.toLocaleString("en-IN")}` : "—"}
@@ -2298,13 +2371,13 @@ function OnboardingCreatorRow({
             />
             <div className="flex gap-1">
               <button onClick={saveCost} className="rounded-lg bg-indigo-600 px-2 py-1 text-[10px] font-semibold text-white hover:bg-indigo-700">
-                {canApproveCost ? "Save" : "Request"}
+                Request
               </button>
               <button onClick={() => setEditingCost(false)} className="rounded-lg border border-slate-200 px-2 py-1 text-[10px] font-semibold text-slate-500 dark:border-slate-700 dark:text-slate-400">
                 Cancel
               </button>
             </div>
-            {!canApproveCost && <span className="text-[10px] text-slate-400 dark:text-slate-500">Needs CM/Brand Solutions approval to apply.</span>}
+            <span className="text-[10px] text-slate-400 dark:text-slate-500">Needs a different Brand Solutions user to approve before it applies.</span>
           </div>
         )}
       </td>

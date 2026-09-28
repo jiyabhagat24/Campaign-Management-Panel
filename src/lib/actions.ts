@@ -1916,10 +1916,19 @@ function negativeCostError(value: number | null | undefined, label: string): str
 export async function requestCommercialEdit(creatorId: string, newQuotedCost: number, reason: string) {
   const user = await requireUser();
   if (!canSetCommercials(user.role) && !isSuperAdmin(user.id)) throw new Error("Not authorized to edit commercials");
+  if (!reason.trim()) throw new Error("A reason is required to change a locked quoted cost");
   const negativeError = negativeCostError(newQuotedCost, "Quoted cost");
   if (negativeError) throw new Error(negativeError);
 
   const creator = await prisma.creator.findUniqueOrThrow({ where: { id: creatorId } });
+  await prisma.creator.update({
+    where: { id: creatorId },
+    data: {
+      pendingQuotedCostEdit: newQuotedCost,
+      pendingQuotedCostEditReason: reason.trim(),
+      pendingQuotedCostEditRequestedByUserId: user.id,
+    } as any,
+  });
   await logActivity({
     campaignId: creator.campaignId,
     actorId: user.id,
@@ -1929,12 +1938,85 @@ export async function requestCommercialEdit(creatorId: string, newQuotedCost: nu
     entityId: creator.id,
     meta: { newQuotedCost, reason, requestedBy: user.name },
   });
-  // In production this should create an approval record requiring a SECOND
-  // named approver (see requestCommercialEdit note in README) before writing
-  // to quotedCost. MVP applies it directly if the requester already has
-  // approver rights, and logs the request either way for audit.
-  if (canApproveCommercialEdit(user.role)) {
-    await prisma.creator.update({ where: { id: creatorId }, data: { quotedCost: newQuotedCost } });
+  // Real two-person approval (Step 13): this only ever writes the pending
+  // fields. A different, Brand-Solutions user has to call
+  // approveCommercialEditRequest below before quotedCost itself changes —
+  // the requesting Campaign Manager can no longer apply their own request.
+  await notifyCampaignRole(
+    creator.campaignId,
+    "BRAND_SOLUTIONS",
+    `Quote reopen needs approval: ${creator.name}`,
+    `${user.name} wants to change ${creator.name}'s quoted cost to ₹${newQuotedCost.toLocaleString("en-IN")}: ${reason.trim()}`
+  );
+  revalidatePath(`/campaigns/${creator.campaignId}`);
+}
+
+export async function approveCommercialEditRequest(creatorId: string) {
+  const user = await requireUser();
+  if (!canApproveCommercialEdit(user.role) && !isSuperAdmin(user.id)) throw new Error("Only Brand Solutions can approve a quoted cost change.");
+  const creator = await prisma.creator.findUniqueOrThrow({ where: { id: creatorId } });
+  const c = creator as any;
+  if (c.pendingQuotedCostEdit === null || c.pendingQuotedCostEdit === undefined) throw new Error("There's no pending quoted cost request on this creator.");
+  if (c.pendingQuotedCostEditRequestedByUserId === user.id && !isSuperAdmin(user.id)) {
+    throw new Error("A different person has to approve this — you can't approve your own request.");
+  }
+
+  await prisma.creator.update({
+    where: { id: creatorId },
+    data: {
+      quotedCost: c.pendingQuotedCostEdit,
+      pendingQuotedCostEdit: null,
+      pendingQuotedCostEditReason: null,
+      pendingQuotedCostEditRequestedByUserId: null,
+    } as any,
+  });
+  await logActivity({
+    campaignId: creator.campaignId,
+    actorId: user.id,
+    actorName: user.name,
+    action: "COMMERCIAL_EDIT_APPROVED",
+    entityType: "Creator",
+    entityId: creator.id,
+    meta: { newQuotedCost: c.pendingQuotedCostEdit },
+  });
+  if (c.pendingQuotedCostEditRequestedByUserId) {
+    await notify({
+      userId: c.pendingQuotedCostEditRequestedByUserId,
+      channel: "INSTANT",
+      title: `Quote approved: ${creator.name}`,
+      body: `${user.name} approved the quoted cost change to ₹${Number(c.pendingQuotedCostEdit).toLocaleString("en-IN")} for ${creator.name}.`,
+    });
+  }
+  revalidatePath(`/campaigns/${creator.campaignId}`);
+}
+
+export async function rejectCommercialEditRequest(creatorId: string, note: string) {
+  const user = await requireUser();
+  if (!canApproveCommercialEdit(user.role) && !isSuperAdmin(user.id)) throw new Error("Only Brand Solutions can reject a quoted cost change.");
+  const creator = await prisma.creator.findUniqueOrThrow({ where: { id: creatorId } });
+  const c = creator as any;
+  if (c.pendingQuotedCostEdit === null || c.pendingQuotedCostEdit === undefined) throw new Error("There's no pending quoted cost request on this creator.");
+
+  await prisma.creator.update({
+    where: { id: creatorId },
+    data: { pendingQuotedCostEdit: null, pendingQuotedCostEditReason: null, pendingQuotedCostEditRequestedByUserId: null } as any,
+  });
+  await logActivity({
+    campaignId: creator.campaignId,
+    actorId: user.id,
+    actorName: user.name,
+    action: "COMMERCIAL_EDIT_REJECTED",
+    entityType: "Creator",
+    entityId: creator.id,
+    meta: { note },
+  });
+  if (c.pendingQuotedCostEditRequestedByUserId) {
+    await notify({
+      userId: c.pendingQuotedCostEditRequestedByUserId,
+      channel: "INSTANT",
+      title: `Quote change rejected: ${creator.name}`,
+      body: `${user.name} rejected the quoted cost change for ${creator.name}${note.trim() ? `: ${note.trim()}` : "."}`,
+    });
   }
   revalidatePath(`/campaigns/${creator.campaignId}`);
 }
@@ -1950,6 +2032,14 @@ export async function requestFinalCostEdit(creatorId: string, newFinalQuotedCost
   if (negativeError) throw new Error(negativeError);
 
   const creator = await prisma.creator.findUniqueOrThrow({ where: { id: creatorId } });
+  await prisma.creator.update({
+    where: { id: creatorId },
+    data: {
+      pendingFinalCostEdit: newFinalQuotedCost,
+      pendingFinalCostEditReason: reason.trim(),
+      pendingFinalCostEditRequestedByUserId: user.id,
+    } as any,
+  });
   await logActivity({
     campaignId: creator.campaignId,
     actorId: user.id,
@@ -1959,8 +2049,83 @@ export async function requestFinalCostEdit(creatorId: string, newFinalQuotedCost
     entityId: creator.id,
     meta: { newFinalQuotedCost, reason, requestedBy: user.name },
   });
-  if (canApproveCommercialEdit(user.role)) {
-    await prisma.creator.update({ where: { id: creatorId }, data: { finalQuotedCost: newFinalQuotedCost } });
+  // Real two-person approval (Step 13) — see requestCommercialEdit above for
+  // the full rationale. Applies identically to the locked final cost.
+  await notifyCampaignRole(
+    creator.campaignId,
+    "BRAND_SOLUTIONS",
+    `Locked cost reopen needs approval: ${creator.name}`,
+    `${user.name} wants to change ${creator.name}'s final quoted cost to ₹${newFinalQuotedCost.toLocaleString("en-IN")}: ${reason.trim()}`
+  );
+  revalidatePath(`/campaigns/${creator.campaignId}`);
+}
+
+export async function approveFinalCostEditRequest(creatorId: string) {
+  const user = await requireUser();
+  if (!canApproveCommercialEdit(user.role) && !isSuperAdmin(user.id)) throw new Error("Only Brand Solutions can approve a final cost change.");
+  const creator = await prisma.creator.findUniqueOrThrow({ where: { id: creatorId } });
+  const c = creator as any;
+  if (c.pendingFinalCostEdit === null || c.pendingFinalCostEdit === undefined) throw new Error("There's no pending final cost request on this creator.");
+  if (c.pendingFinalCostEditRequestedByUserId === user.id && !isSuperAdmin(user.id)) {
+    throw new Error("A different person has to approve this — you can't approve your own request.");
+  }
+
+  await prisma.creator.update({
+    where: { id: creatorId },
+    data: {
+      finalQuotedCost: c.pendingFinalCostEdit,
+      pendingFinalCostEdit: null,
+      pendingFinalCostEditReason: null,
+      pendingFinalCostEditRequestedByUserId: null,
+    } as any,
+  });
+  await logActivity({
+    campaignId: creator.campaignId,
+    actorId: user.id,
+    actorName: user.name,
+    action: "FINAL_COST_EDIT_APPROVED",
+    entityType: "Creator",
+    entityId: creator.id,
+    meta: { newFinalQuotedCost: c.pendingFinalCostEdit },
+  });
+  if (c.pendingFinalCostEditRequestedByUserId) {
+    await notify({
+      userId: c.pendingFinalCostEditRequestedByUserId,
+      channel: "INSTANT",
+      title: `Final cost approved: ${creator.name}`,
+      body: `${user.name} approved the final cost change to ₹${Number(c.pendingFinalCostEdit).toLocaleString("en-IN")} for ${creator.name}.`,
+    });
+  }
+  revalidatePath(`/campaigns/${creator.campaignId}`);
+}
+
+export async function rejectFinalCostEditRequest(creatorId: string, note: string) {
+  const user = await requireUser();
+  if (!canApproveCommercialEdit(user.role) && !isSuperAdmin(user.id)) throw new Error("Only Brand Solutions can reject a final cost change.");
+  const creator = await prisma.creator.findUniqueOrThrow({ where: { id: creatorId } });
+  const c = creator as any;
+  if (c.pendingFinalCostEdit === null || c.pendingFinalCostEdit === undefined) throw new Error("There's no pending final cost request on this creator.");
+
+  await prisma.creator.update({
+    where: { id: creatorId },
+    data: { pendingFinalCostEdit: null, pendingFinalCostEditReason: null, pendingFinalCostEditRequestedByUserId: null } as any,
+  });
+  await logActivity({
+    campaignId: creator.campaignId,
+    actorId: user.id,
+    actorName: user.name,
+    action: "FINAL_COST_EDIT_REJECTED",
+    entityType: "Creator",
+    entityId: creator.id,
+    meta: { note },
+  });
+  if (c.pendingFinalCostEditRequestedByUserId) {
+    await notify({
+      userId: c.pendingFinalCostEditRequestedByUserId,
+      channel: "INSTANT",
+      title: `Final cost change rejected: ${creator.name}`,
+      body: `${user.name} rejected the final cost change for ${creator.name}${note.trim() ? `: ${note.trim()}` : "."}`,
+    });
   }
   revalidatePath(`/campaigns/${creator.campaignId}`);
 }
