@@ -4,7 +4,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Role } from "@/lib/constants";
 import { canSetCommercials, canApproveCommercialEdit, canOperateShortlist, canManageClients, isSuperAdmin } from "@/lib/rbac";
-import { FEE_TYPE_LABELS, type FeeType } from "@/lib/constants";
+import { FEE_TYPE_LABELS, type FeeType, PLATFORM_SHORT_LABELS, PAYOUT_PAYMENT_STATUS_LABELS, type PayoutPaymentStatus, type Platform } from "@/lib/constants";
 import {
   PLATFORM_LABELS,
   creatorKanbanColumn,
@@ -18,6 +18,7 @@ import {
 import StatusBadge from "@/components/StatusBadge";
 import CampaignReport from "@/components/campaign/CampaignReport";
 import ClientInvoicesPanel from "@/components/campaign/ClientInvoicesPanel";
+import CreatorPayoutsTable, { type PayoutCreatorRow } from "@/components/finance/CreatorPayoutsTable";
 import { INDIAN_LANGUAGES, CONTENT_CATEGORIES, MAJOR_INDIAN_CITIES } from "@/components/campaign/PlatformBriefsEditor";
 import MultiSelectBox from "@/components/campaign/MultiSelectBox";
 import {
@@ -187,6 +188,15 @@ export type Creator = {
   pendingFinalCostEdit?: number | null;
   pendingFinalCostEditReason?: string | null;
   pendingFinalCostEditRequestedByUserId?: string | null;
+  // Finance and Invoicing, Section A (creator payouts) — payoutInvoiceRaised/
+  // Received/PaymentStatus are client-visible per that sheet's reduced
+  // client-facing columns; payoutAdvance/payoutRemark are TBM-only and
+  // stripped in serializeCreatorForClient (rbac.ts).
+  payoutInvoiceRaised?: boolean;
+  payoutInvoiceReceived?: boolean;
+  payoutPaymentStatus?: string;
+  payoutAdvance?: string | null;
+  payoutRemark?: string | null;
   rightsOfUsage: boolean;
   usageDurationDays: number | null;
   onboardedAt: string | Date | null;
@@ -229,7 +239,7 @@ export default function CreatorKanban({
   insightCommentary,
   campaignLearnings,
   recommendation,
-  budgetQuoted,
+  finalClosedCost,
   financeFeeType,
   financeRetainerFee,
   financeAgencyFeePercent,
@@ -253,20 +263,21 @@ export default function CreatorKanban({
   insightCommentary?: string | null;
   campaignLearnings?: string | null;
   recommendation?: string | null;
-  // Step 29 — client-facing Finance tab. budgetQuoted/financeFeeType/
-  // financeRetainerFee/financeAgencyFeePercent are the campaign's own
-  // client-facing billing terms (what the client pays TBM) — distinct from
-  // Creator.internalCost/quotedCost, which never reach this component's
-  // client-visible props. clientInvoices is the Step 28 Client Cash ledger,
-  // also entirely client-safe (invoice number/dates/amounts only).
-  budgetQuoted?: number | null;
+  // Step 29 / Finance and Invoicing Section B — client-facing billing terms
+  // (what the client pays TBM) — distinct from Creator.internalCost/
+  // quotedCost, which never reach this component's client-visible props.
+  // finalClosedCost is the sum of onboarded creators' Final Quoted Cost
+  // (computed in campaigns/[id]/page.tsx), not Campaign.budgetQuoted.
+  // clientInvoices is the Step 28 Client Cash ledger, also entirely
+  // client-safe (invoice number/dates/amounts only).
+  finalClosedCost?: number | null;
   financeFeeType?: string | null;
   financeRetainerFee?: number | null;
   financeAgencyFeePercent?: number | null;
   clientInvoices?: ClientInvoiceRow[];
 }) {
   const [addingCreator, setAddingCreator] = useState(false);
-  const [tab, setTab] = useState<"SHORTLIST" | "ONBOARDING" | "REPORT" | "FINANCE">("SHORTLIST");
+  const [tab, setTab] = useState<"SHORTLIST" | "ONBOARDING" | "REPORT" | "FINANCE" | "FINANCE_INVOICING">("SHORTLIST");
   const [creatorList, setCreatorList] = useState(creators);
 
   useEffect(() => {
@@ -354,6 +365,23 @@ export default function CreatorKanban({
   // alongside ONBOARDED — see creatorKanbanColumn in constants.ts.
   const onboarding = creatorList.filter((c) => c.status === "ONBOARDED" || c.status === "BLOCKED");
 
+  // Finance and Invoicing, Section A — same PayoutCreatorRow shape the
+  // global /finance page builds, just scoped to this one campaign's
+  // onboarded/blocked creators instead of every campaign at once.
+  const payoutRows: PayoutCreatorRow[] = onboarding.map((c) => ({
+    id: c.id,
+    campaignId,
+    name: c.name,
+    deliverables: c.deliverables.map((d) => PLATFORM_SHORT_LABELS[d.platform as Platform] ?? d.platform),
+    live: c.deliverables.some((d) => Boolean(d.liveLink)),
+    payoutAmount: c.internalCost ?? null,
+    payoutInvoiceRaised: c.payoutInvoiceRaised ?? false,
+    payoutInvoiceReceived: c.payoutInvoiceReceived ?? false,
+    payoutPaymentStatus: c.payoutPaymentStatus ?? "NOT_STARTED",
+    payoutAdvance: c.payoutAdvance ?? null,
+    payoutRemark: c.payoutRemark ?? null,
+  }));
+
   // Shortlisting Stage sheet tab's own summary strip.
   const creatorsShared = shortlist.length;
   // "Shortlisted" = every creator the client has ever leaned positive on —
@@ -389,9 +417,16 @@ export default function CreatorKanban({
         <TabButton active={tab === "SHORTLIST"} onClick={() => setTab("SHORTLIST")} label="Shortlist" count={shortlist.length} />
         <TabButton active={tab === "ONBOARDING"} onClick={() => setTab("ONBOARDING")} label="Onboarded" count={onboarding.length} />
         <TabButton active={tab === "REPORT"} onClick={() => setTab("REPORT")} label="Campaign Report" />
-        {(isClientView || canManageClients(role) || superAdmin) && (
-          <TabButton active={tab === "FINANCE"} onClick={() => setTab("FINANCE")} label="Finance" />
+        {/* Finance and Invoicing (TheBoredMonkey eyes only) — Campaign
+            Manager + Brand Solutions (+ every other canSeeCost role, same
+            gate the rest of this app already uses for internal financial
+            data). Never shown to a client. */}
+        {!isClientView && canSeeCost && (
+          <TabButton active={tab === "FINANCE_INVOICING"} onClick={() => setTab("FINANCE_INVOICING")} label="Finance and Invoicing" />
         )}
+        {/* Client's own read-only Finance view (Step 29) — separate tab so
+            it never mixes with the internal one above. */}
+        {isClientView && <TabButton active={tab === "FINANCE"} onClick={() => setTab("FINANCE")} label="Finance" />}
       </div>
 
       <div className="py-2">
@@ -742,15 +777,91 @@ export default function CreatorKanban({
         )}
 
         {tab === "FINANCE" && (
-          <ClientInvoicesPanel
-            campaignId={campaignId}
-            canEdit={!isClientView && (canManageClients(role) || superAdmin)}
-            invoices={clientInvoices ?? []}
-            budgetQuoted={budgetQuoted ?? null}
-            financeFeeType={financeFeeType ?? null}
-            financeRetainerFee={financeRetainerFee ?? null}
-            financeAgencyFeePercent={financeAgencyFeePercent ?? null}
-          />
+          <div className="space-y-4">
+            {/* Reduced payout status table — the "here client sees" columns
+                from the Finance and Invoicing sheet: Creator / Deliverables
+                / Content Status / Invoice Raised / Invoice Received /
+                Payment Status, deliberately no Payout Amount, Advance, or
+                Remark (those stay TBM-only). */}
+            <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-card dark:bg-slate-900 dark:border-slate-800">
+              <p className="px-5 pt-5 pb-3 text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">Creator Payment Status</p>
+              <div className="overflow-x-auto scrollbar-x-hidden">
+                <table className="w-full text-left text-sm">
+                  <thead className="border-t border-b border-slate-100 bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-400">
+                    <tr>
+                      {["Creator", "Deliverables", "Content Status", "Invoice Raised", "Invoice Received", "Payment Status"].map((h) => (
+                        <th key={h} className="whitespace-nowrap px-5 py-2.5">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 font-medium dark:divide-slate-800">
+                    {payoutRows.map((r) => (
+                      <tr key={r.id}>
+                        <td className="whitespace-nowrap px-5 py-3 font-semibold text-slate-800 dark:text-slate-200">{r.name}</td>
+                        <td className="whitespace-nowrap px-5 py-3">{r.deliverables.length > 0 ? r.deliverables.join(", ") : "—"}</td>
+                        <td className="whitespace-nowrap px-5 py-3">
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
+                              r.live
+                                ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"
+                                : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
+                            }`}
+                          >
+                            {r.live ? "Live" : "Not live"}
+                          </span>
+                        </td>
+                        <td className="whitespace-nowrap px-5 py-3">{r.payoutInvoiceRaised ? "Yes" : "No"}</td>
+                        <td className="whitespace-nowrap px-5 py-3">{r.payoutInvoiceReceived ? "Yes" : "No"}</td>
+                        <td className="whitespace-nowrap px-5 py-3">
+                          {PAYOUT_PAYMENT_STATUS_LABELS[r.payoutPaymentStatus as PayoutPaymentStatus] ?? r.payoutPaymentStatus}
+                        </td>
+                      </tr>
+                    ))}
+                    {payoutRows.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="px-5 py-8 text-center text-xs text-slate-400 dark:text-slate-500">No onboarded creators yet.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <ClientInvoicesPanel
+              campaignId={campaignId}
+              canEdit={false}
+              invoices={clientInvoices ?? []}
+              finalClosedCost={finalClosedCost ?? null}
+              financeFeeType={financeFeeType ?? null}
+              financeRetainerFee={financeRetainerFee ?? null}
+              financeAgencyFeePercent={financeAgencyFeePercent ?? null}
+            />
+          </div>
+        )}
+
+        {tab === "FINANCE_INVOICING" && (
+          <div className="space-y-6">
+            <div>
+              <p className="mb-2 text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+                Section A — Creator Payouts (money out)
+              </p>
+              <CreatorPayoutsTable rows={payoutRows} />
+            </div>
+            <div>
+              <p className="mb-2 text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+                Section B — Client Invoicing (money in)
+              </p>
+              <ClientInvoicesPanel
+                campaignId={campaignId}
+                canEdit={canManageClients(role) || superAdmin}
+                invoices={clientInvoices ?? []}
+                finalClosedCost={finalClosedCost ?? null}
+                financeFeeType={financeFeeType ?? null}
+                financeRetainerFee={financeRetainerFee ?? null}
+                financeAgencyFeePercent={financeAgencyFeePercent ?? null}
+              />
+            </div>
+          </div>
         )}
       </div>
     </div>

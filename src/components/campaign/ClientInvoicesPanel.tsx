@@ -39,7 +39,7 @@ export default function ClientInvoicesPanel({
   campaignId,
   canEdit,
   invoices,
-  budgetQuoted,
+  finalClosedCost,
   financeFeeType,
   financeRetainerFee,
   financeAgencyFeePercent,
@@ -47,7 +47,12 @@ export default function ClientInvoicesPanel({
   campaignId: string;
   canEdit: boolean;
   invoices: ClientInvoiceRow[];
-  budgetQuoted: number | null;
+  // "Total quoted cost at which the campaign closed on the client side" —
+  // the sum of onboarded creators' Final Quoted Cost (falling back to
+  // Quoted Cost), same computation as the global /finance page's Section B,
+  // not Campaign.budgetQuoted (an optional top-level estimate that's often
+  // left unset).
+  finalClosedCost: number | null;
   financeFeeType: string | null;
   financeRetainerFee: number | null;
   financeAgencyFeePercent: number | null;
@@ -123,8 +128,8 @@ export default function ClientInvoicesPanel({
           not internal cost/margin. */}
       <div className="grid grid-cols-2 gap-4 rounded-xl border border-slate-200/80 bg-white p-4 shadow-card dark:bg-slate-900 dark:border-slate-800 sm:grid-cols-4">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Campaign Value</p>
-          <p className="mt-1 text-lg font-bold text-slate-900 dark:text-white">{budgetQuoted != null ? money(budgetQuoted) : "—"}</p>
+          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Final Closed Cost</p>
+          <p className="mt-1 text-lg font-bold text-slate-900 dark:text-white">{finalClosedCost != null ? money(finalClosedCost) : "—"}</p>
         </div>
         <div>
           <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">{FEE_TYPE_LABELS[feeType]}</p>

@@ -25,10 +25,13 @@ export default async function ClientCashPage() {
       name: true,
       brand: true,
       brandLogoUrl: true,
-      budgetQuoted: true,
       financeFeeType: true,
       financeRetainerFee: true,
       financeAgencyFeePercent: true,
+      creators: {
+        where: { status: "ONBOARDED" },
+        select: { finalQuotedCost: true, quotedCost: true },
+      },
     },
     orderBy: { updatedAt: "desc" },
   });
@@ -85,7 +88,9 @@ export default async function ClientCashPage() {
                 paymentTerms: inv.paymentTerms,
                 remark: inv.remark,
               }))}
-              budgetQuoted={c.budgetQuoted}
+              finalClosedCost={
+                c.creators.length > 0 ? c.creators.reduce((s, cr) => s + (cr.finalQuotedCost ?? cr.quotedCost ?? 0), 0) : null
+              }
               financeFeeType={c.financeFeeType}
               financeRetainerFee={c.financeRetainerFee}
               financeAgencyFeePercent={c.financeAgencyFeePercent}

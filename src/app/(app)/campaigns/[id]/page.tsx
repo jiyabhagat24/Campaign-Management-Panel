@@ -63,6 +63,12 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
   // onboarded creators out of the window and making them look dormant-free/
   // flag-free when they actually just had no *recent* logged activity.
   const onboardingCreators = campaign.creators.filter((c) => c.status === "ONBOARDED" || c.status === "BLOCKED");
+  // Finance and Invoicing, Section B: "Final Closed Cost" is the sum of
+  // each ONBOARDED creator's own Final Quoted Cost (falling back to Quoted
+  // Cost) — same computation as the global /finance page, not
+  // Campaign.budgetQuoted (an optional top-level estimate, often unset).
+  const onboardedOnly = campaign.creators.filter((c) => c.status === "ONBOARDED");
+  const finalClosedCost = onboardedOnly.length > 0 ? onboardedOnly.reduce((s, c) => s + (c.finalQuotedCost ?? c.quotedCost ?? 0), 0) : null;
   const onboardingEntityIds = [
     ...onboardingCreators.map((c) => c.id),
     ...onboardingCreators.flatMap((c) => c.deliverables.map((d) => d.id)),
@@ -210,7 +216,7 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
         insightCommentary={(campaign as any).insightCommentary ?? null}
         campaignLearnings={(campaign as any).campaignLearnings ?? null}
         recommendation={(campaign as any).recommendation ?? null}
-        budgetQuoted={campaign.budgetQuoted}
+        finalClosedCost={finalClosedCost}
         financeFeeType={campaign.financeFeeType}
         financeRetainerFee={campaign.financeRetainerFee}
         financeAgencyFeePercent={campaign.financeAgencyFeePercent}

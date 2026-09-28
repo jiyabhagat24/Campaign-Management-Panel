@@ -200,6 +200,12 @@ const CLIENT_HIDDEN_FIELDS = [
   "pendingFinalCostEdit",
   "pendingFinalCostEditReason",
   "pendingFinalCostEditRequestedByUserId",
+  // Finance and Invoicing, Section A: the client's reduced view keeps
+  // payoutInvoiceRaised/Received/PaymentStatus (per that sheet's own
+  // "here client sees" column list) but not the free-text Advance/Remark
+  // notes, which are TBM-internal operational notes.
+  "payoutAdvance",
+  "payoutRemark",
 ] as const;
 
 export function serializeCreatorForClient<T extends { internalCost: number | null }>(
