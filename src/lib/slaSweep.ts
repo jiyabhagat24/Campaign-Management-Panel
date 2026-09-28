@@ -33,6 +33,9 @@ export async function runSlaNotificationSweep() {
     pricingQueueStale: 0,
     escalationsUnclaimed: 0,
     staleChase: 0,
+    earlyChase: 0,
+    noSpoc: 0,
+    pricingQueueEscalated: 0,
   };
 
   // ---- 1. Dormant creators: ONBOARDED/BLOCKED, no logged activity in 48h ----
@@ -81,7 +84,33 @@ export async function runSlaNotificationSweep() {
     }
   }
 
-  // ---- 2. Pricing Queue rows sitting 48h+ unpriced ----
+  // ---- 1b. Onboarded creators with no SPOC assigned (Step 15) ----
+  // isCreatorPOC in rbac.ts already blocks every execution action (product/
+  // script/content status, deliverables, live links) when pocUserId is
+  // null — the enforcement already exists. What was missing was visibility:
+  // nobody was ever told a creator was stuck like this, so it could sit
+  // unworked indefinitely with no error and no flag. Recipient is the
+  // Campaign Manager, who owns SPOC assignment (see the POC cell's gating
+  // in CreatorKanban.tsx).
+  for (const creator of activeCreators) {
+    if (creator.status !== "ONBOARDED" || creator.pocUserId) continue;
+    const campaignTeam = await prisma.campaignTeamMember.findMany({
+      where: { campaignId: creator.campaignId, roleOnCampaign: "CAMPAIGN_MANAGER" },
+      select: { userId: true },
+    });
+    for (const tm of campaignTeam) {
+      const sent = await notifyOnceToday(
+        tm.userId,
+        `No SPOC assigned: ${creator.name}`,
+        `${creator.name} on ${creator.campaign.name} was onboarded but has no POC assigned yet — execution is blocked until one is set.`
+      );
+      if (sent) counts.noSpoc++;
+    }
+  }
+
+  // ---- 2. Pricing Queue rows sitting 48h+ unpriced (to the Campaign
+  // Manager) or 96h+ unpriced (escalated to the IR Manager, Step 7's
+  // second-tier flag — distinct from the 48h one above it).
   const stalePricing = await prisma.creator.findMany({
     where: {
       status: { notIn: ["REJECTED", "CLIENT_REJECTED"] },
@@ -91,6 +120,7 @@ export async function runSlaNotificationSweep() {
     },
     include: { campaign: { select: { id: true, name: true, teamMembers: { where: { roleOnCampaign: "CAMPAIGN_MANAGER" }, select: { userId: true } } } } },
   });
+  let irManagersForPricing: { id: string }[] | null = null;
   for (const creator of stalePricing) {
     for (const tm of creator.campaign.teamMembers) {
       const sent = await notifyOnceToday(
@@ -99,6 +129,19 @@ export async function runSlaNotificationSweep() {
         `${creator.name} on ${creator.campaign.name} has been waiting on a vet/price decision for over 48 hours.`
       );
       if (sent) counts.pricingQueueStale++;
+    }
+
+    const hoursWaiting = (Date.now() - creator.createdAt.getTime()) / (60 * 60 * 1000);
+    if (hoursWaiting >= 96) {
+      if (!irManagersForPricing) irManagersForPricing = await prisma.user.findMany({ where: { role: "IR_MANAGER" }, select: { id: true } });
+      for (const mgr of irManagersForPricing) {
+        const sentEsc = await notifyOnceToday(
+          mgr.id,
+          `Pricing Queue: ${creator.name} waiting 96h+`,
+          `${creator.name} on ${creator.campaign.name} still hasn't been priced after 96+ hours — escalating past the Campaign Manager.`
+        );
+        if (sentEsc) counts.pricingQueueEscalated++;
+      }
     }
   }
 
@@ -132,12 +175,33 @@ export async function runSlaNotificationSweep() {
       chaseLogs: { orderBy: { createdAt: "desc" }, take: 1 },
     },
   });
-  const staleChase = preOnboardCreators
-    .map((c) => {
-      const lastChaseAt = c.chaseLogs[0]?.createdAt ?? c.createdAt;
-      return { creator: c, lastChaseAt };
-    })
-    .filter((row) => Date.now() - row.lastChaseAt.getTime() > 7 * DAY_MS);
+  const chaseRows = preOnboardCreators.map((c) => {
+    const lastChaseAt = c.chaseLogs[0]?.createdAt ?? c.createdAt;
+    return { creator: c, lastChaseAt };
+  });
+  const earlyChase = chaseRows.filter(
+    (row) => Date.now() - row.lastChaseAt.getTime() > 3 * DAY_MS && Date.now() - row.lastChaseAt.getTime() <= 7 * DAY_MS
+  );
+  const staleChase = chaseRows.filter((row) => Date.now() - row.lastChaseAt.getTime() > 7 * DAY_MS);
+
+  // 3-day flag (Step 21) — an earlier, lower-urgency heads-up than the
+  // 7-day one below, same recipient. Kept as a separate bucket (3-7 days)
+  // rather than "3+" so a creator doesn't fire both notifications on the
+  // same sweep once it crosses 7 days — the 7-day one takes over from there.
+  for (const { creator } of earlyChase) {
+    const campaignTeam = await prisma.campaignTeamMember.findMany({
+      where: { campaignId: creator.campaignId, roleOnCampaign: "CAMPAIGN_MANAGER" },
+      select: { userId: true },
+    });
+    for (const tm of campaignTeam) {
+      const sent = await notifyOnceToday(
+        tm.userId,
+        `No client chase logged in 3+ days: ${creator.name}`,
+        `${creator.name} on ${creator.campaign.name} hasn't had a chase attempt logged in over 3 days — chase before this slips to a week.`
+      );
+      if (sent) counts.earlyChase++;
+    }
+  }
 
   for (const { creator } of staleChase) {
     const campaignTeam = await prisma.campaignTeamMember.findMany({
