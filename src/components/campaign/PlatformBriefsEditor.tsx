@@ -148,12 +148,12 @@ const YT_TICK_TYPES: { key: "ytShorts" | "ytDedicated" | "ytConceptual" | "ytInt
   { key: "instaReelRepost", label: "Insta Reel Repost" },
 ];
 
-// Best-effort re-parse of a previously saved plain-text deliverables string
-// (e.g. "Reel x3, Post x1 + YT Shorts Repost") back into the structured
-// checkbox/quantity state, so editing an existing brief doesn't blank the
-// form out. Anything it can't recognize (old free-text briefs written
-// before this field existed, e.g. "1 Collab Reel + 1 Month Usage Rights")
-// falls through to the "Other" box untouched — no data loss either way.
+// Parses one category's slice of the deliverables string (the part after
+// "CategoryName: ") back into quantities/tickboxes — reused per-category by
+// the *ByCategory parsers below. Anything it can't recognize is dropped
+// (fine here: the per-category segment is only ever text this same field
+// generated, not arbitrary free text — the overall "Other" box is what
+// carries anything unrecognized).
 function parseInstaDeliverables(raw: string) {
   let rest = raw;
   const qty: Record<string, string> = {};
@@ -166,9 +166,7 @@ function parseInstaDeliverables(raw: string) {
     }
   }
   const ytShortsRepost = /YT\s+Shorts\s+Repost/i.test(rest);
-  rest = rest.replace(/YT\s+Shorts\s+Repost/i, "");
-  const other = rest.replace(/^[\s,+|;-]+|[\s,+|;-]+$/g, "").replace(/\s{2,}/g, " ").trim();
-  return { qty, ytShortsRepost, other };
+  return { qty, ytShortsRepost };
 }
 
 function parseYtDeliverables(raw: string) {
@@ -181,106 +179,192 @@ function parseYtDeliverables(raw: string) {
       rest = rest.replace(re, "");
     }
   }
-  const other = rest.replace(/^[\s,+|;-]+|[\s,+|;-]+$/g, "").replace(/\s{2,}/g, " ").trim();
-  return { ticks, other };
+  return { ticks };
 }
 
-// Structured, platform-specific deliverables checklist — replaces the old
-// single free-text "Deliverables" input. Still serializes down to the same
-// plain string CampaignPlatformBrief.deliverables stores (e.g. "Reel x3,
-// Post x1 + YT Shorts Repost"), so no schema change is needed — same
-// "rich UI, flat string storage" pattern SkuField uses on the New Campaign
-// form.
-function DeliverablesField({ platform, value, onChange }: { platform: string; value: string; onChange: (v: string) => void }) {
-  const isInsta = platform === "Instagram";
-  const instaParsed = parseInstaDeliverables(value);
-  const ytParsed = parseYtDeliverables(value);
+// Splits the stored deliverables string on " | " into one segment per
+// category (each segment shaped "CategoryName: Reel x3, Post x1"), matches
+// each segment's label against the brief's currently-selected categories,
+// and routes anything that doesn't match a known category (old free-text
+// briefs written before this field existed, e.g. "1 Collab Reel + 1 Month
+// Usage Rights", or a category that's since been unticked) into "other" —
+// no data loss either way.
+function splitCategorySegments(raw: string) {
+  return raw
+    .split("|")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
 
-  const [instaQty, setInstaQty] = useState<Record<string, string>>(instaParsed.qty);
-  const [ytShortsRepost, setYtShortsRepost] = useState(instaParsed.ytShortsRepost);
-  const [ytTicks, setYtTicks] = useState<Record<string, boolean>>(ytParsed.ticks);
+function parseInstaDeliverablesByCategory(raw: string, categories: string[]) {
+  const byCategory: Record<string, { qty: Record<string, string>; ytShortsRepost: boolean }> = {};
+  const otherParts: string[] = [];
+  for (const seg of splitCategorySegments(raw)) {
+    const m = seg.match(/^([^:]+):\s*(.*)$/);
+    const cat = m ? categories.find((c) => c.toLowerCase() === m[1].trim().toLowerCase()) : undefined;
+    if (m && cat) {
+      byCategory[cat] = parseInstaDeliverables(m[2]);
+    } else {
+      otherParts.push(seg);
+    }
+  }
+  return { byCategory, other: otherParts.join(" | ") };
+}
+
+function parseYtDeliverablesByCategory(raw: string, categories: string[]) {
+  const byCategory: Record<string, Record<string, boolean>> = {};
+  const otherParts: string[] = [];
+  for (const seg of splitCategorySegments(raw)) {
+    const m = seg.match(/^([^:]+):\s*(.*)$/);
+    const cat = m ? categories.find((c) => c.toLowerCase() === m[1].trim().toLowerCase()) : undefined;
+    if (m && cat) {
+      byCategory[cat] = parseYtDeliverables(m[2]).ticks;
+    } else {
+      otherParts.push(seg);
+    }
+  }
+  return { byCategory, other: otherParts.join(" | ") };
+}
+
+// Structured, per-category, platform-specific deliverables checklist —
+// replaces the old single free-text "Deliverables" input. Pick 2 categories
+// on the brief (e.g. Tech, Lifestyle) and each gets its own Reel/Post/
+// Carousel/Story quantity boxes (Instagram) or YT Shorts/Dedicated/
+// Conceptual/Integrated/Insta Reel Repost tickboxes (YouTube) — a Tech reel
+// count is tracked separately from a Lifestyle reel count. Still serializes
+// down to the same plain string CampaignPlatformBrief.deliverables stores
+// (e.g. "Tech: Reel x3, Post x1 | Lifestyle: Story x2"), so no schema
+// change is needed — same "rich UI, flat string storage" pattern SkuField
+// uses on the New Campaign form.
+function DeliverablesField({
+  platform,
+  categories,
+  value,
+  onChange,
+}: {
+  platform: string;
+  categories: string[];
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const isInsta = platform === "Instagram";
+  const instaParsed = parseInstaDeliverablesByCategory(value, categories);
+  const ytParsed = parseYtDeliverablesByCategory(value, categories);
+
+  const [instaByCategory, setInstaByCategory] = useState<Record<string, { qty: Record<string, string>; ytShortsRepost: boolean }>>(
+    instaParsed.byCategory
+  );
+  const [ytByCategory, setYtByCategory] = useState<Record<string, Record<string, boolean>>>(ytParsed.byCategory);
   const [other, setOther] = useState(isInsta ? instaParsed.other : ytParsed.other);
 
-  function serialize(nextInstaQty: Record<string, string>, nextYtShortsRepost: boolean, nextYtTicks: Record<string, boolean>, nextOther: string) {
-    const parts: string[] = [];
-    if (isInsta) {
-      const qtyParts = INSTA_QTY_TYPES.filter(({ key }) => parseInt(nextInstaQty[key] ?? "0", 10) > 0).map(
-        ({ key, label }) => `${label} x${nextInstaQty[key]}`
-      );
-      if (qtyParts.length) parts.push(qtyParts.join(", "));
-      if (nextYtShortsRepost) parts.push("YT Shorts Repost");
-    } else {
-      const tickParts = YT_TICK_TYPES.filter(({ key }) => nextYtTicks[key]).map(({ label }) => label);
-      if (tickParts.length) parts.push(tickParts.join(", "));
+  function serialize(
+    nextInstaByCategory: typeof instaByCategory,
+    nextYtByCategory: typeof ytByCategory,
+    nextOther: string
+  ) {
+    const catParts: string[] = [];
+    for (const category of categories) {
+      if (isInsta) {
+        const entry = nextInstaByCategory[category];
+        const bits = entry
+          ? INSTA_QTY_TYPES.filter(({ key }) => parseInt(entry.qty[key] ?? "0", 10) > 0).map(
+              ({ key, label }) => `${label} x${entry.qty[key]}`
+            )
+          : [];
+        if (entry?.ytShortsRepost) bits.push("YT Shorts Repost");
+        if (bits.length) catParts.push(`${category}: ${bits.join(", ")}`);
+      } else {
+        const entry = nextYtByCategory[category];
+        const bits = entry ? YT_TICK_TYPES.filter(({ key }) => entry[key]).map(({ label }) => label) : [];
+        if (bits.length) catParts.push(`${category}: ${bits.join(", ")}`);
+      }
     }
+    const parts = [...catParts];
     if (nextOther.trim()) parts.push(nextOther.trim());
-    return parts.join(" + ");
+    return parts.join(" | ");
   }
 
-  function updateInstaQty(key: string, v: string) {
+  function updateInstaQty(category: string, key: string, v: string) {
     const digits = v.replace(/[^\d]/g, "");
-    const next = { ...instaQty, [key]: digits };
-    setInstaQty(next);
-    onChange(serialize(next, ytShortsRepost, ytTicks, other));
+    const current = instaByCategory[category] ?? { qty: {}, ytShortsRepost: false };
+    const next = { ...instaByCategory, [category]: { ...current, qty: { ...current.qty, [key]: digits } } };
+    setInstaByCategory(next);
+    onChange(serialize(next, ytByCategory, other));
   }
 
-  function updateYtShortsRepost(checked: boolean) {
-    setYtShortsRepost(checked);
-    onChange(serialize(instaQty, checked, ytTicks, other));
+  function updateInstaRepost(category: string, checked: boolean) {
+    const current = instaByCategory[category] ?? { qty: {}, ytShortsRepost: false };
+    const next = { ...instaByCategory, [category]: { ...current, ytShortsRepost: checked } };
+    setInstaByCategory(next);
+    onChange(serialize(next, ytByCategory, other));
   }
 
-  function updateYtTick(key: string, checked: boolean) {
-    const next = { ...ytTicks, [key]: checked };
-    setYtTicks(next);
-    onChange(serialize(instaQty, ytShortsRepost, next, other));
+  function updateYtTick(category: string, key: string, checked: boolean) {
+    const current = ytByCategory[category] ?? {};
+    const next = { ...ytByCategory, [category]: { ...current, [key]: checked } };
+    setYtByCategory(next);
+    onChange(serialize(instaByCategory, next, other));
   }
 
   function updateOther(v: string) {
     setOther(v);
-    onChange(serialize(instaQty, ytShortsRepost, ytTicks, v));
+    onChange(serialize(instaByCategory, ytByCategory, v));
   }
 
   return (
     <div>
       <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Deliverables</label>
-      {isInsta ? (
-        <div className="space-y-2">
-          <div className="grid grid-cols-4 gap-2">
-            {INSTA_QTY_TYPES.map(({ key, label }) => (
-              <div key={key}>
-                <label className="mb-0.5 block text-[11px] text-slate-500 dark:text-slate-400">{label}</label>
-                <input
-                  value={instaQty[key] ?? ""}
-                  onChange={(e) => updateInstaQty(key, e.target.value)}
-                  placeholder="0"
-                  inputMode="numeric"
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:placeholder:text-slate-500"
-                />
-              </div>
-            ))}
-          </div>
-          <label className="flex w-fit cursor-pointer items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-300">
-            <input
-              type="checkbox"
-              checked={ytShortsRepost}
-              onChange={(e) => updateYtShortsRepost(e.target.checked)}
-              className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-            />
-            YT Shorts Repost
-          </label>
-        </div>
+      {categories.length === 0 ? (
+        <p className="rounded-lg border border-dashed border-slate-300 px-3 py-2 text-xs text-slate-400 dark:border-slate-700 dark:text-slate-500">
+          Pick a category above — deliverables are tracked per category.
+        </p>
       ) : (
-        <div className="flex flex-wrap gap-3">
-          {YT_TICK_TYPES.map(({ key, label }) => (
-            <label key={key} className="flex cursor-pointer items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-300">
-              <input
-                type="checkbox"
-                checked={Boolean(ytTicks[key])}
-                onChange={(e) => updateYtTick(key, e.target.checked)}
-                className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-              />
-              {label}
-            </label>
+        <div className="space-y-2">
+          {categories.map((category) => (
+            <div key={category} className="rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-950">
+              <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">{category}</p>
+              {isInsta ? (
+                <div className="space-y-2">
+                  <div className="grid grid-cols-4 gap-2">
+                    {INSTA_QTY_TYPES.map(({ key, label }) => (
+                      <div key={key}>
+                        <label className="mb-0.5 block text-[11px] text-slate-500 dark:text-slate-400">{label}</label>
+                        <input
+                          value={instaByCategory[category]?.qty[key] ?? ""}
+                          onChange={(e) => updateInstaQty(category, key, e.target.value)}
+                          placeholder="0"
+                          inputMode="numeric"
+                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:placeholder:text-slate-500"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  <label className="flex w-fit cursor-pointer items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-300">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(instaByCategory[category]?.ytShortsRepost)}
+                      onChange={(e) => updateInstaRepost(category, e.target.checked)}
+                      className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    YT Shorts Repost
+                  </label>
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-3">
+                  {YT_TICK_TYPES.map(({ key, label }) => (
+                    <label key={key} className="flex cursor-pointer items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-300">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(ytByCategory[category]?.[key])}
+                        onChange={(e) => updateYtTick(category, key, e.target.checked)}
+                        className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                      />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
           ))}
         </div>
       )}
@@ -402,6 +486,7 @@ export default function PlatformBriefsEditor({
           <CategoryField value={brief.category} onChange={(v) => updateBrief(brief.platform, { category: v })} />
           <DeliverablesField
             platform={brief.platform}
+            categories={brief.category ? brief.category.split(",").map((c) => c.trim()).filter(Boolean) : []}
             value={brief.deliverables}
             onChange={(v) => updateBrief(brief.platform, { deliverables: v })}
           />
