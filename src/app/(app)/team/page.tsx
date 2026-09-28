@@ -4,6 +4,7 @@ import { currentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { canManageTeam } from "@/lib/rbac";
 import TeamManagementClient from "@/components/team/TeamManagementClient";
+import PermissionsMatrix from "@/components/team/PermissionsMatrix";
 
 // CXO-only admin page — the self-serve replacement for creating User rows
 // by hand (prisma/seed.ts or Prisma Studio). See src/lib/actions.ts's
@@ -32,6 +33,7 @@ export default async function TeamPage() {
           page.
         </p>
       </div>
+      <PermissionsMatrix />
       <TeamManagementClient
         users={users.map((u) => ({ ...u, createdAt: u.createdAt.toISOString() }))}
         currentUserId={user.id}
