@@ -1558,8 +1558,27 @@ export async function proposeNegotiationRound(creatorId: string, proposedCost: n
   const roundNumber = (lastRound?.roundNumber ?? 0) + 1;
 
   if (roundNumber > NEGOTIATION_ROUND_CAP) {
+    // Gate G10: a 4th round doesn't just get silently blocked — it raises a
+    // real escalation an IR Manager can see and own, per spec Step 12.
+    // raiseEscalation already fans out to IR_MANAGER + CXO (see Task #2's
+    // notifyOrgRole calls inside it), so no extra notify needed here. Guard
+    // against re-raising a duplicate every time someone retries against the
+    // same capped creator while the first escalation is still open.
+    const alreadyEscalated = await prisma.escalation.findFirst({
+      where: { creatorId: creator.id, sitsAt: "PRICING", status: { not: "CLOSED" } },
+    });
+    if (!alreadyEscalated) {
+      await raiseEscalation({
+        campaignId: creator.campaignId,
+        creatorId: creator.id,
+        title: `${creator.name} hit the ${NEGOTIATION_ROUND_CAP}-round negotiation cap`,
+        description: `Round ${roundNumber} was blocked — this creator has already gone through ${NEGOTIATION_ROUND_CAP} negotiation rounds without a deal.`,
+        sitsAt: "PRICING",
+        severity: "HIGH",
+      });
+    }
     throw new Error(
-      `This creator has already hit ${NEGOTIATION_ROUND_CAP} negotiation rounds — escalate to a manager instead of proposing another round.`
+      `This creator has already hit ${NEGOTIATION_ROUND_CAP} negotiation rounds — this has been escalated to an IR Manager instead of proposing another round.`
     );
   }
 
