@@ -62,6 +62,38 @@ function authorFields(user: { id: string; role: Role }) {
   return isClient(user.role) ? { authorClientId: user.id } : { authorId: user.id };
 }
 
+// Notifies every internal user holding a given role ON THIS CAMPAIGN (via
+// CampaignTeamMember), not every user with that role org-wide — matches the
+// "assignment grants access" rule everywhere else in this file. Shared by
+// every action below that needs to fan a notification out to "the Campaign
+// Manager(s)/Brand Solutions/IR Executives/IR Interns on this campaign",
+// instead of each call site writing its own campaignTeamMember.findMany.
+// excludeUserId skips notifying whoever just performed the action, same as
+// the existing instant-notify call sites do individually.
+async function notifyCampaignRole(campaignId: string, role: string, title: string, body: string, excludeUserId?: string) {
+  const members = await prisma.campaignTeamMember.findMany({
+    where: { campaignId, roleOnCampaign: role, ...(excludeUserId ? { userId: { not: excludeUserId } } : {}) },
+    select: { userId: true },
+  });
+  await Promise.all(members.map((m) => notify({ userId: m.userId, channel: "INSTANT", title, body })));
+}
+
+// IR Manager and CXO are org-wide (isOrgWide in rbac.ts) — they see every
+// campaign without ever being added as a CampaignTeamMember row on it, so
+// notifyCampaignRole above would silently find nobody for either role. Every
+// real login with the role gets notified instead, same as createCampaign
+// already does for IR Managers. Also used for genuinely org-wide events that
+// aren't scoped to one campaign at all (e.g. the month lock, Step 30), where
+// even a normally campaign-scoped role like Campaign Manager needs every
+// Campaign Manager notified, not just one campaign's team.
+async function notifyOrgRole(role: Role, title: string, body: string, excludeUserId?: string) {
+  const users = await prisma.user.findMany({
+    where: { role, ...(excludeUserId ? { id: { not: excludeUserId } } : {}) },
+    select: { id: true },
+  });
+  await Promise.all(users.map((u) => notify({ userId: u.id, channel: "INSTANT", title, body })));
+}
+
 // ---------- Campaign ----------
 
 // Shape PlatformBriefsEditor (New Campaign form / CampaignHeaderEditor)
@@ -569,7 +601,7 @@ export async function updateCreatorPayout(
     throw new Error("Invalid payment status.");
   }
 
-  await prisma.creator.update({ where: { id: creatorId }, data: fields });
+  const payoutCreator = await prisma.creator.update({ where: { id: creatorId }, data: fields });
 
   await logActivity({
     campaignId,
@@ -580,6 +612,26 @@ export async function updateCreatorPayout(
     entityId: creatorId,
     meta: fields,
   });
+
+  // Per spec Step 26: invoice-received/agreement-complete is the IR
+  // Executive's write — the Campaign Manager needs to know it's in.
+  if (fields.payoutInvoiceReceived) {
+    await notifyCampaignRole(
+      campaignId,
+      "CAMPAIGN_MANAGER",
+      `Invoice received: ${payoutCreator.name}`,
+      `${user.name} marked ${payoutCreator.name}'s creator invoice as received.`
+    );
+  }
+  // Per spec Step 27: payables/payout status is the Campaign Manager's
+  // write — Brand Solutions and the IR Manager both need visibility on
+  // money going out.
+  if (fields.payoutPaymentStatus != null || fields.payoutAdvance != null) {
+    const payoutTitle = `Payout updated: ${payoutCreator.name}`;
+    const payoutBody = `${user.name} updated the payout status for ${payoutCreator.name}${fields.payoutPaymentStatus ? ` to ${fields.payoutPaymentStatus.replace(/_/g, " ").toLowerCase()}` : ""}.`;
+    await notifyCampaignRole(campaignId, "BRAND_SOLUTIONS", payoutTitle, payoutBody);
+    await notifyOrgRole("IR_MANAGER", payoutTitle, payoutBody);
+  }
 
   revalidatePath("/finance");
   revalidatePath("/dashboard");
@@ -711,6 +763,15 @@ export async function assignTeamMember(campaignId: string, userId: string, roleO
       title: `Added to ${campaign?.name ?? "a campaign"}`,
       body: `${user.name} added you as ${roleOnCampaign.replace(/_/g, " ").toLowerCase()} on ${campaign?.name ?? "a campaign"}.`,
     });
+    // Per spec Step 2: Brand Solutions should know the team's being staffed
+    // too, not just the person who was just added.
+    await notifyCampaignRole(
+      campaignId,
+      "BRAND_SOLUTIONS",
+      `Team update on ${campaign?.name ?? "a campaign"}`,
+      `${user.name} added ${roleOnCampaign.replace(/_/g, " ").toLowerCase()} on ${campaign?.name ?? "a campaign"}.`,
+      user.id
+    );
   }
 
   if (campaign?.status === "DRAFT") {
@@ -1149,6 +1210,21 @@ export async function setCreatorClientDecision(
     meta: fields,
   });
 
+  // Per spec Step 13: Campaign Manager, IR Executive, IR Intern and Brand
+  // Solutions all need to know the moment a creator gets onboarded — this
+  // is what kicks off SPOC assignment and execution.
+  if (wantsOnboard && creator.status !== "ONBOARDED") {
+    const onboardCampaign = await prisma.campaign.findUnique({ where: { id: creator.campaignId }, select: { name: true } });
+    const title = `${creator.name} onboarded`;
+    const body = `${creator.name} was marked Onboard on ${onboardCampaign?.name ?? "a campaign"} — ready for SPOC assignment.`;
+    await Promise.all([
+      notifyCampaignRole(creator.campaignId, "CAMPAIGN_MANAGER", title, body),
+      notifyCampaignRole(creator.campaignId, "IR_EXECUTIVE", title, body),
+      notifyCampaignRole(creator.campaignId, "IR_INTERN", title, body),
+      notifyCampaignRole(creator.campaignId, "BRAND_SOLUTIONS", title, body),
+    ]);
+  }
+
   revalidatePath(`/campaigns/${creator.campaignId}`);
 }
 
@@ -1403,6 +1479,17 @@ export async function rejectCreator(creatorId: string, reason: string) {
     entityId: creator.id,
     meta: { reason },
   });
+
+  // Per spec Step 6: the row goes back to whoever sourced it, with the reason.
+  if (creator.sourcedByUserId && creator.sourcedByUserId !== user.id) {
+    await notify({
+      userId: creator.sourcedByUserId,
+      channel: "INSTANT",
+      title: `${creator.name} rejected`,
+      body: `${user.name} rejected ${creator.name}: ${reason}`,
+    });
+  }
+
   revalidatePath(`/campaigns/${creator.campaignId}`);
 }
 
@@ -1441,15 +1528,15 @@ export async function clientReviewCreator(
     entityId: creator.id,
   });
 
-  // Instant notify: it's TBM's turn now.
-  const campaign = await prisma.campaign.findUnique({ where: { id: creator.campaignId }, select: { createdById: true, name: true } });
-  if (campaign) {
-    await notify({
-      userId: campaign.createdById,
-      channel: "INSTANT",
-      title: `Client responded on ${creator.name}`,
-      body: `${user.name} marked ${creator.name} as ${decision.replace("CLIENT_", "").toLowerCase()} on ${campaign.name}.`,
-    });
+  // Per spec Step 8: Campaign Manager on all three decisions; the sourcing
+  // IR Executive/Intern too when it's a Negotiate (they're the ones who'll
+  // have to go back to the creator with a revised number).
+  const campaign = await prisma.campaign.findUnique({ where: { id: creator.campaignId }, select: { name: true } });
+  const notifyTitle = `Client responded on ${creator.name}`;
+  const notifyBody = `${user.name} marked ${creator.name} as ${decision.replace("CLIENT_", "").toLowerCase()} on ${campaign?.name ?? "a campaign"}.`;
+  await notifyCampaignRole(creator.campaignId, "CAMPAIGN_MANAGER", notifyTitle, notifyBody);
+  if (decision === "CLIENT_NEGOTIATING" && creator.sourcedByUserId) {
+    await notify({ userId: creator.sourcedByUserId, channel: "INSTANT", title: notifyTitle, body: notifyBody });
   }
 
   revalidatePath(`/campaigns/${creator.campaignId}`);
@@ -1521,6 +1608,30 @@ export async function proposeNegotiationRound(creatorId: string, proposedCost: n
     entityId: creatorId,
     meta: { roundNumber, proposedCost, by: isClient(user.role) ? "CLIENT" : user.name },
   });
+
+  // Per spec Steps 9-12: every negotiation round should tell whoever's turn
+  // it now is. A TBM-side (Campaign Manager) proposal republishes to the
+  // client and lets the sourcing IR Executive/Intern know where the number
+  // landed; a client counter-offer lets the Campaign Manager know it's back
+  // on TBM's side.
+  const negotiationTitle = `Round ${roundNumber} on ${creator.name}`;
+  if (!isClient(user.role)) {
+    const negotiationBody = `${user.name} proposed ₹${proposedCost.toLocaleString("en-IN")} (round ${roundNumber}) for ${creator.name} — republished to the client.`;
+    const clientAccess = await prisma.campaignClientAccess.findFirst({ where: { campaignId: creator.campaignId } });
+    if (clientAccess) {
+      await notify({ clientId: clientAccess.clientId, channel: "INSTANT", title: negotiationTitle, body: negotiationBody });
+    }
+    if (creator.sourcedByUserId && creator.sourcedByUserId !== user.id) {
+      await notify({ userId: creator.sourcedByUserId, channel: "INSTANT", title: negotiationTitle, body: negotiationBody });
+    }
+  } else {
+    await notifyCampaignRole(
+      creator.campaignId,
+      "CAMPAIGN_MANAGER",
+      negotiationTitle,
+      `The client countered ₹${proposedCost.toLocaleString("en-IN")} (round ${roundNumber}) on ${creator.name}.`
+    );
+  }
 
   revalidatePath(`/campaigns/${creator.campaignId}`);
 }
@@ -1601,6 +1712,18 @@ export async function triggerPause(creatorId: string, reason: string) {
     meta: { reason },
   });
 
+  // Per spec Step 18: a pause never takes effect on the SPOC's word alone —
+  // the Campaign Manager needs to know it's waiting on their confirmation,
+  // and Brand Solutions/the client need to know why the creator's stalled.
+  const pauseTitle = `${creator.name} paused — needs confirmation`;
+  const pauseBody = `${user.name} flagged ${creator.name} as blocked: ${reason}`;
+  await notifyCampaignRole(creator.campaignId, "CAMPAIGN_MANAGER", pauseTitle, pauseBody);
+  await notifyCampaignRole(creator.campaignId, "BRAND_SOLUTIONS", pauseTitle, pauseBody);
+  const pauseClientAccess = await prisma.campaignClientAccess.findFirst({ where: { campaignId: creator.campaignId } });
+  if (pauseClientAccess) {
+    await notify({ clientId: pauseClientAccess.clientId, channel: "INSTANT", title: pauseTitle, body: pauseBody });
+  }
+
   revalidatePath(`/campaigns/${creator.campaignId}`);
 }
 
@@ -1625,6 +1748,15 @@ export async function confirmPause(creatorId: string) {
     entityType: "Creator",
     entityId: creatorId,
   });
+
+  // Per spec Step 19: the IR SPOC who triggered the pause and Brand
+  // Solutions both need to know it's now actually in effect.
+  const confirmTitle = `${creator.name} pause confirmed`;
+  const confirmBody = `${user.name} confirmed the pause on ${creator.name} — the clock is now stopped.`;
+  if (creator.pauseRequestedByUserId && creator.pauseRequestedByUserId !== user.id) {
+    await notify({ userId: creator.pauseRequestedByUserId, channel: "INSTANT", title: confirmTitle, body: confirmBody });
+  }
+  await notifyCampaignRole(creator.campaignId, "BRAND_SOLUTIONS", confirmTitle, confirmBody);
 
   revalidatePath(`/campaigns/${creator.campaignId}`);
 }
@@ -2088,6 +2220,18 @@ export async function addLiveLink(deliverableId: string, liveLink: string) {
     entityId: deliverable.id,
     meta: { liveLink },
   });
+
+  // Per spec Step 22: Campaign Manager, Brand Solutions and the client all
+  // need to know the moment a deliverable goes live.
+  const liveTitle = `${deliverable.creator.name} is live`;
+  const liveBody = `${user.name} marked a deliverable live for ${deliverable.creator.name}: ${liveLink}`;
+  await notifyCampaignRole(deliverable.creator.campaignId, "CAMPAIGN_MANAGER", liveTitle, liveBody);
+  await notifyCampaignRole(deliverable.creator.campaignId, "BRAND_SOLUTIONS", liveTitle, liveBody);
+  const liveClientAccess = await prisma.campaignClientAccess.findFirst({ where: { campaignId: deliverable.creator.campaignId } });
+  if (liveClientAccess) {
+    await notify({ clientId: liveClientAccess.clientId, channel: "INSTANT", title: liveTitle, body: liveBody });
+  }
+
   revalidatePath(`/campaigns/${deliverable.creator.campaignId}`);
 }
 
@@ -2995,6 +3139,17 @@ export async function lockMonth(month: string, auditCorrectionNotes?: string) {
   // required) and a Month lock isn't tied to one campaign. The Month row
   // itself (lockedAt/lockedByUserId) is the audit record for this action.
 
+  // Per spec Step 30: locking a month is org-wide, so it notifies every
+  // Brand Solutions, Campaign Manager and IR Manager login, not just one
+  // campaign's team.
+  const lockTitle = `${month} is now locked`;
+  const lockBody = `${user.name} locked ${month} after the accounts audit — figures for that month are no longer provisional.`;
+  await Promise.all([
+    notifyOrgRole("BRAND_SOLUTIONS", lockTitle, lockBody, user.id),
+    notifyOrgRole("CAMPAIGN_MANAGER", lockTitle, lockBody, user.id),
+    notifyOrgRole("IR_MANAGER", lockTitle, lockBody, user.id),
+  ]);
+
   revalidatePath("/finance");
   revalidatePath("/admin/months");
   return record;
@@ -3052,6 +3207,13 @@ export async function raiseEscalation(input: {
     });
   }
 
+  // Per spec Step 31: the IR Manager and CXO must never learn of an
+  // escalation late — both get notified at creation regardless of who was
+  // proposed as owner.
+  const escalationBody = `${user.name} raised "${title}" (${input.severity}) on this campaign.`;
+  await notifyOrgRole("IR_MANAGER", `New escalation: ${title}`, escalationBody, user.id);
+  await notifyOrgRole("CXO", `New escalation: ${title}`, escalationBody, user.id);
+
   revalidatePath(`/campaigns/${input.campaignId}`);
   revalidatePath("/escalations");
   return escalation;
@@ -3080,6 +3242,15 @@ export async function claimEscalation(escalationId: string) {
     entityType: "Escalation",
     entityId: escalationId,
   });
+
+  // Per spec Step 32: whoever raised it should know it now has an owner.
+  const claimBody = `${user.name} took ownership of "${escalation.title}".`;
+  if (escalation.raisedByUserId && escalation.raisedByUserId !== user.id) {
+    await notify({ userId: escalation.raisedByUserId, channel: "INSTANT", title: `Escalation owned: ${escalation.title}`, body: claimBody });
+  }
+  if (escalation.raisedByClientId) {
+    await notify({ clientId: escalation.raisedByClientId, channel: "INSTANT", title: `Escalation owned: ${escalation.title}`, body: claimBody });
+  }
 
   revalidatePath(`/campaigns/${escalation.campaignId}`);
   revalidatePath("/escalations");
@@ -3110,6 +3281,19 @@ export async function closeEscalation(escalationId: string, resolutionNote: stri
     entityId: escalationId,
     meta: { rootCauseCategory },
   });
+
+  // Per spec Step 33: the raiser, IR Manager and CXO all need to know it's
+  // closed — the raiser especially, since "nobody tells them" was the gap.
+  const closeTitle = `Escalation closed: ${escalation.title}`;
+  const closeBody = `${user.name} closed "${escalation.title}" — ${resolutionNote}`;
+  if (escalation.raisedByUserId && escalation.raisedByUserId !== user.id) {
+    await notify({ userId: escalation.raisedByUserId, channel: "INSTANT", title: closeTitle, body: closeBody });
+  }
+  if (escalation.raisedByClientId) {
+    await notify({ clientId: escalation.raisedByClientId, channel: "INSTANT", title: closeTitle, body: closeBody });
+  }
+  await notifyOrgRole("IR_MANAGER", closeTitle, closeBody, user.id);
+  await notifyOrgRole("CXO", closeTitle, closeBody, user.id);
 
   revalidatePath(`/campaigns/${escalation.campaignId}`);
   revalidatePath("/escalations");
