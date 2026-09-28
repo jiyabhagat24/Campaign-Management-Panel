@@ -78,6 +78,14 @@ export function canViewPricingQueue(role: Role) {
   return canSetCommercials(role) || role === "IR_MANAGER";
 }
 
+// Step 7's Time Analytics page — stage-duration reporting (pricing wait,
+// time to onboard, time to go live). Same audience as Pricing Queue plus
+// CXO, since this is oversight/bottleneck reporting rather than a worklist
+// tied to one action a single role performs.
+export function canViewTimeAnalytics(role: Role) {
+  return canViewPricingQueue(role) || role === "CXO";
+}
+
 // IR Intern: works shortlisting/onboarding rows like an IR Executive, and
 // sees full cost/margin same as everyone internal, but never approves or
 // sets commercials.

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { Role } from "@/lib/constants";
-import { canSeeInternalCost, canManageTeam, canManageClients, canViewPricingQueue, isClient, isSuperAdmin } from "@/lib/rbac";
+import { canSeeInternalCost, canManageTeam, canManageClients, canViewPricingQueue, canViewTimeAnalytics, isClient, isSuperAdmin } from "@/lib/rbac";
 import ThemeToggle from "@/components/ThemeToggle";
 import NotificationBell, { type NotificationItem } from "@/components/NotificationBell";
 import {
@@ -18,6 +18,7 @@ import {
   PhoneCall,
   CalendarCheck,
   DollarSign,
+  Clock,
 } from "lucide-react";
 
 const NAV = [
@@ -32,6 +33,9 @@ const NAV = [
   // Campaign Manager + IR Manager — Pricing Queue (task #15), see
   // canViewPricingQueue in rbac.ts.
   { href: "/pricing-queue", label: "Pricing Queue", icon: DollarSign, pricingOnly: true },
+  // Same audience plus CXO — Step 7's Time Analytics (stage-duration
+  // reporting), see canViewTimeAnalytics in rbac.ts.
+  { href: "/time-analytics", label: "Time Analytics", icon: Clock, timeAnalyticsOnly: true },
   // Escalations (task #14) and Action Tracker (task #16) — internal-only,
   // not gated to a single role since any internal role can raise/own an
   // escalation and any internal role logs a client chase.
@@ -74,6 +78,7 @@ export default function Sidebar({ role, name, notifications, userId }: { role: R
     if ("clientsOnly" in item && item.clientsOnly && !canManageClients(role)) return false;
     if ("internalOnly" in item && item.internalOnly && isClient(role)) return false;
     if ("pricingOnly" in item && item.pricingOnly && !canViewPricingQueue(role)) return false;
+    if ("timeAnalyticsOnly" in item && item.timeAnalyticsOnly && !canViewTimeAnalytics(role)) return false;
     return true;
   });
 

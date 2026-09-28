@@ -111,14 +111,20 @@ export async function runSlaNotificationSweep() {
   // ---- 2. Pricing Queue rows sitting 48h+ unpriced (to the Campaign
   // Manager) or 96h+ unpriced (escalated to the IR Manager, Step 7's
   // second-tier flag — distinct from the 48h one above it).
-  const stalePricing = await prisma.creator.findMany({
+  const stalePricingCandidates = await prisma.creator.findMany({
     where: {
       status: { notIn: ["REJECTED", "CLIENT_REJECTED"] },
       quotedCost: null,
       internalCost: { not: null },
-      createdAt: { lt: new Date(Date.now() - 2 * DAY_MS) },
     },
     include: { campaign: { select: { id: true, name: true, teamMembers: { where: { roleOnCampaign: "CAMPAIGN_MANAGER" }, select: { userId: true } } } } },
+  });
+  // Wait-clock starts at pricingQueueEnteredAt (when internalCost was first
+  // set — see actions.ts) rather than createdAt: a row can sit shortlisted
+  // with no cost for a while before actually entering the queue.
+  const stalePricing = stalePricingCandidates.filter((c) => {
+    const enteredAt = (c as any).pricingQueueEnteredAt ?? c.createdAt;
+    return Date.now() - new Date(enteredAt).getTime() >= 2 * DAY_MS;
   });
   let irManagersForPricing: { id: string }[] | null = null;
   for (const creator of stalePricing) {
@@ -131,7 +137,8 @@ export async function runSlaNotificationSweep() {
       if (sent) counts.pricingQueueStale++;
     }
 
-    const hoursWaiting = (Date.now() - creator.createdAt.getTime()) / (60 * 60 * 1000);
+    const enteredAt = (creator as any).pricingQueueEnteredAt ?? creator.createdAt;
+    const hoursWaiting = (Date.now() - new Date(enteredAt).getTime()) / (60 * 60 * 1000);
     if (hoursWaiting >= 96) {
       if (!irManagersForPricing) irManagersForPricing = await prisma.user.findMany({ where: { role: "IR_MANAGER" }, select: { id: true } });
       for (const mgr of irManagersForPricing) {

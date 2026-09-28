@@ -886,8 +886,9 @@ export async function addCreator(campaignId: string, formData: FormData, force =
         ...(youtubeShortsMedianViews !== null ? { youtubeShortsMedianViews } : {}),
         ...(youtubeShortsMedianERPercent !== null ? { youtubeShortsMedianERPercent } : {}),
         ...(internalCost !== null ? { internalCost } : {}),
+        ...(internalCost !== null && !(existing as any).pricingQueueEnteredAt ? { pricingQueueEnteredAt: new Date() } : {}),
         shortlistDeliverables: newDeliverableTypes.length ? { create: newDeliverableTypes.map((type) => ({ deliverableType: type })) } : undefined,
-      },
+      } as any,
       include: {
         negotiationRounds: { orderBy: { roundNumber: "asc" } },
         deliverables: true,
@@ -935,6 +936,7 @@ export async function addCreator(campaignId: string, formData: FormData, force =
       youtubeShortsMedianERPercent,
       internalCost,
       quotedCost,
+      ...(internalCost !== null ? { pricingQueueEnteredAt: new Date() } : {}),
       // Task #19: who sourced this row, for row-level Shortlisting scope
       // (IR Intern sees only their own rows, IR Executive sees their own +
       // their Interns' — see rbac.filterCreatorsForShortlistScope).
@@ -942,7 +944,7 @@ export async function addCreator(campaignId: string, formData: FormData, force =
       shortlistDeliverables: {
         create: deliverableTypes.map((type) => ({ deliverableType: type })),
       },
-    },
+    } as any,
     include: {
       negotiationRounds: { orderBy: { roundNumber: "asc" } },
       deliverables: true,
@@ -1043,7 +1045,11 @@ export async function updateCreatorShortlist(
       // (see publishQuotedCost below). Any change to the number un-publishes
       // it, so a client never sees a price that's since been edited.
       ...(fields.quotedCost !== undefined ? { quotedCostPublished: false } : {}),
-    },
+      // Step 7 / Time Analytics: stamp the moment this row first gets an
+      // internal cost — that's when it actually entered the Pricing Queue,
+      // not whenever the Creator row itself was created.
+      ...(fields.internalCost != null && creator.internalCost === null ? { pricingQueueEnteredAt: new Date() } : {}),
+    } as any,
   });
 
 

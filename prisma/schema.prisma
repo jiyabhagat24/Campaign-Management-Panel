@@ -426,6 +426,14 @@ model Creator {
   pendingFinalCostEditReason             String?
   pendingFinalCostEditRequestedByUserId  String?
 
+  // Step 7 / Time Analytics: when internalCost was first set, i.e. when this
+  // row actually entered the Pricing Queue — distinct from createdAt (a
+  // creator can sit shortlisted with no cost for a while before IR prices
+  // it). Stamped once, the first time internalCost goes from null to a real
+  // value (see addCreator/updateCreatorShortlist in actions.ts); never
+  // rewritten after that even if internalCost changes again later.
+  pricingQueueEnteredAt DateTime?
+
   rightsOfUsage     Boolean @default(false)
   usageDurationDays Int? // usage window in days, counted from the deliverable's live date
 
