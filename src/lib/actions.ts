@@ -6,7 +6,7 @@ import bcrypt from "bcryptjs";
 import { requireUser } from "@/lib/auth";
 import { logActivity } from "@/lib/activity";
 import { notify } from "@/lib/notify";
-import { canApproveCommercialEdit, canSetCommercials, canSeeInternalCost, canManageTeam, canManageClients, canCreateCampaign, canDeleteCampaign, canOperateShortlist, isCreatorPOC, isClient, isSuperAdmin } from "@/lib/rbac";
+import { canApproveCommercialEdit, canSetCommercials, canSeeInternalCost, canManageTeam, canManageClients, canCreateCampaign, canDeleteCampaign, canOperateShortlist, isCreatorPOC, isClient, isSuperAdmin, campaignVisibilityWhere } from "@/lib/rbac";
 import {
   DEFAULT_SLA,
   type Stage,
@@ -3916,9 +3916,14 @@ export async function logChase(creatorId: string, channel: string, note?: string
 // more than 7 days old and the creator isn't already in a terminal state —
 // the trigger the spec's Action Tracker page is built around.
 export async function getStaleChaseCandidates() {
-  await requireUser();
+  const user = await requireUser();
+  // Page Permissions matrix: Action Tracker is "own campaigns" for every
+  // role that gets it (not org-wide except for CXO/IR Manager, who are
+  // blocked from this page entirely anyway — see action-tracker/page.tsx).
+  // This previously queried every creator in the system regardless of who
+  // was looking.
   const creators = await prisma.creator.findMany({
-    where: { status: { notIn: ["ONBOARDED", "REJECTED", "CLIENT_REJECTED"] } },
+    where: { status: { notIn: ["ONBOARDED", "REJECTED", "CLIENT_REJECTED"] }, campaign: campaignVisibilityWhere(user) },
     include: {
       campaign: { select: { id: true, name: true } },
       chaseLogs: { orderBy: { createdAt: "desc" }, take: 1 },

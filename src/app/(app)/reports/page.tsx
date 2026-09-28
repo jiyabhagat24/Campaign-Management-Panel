@@ -1,16 +1,25 @@
 import { redirect } from "next/navigation";
 import { currentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { isClient } from "@/lib/rbac";
+import { campaignVisibilityWhere } from "@/lib/rbac";
 import Link from "next/link";
 
+// Page Permissions matrix: every non-CXO/IR-Manager internal role sees "own
+// campaigns" here, not every campaign in the system — this previously ran
+// an unscoped findMany for anyone who wasn't a client, so a Campaign
+// Manager or Brand Solutions user could see every other team's campaigns
+// too. campaignVisibilityWhere already encodes the right scope per role
+// (client -> clientAccess, CXO/IR Manager -> org-wide, everyone else ->
+// their own CampaignTeamMember rows) — same helper the Campaigns directory
+// and Pipeline already use.
 export default async function ReportsPage() {
   const user = await currentUser();
   if (!user) redirect("/login");
 
-  const campaigns = isClient(user.role)
-    ? await prisma.campaign.findMany({ where: { clientAccess: { some: { clientId: user.id } } }, include: { creators: { include: { deliverables: true } } } })
-    : await prisma.campaign.findMany({ include: { creators: { include: { deliverables: true } } } });
+  const campaigns = await prisma.campaign.findMany({
+    where: campaignVisibilityWhere(user),
+    include: { creators: { include: { deliverables: true } } },
+  });
 
   return (
     <div className="p-8">
