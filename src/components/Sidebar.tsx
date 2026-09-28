@@ -19,6 +19,7 @@ import {
   CalendarCheck,
   DollarSign,
   Clock,
+  Wallet,
 } from "lucide-react";
 
 const NAV = [
@@ -47,6 +48,8 @@ const NAV = [
   // remove) plus grant/revoke which campaigns each client can see.
   // Separate flag from teamOnly (Team page / Month Lock stay CXO-only).
   { href: "/clients", label: "Clients", icon: UserCheck, clientsOnly: true },
+  // Same gate as Clients — Step 28's Client Cash invoicing worklist.
+  { href: "/client-cash", label: "Client Cash", icon: Wallet, clientsOnly: true },
   // CXO-only — month lock (task #17 / spec Gate G12).
   { href: "/admin/months", label: "Month Lock", icon: CalendarCheck, teamOnly: true },
 ];

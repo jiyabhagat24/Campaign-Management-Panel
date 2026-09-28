@@ -753,6 +753,111 @@ export async function updateCampaignInvoiced(campaignId: string, invoiced: boole
   revalidatePath("/dashboard");
 }
 
+// ---------- Client Cash (Steps 28/29) ----------
+// Brand Solutions' own invoice worklist — see ClientInvoice in schema.prisma
+// for why this is a real per-invoice table rather than flat Campaign
+// columns. Gated with canManageClients (CXO + Brand Solutions), the same
+// permission that already owns client intake and campaign access grants —
+// Brand Solutions is the role that actually raises/chases client invoices
+// per Step 28.
+export type ClientInvoiceInput = {
+  invoiceNumber: string | null;
+  invoiceRaisedAt: string | null;
+  invoiceAmount: number;
+  amountReceived: number;
+  receivedAt: string | null;
+  paymentTerms: string | null;
+  remark: string | null;
+};
+
+export async function addClientInvoice(campaignId: string, fields: ClientInvoiceInput) {
+  const user = await requireUser();
+  if (!canManageClients(user.role) && !isSuperAdmin(user.id)) throw new Error("Only Brand Solutions can log a client invoice.");
+  const negativeError = negativeCostError(fields.invoiceAmount, "Invoice amount") || negativeCostError(fields.amountReceived, "Amount received");
+  if (negativeError) throw new Error(negativeError);
+
+  const invoice = await (prisma as any).clientInvoice.create({
+    data: {
+      campaignId,
+      invoiceNumber: fields.invoiceNumber?.trim() || null,
+      invoiceRaisedAt: fields.invoiceRaisedAt ? new Date(fields.invoiceRaisedAt) : null,
+      invoiceAmount: fields.invoiceAmount,
+      amountReceived: fields.amountReceived,
+      receivedAt: fields.receivedAt ? new Date(fields.receivedAt) : null,
+      paymentTerms: fields.paymentTerms?.trim() || null,
+      remark: fields.remark?.trim() || null,
+      createdByUserId: user.id,
+    },
+  });
+
+  await logActivity({
+    campaignId,
+    actorId: user.id,
+    actorName: user.name,
+    action: "CLIENT_INVOICE_ADDED",
+    entityType: "ClientInvoice",
+    entityId: invoice.id,
+    meta: { invoiceAmount: fields.invoiceAmount, invoiceNumber: fields.invoiceNumber },
+  });
+
+  revalidatePath(`/campaigns/${campaignId}`);
+  revalidatePath("/client-cash");
+  return invoice;
+}
+
+export async function updateClientInvoice(invoiceId: string, fields: ClientInvoiceInput) {
+  const user = await requireUser();
+  if (!canManageClients(user.role) && !isSuperAdmin(user.id)) throw new Error("Only Brand Solutions can edit a client invoice.");
+  const negativeError = negativeCostError(fields.invoiceAmount, "Invoice amount") || negativeCostError(fields.amountReceived, "Amount received");
+  if (negativeError) throw new Error(negativeError);
+
+  const existing = await (prisma as any).clientInvoice.findUniqueOrThrow({ where: { id: invoiceId } });
+  await (prisma as any).clientInvoice.update({
+    where: { id: invoiceId },
+    data: {
+      invoiceNumber: fields.invoiceNumber?.trim() || null,
+      invoiceRaisedAt: fields.invoiceRaisedAt ? new Date(fields.invoiceRaisedAt) : null,
+      invoiceAmount: fields.invoiceAmount,
+      amountReceived: fields.amountReceived,
+      receivedAt: fields.receivedAt ? new Date(fields.receivedAt) : null,
+      paymentTerms: fields.paymentTerms?.trim() || null,
+      remark: fields.remark?.trim() || null,
+    },
+  });
+
+  await logActivity({
+    campaignId: existing.campaignId,
+    actorId: user.id,
+    actorName: user.name,
+    action: "CLIENT_INVOICE_UPDATED",
+    entityType: "ClientInvoice",
+    entityId: invoiceId,
+    meta: { invoiceAmount: fields.invoiceAmount, amountReceived: fields.amountReceived },
+  });
+
+  revalidatePath(`/campaigns/${existing.campaignId}`);
+  revalidatePath("/client-cash");
+}
+
+export async function deleteClientInvoice(invoiceId: string) {
+  const user = await requireUser();
+  if (!canManageClients(user.role) && !isSuperAdmin(user.id)) throw new Error("Only Brand Solutions can delete a client invoice.");
+
+  const existing = await (prisma as any).clientInvoice.delete({ where: { id: invoiceId } });
+
+  await logActivity({
+    campaignId: existing.campaignId,
+    actorId: user.id,
+    actorName: user.name,
+    action: "CLIENT_INVOICE_DELETED",
+    entityType: "ClientInvoice",
+    entityId: invoiceId,
+  });
+
+  revalidatePath(`/campaigns/${existing.campaignId}`);
+  revalidatePath("/client-cash");
+}
+
 export async function advanceCampaignStage(campaignId: string, stage: Stage) {
   const user = await requireUser();
   if (isClient(user.role)) throw new Error("Clients cannot change campaign stage");

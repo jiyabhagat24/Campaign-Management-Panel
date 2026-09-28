@@ -3,7 +3,8 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Role } from "@/lib/constants";
-import { canSetCommercials, canApproveCommercialEdit, canOperateShortlist, isSuperAdmin } from "@/lib/rbac";
+import { canSetCommercials, canApproveCommercialEdit, canOperateShortlist, canManageClients, isSuperAdmin } from "@/lib/rbac";
+import { FEE_TYPE_LABELS, type FeeType } from "@/lib/constants";
 import {
   PLATFORM_LABELS,
   creatorKanbanColumn,
@@ -16,6 +17,7 @@ import {
 } from "@/lib/constants";
 import StatusBadge from "@/components/StatusBadge";
 import CampaignReport from "@/components/campaign/CampaignReport";
+import ClientInvoicesPanel from "@/components/campaign/ClientInvoicesPanel";
 import { INDIAN_LANGUAGES, CONTENT_CATEGORIES, MAJOR_INDIAN_CITIES } from "@/components/campaign/PlatformBriefsEditor";
 import MultiSelectBox from "@/components/campaign/MultiSelectBox";
 import {
@@ -51,6 +53,9 @@ import {
   saveCampaignReportCommentary,
   publishCampaignReport,
   unpublishCampaignReport,
+  addClientInvoice,
+  updateClientInvoice,
+  deleteClientInvoice,
 } from "@/lib/actions";
 import {
   UserPlus,
@@ -111,6 +116,20 @@ export type ActivityLogEntry = {
 };
 
 type NegotiationRound = { id: string; roundNumber: number; proposedCost: number; proposedBy: string; note: string | null; createdAt: Date };
+
+// Steps 28/29 — one row per invoice raised to the client. Entirely client-
+// safe (no creator-level cost/margin fields) — see ClientInvoice in
+// schema.prisma.
+export type ClientInvoiceRow = {
+  id: string;
+  invoiceNumber: string | null;
+  invoiceRaisedAt: string | Date | null;
+  invoiceAmount: number;
+  amountReceived: number;
+  receivedAt: string | Date | null;
+  paymentTerms: string | null;
+  remark: string | null;
+};
 
 // Just a tag: which deliverable type a creator is being pitched for. The
 // actual numbers/costs/client decision live once on Creator (shared, not
@@ -210,6 +229,11 @@ export default function CreatorKanban({
   insightCommentary,
   campaignLearnings,
   recommendation,
+  budgetQuoted,
+  financeFeeType,
+  financeRetainerFee,
+  financeAgencyFeePercent,
+  clientInvoices,
 }: {
   campaignId: string;
   campaignName: string;
@@ -229,9 +253,20 @@ export default function CreatorKanban({
   insightCommentary?: string | null;
   campaignLearnings?: string | null;
   recommendation?: string | null;
+  // Step 29 — client-facing Finance tab. budgetQuoted/financeFeeType/
+  // financeRetainerFee/financeAgencyFeePercent are the campaign's own
+  // client-facing billing terms (what the client pays TBM) — distinct from
+  // Creator.internalCost/quotedCost, which never reach this component's
+  // client-visible props. clientInvoices is the Step 28 Client Cash ledger,
+  // also entirely client-safe (invoice number/dates/amounts only).
+  budgetQuoted?: number | null;
+  financeFeeType?: string | null;
+  financeRetainerFee?: number | null;
+  financeAgencyFeePercent?: number | null;
+  clientInvoices?: ClientInvoiceRow[];
 }) {
   const [addingCreator, setAddingCreator] = useState(false);
-  const [tab, setTab] = useState<"SHORTLIST" | "ONBOARDING" | "REPORT">("SHORTLIST");
+  const [tab, setTab] = useState<"SHORTLIST" | "ONBOARDING" | "REPORT" | "FINANCE">("SHORTLIST");
   const [creatorList, setCreatorList] = useState(creators);
 
   useEffect(() => {
@@ -354,6 +389,9 @@ export default function CreatorKanban({
         <TabButton active={tab === "SHORTLIST"} onClick={() => setTab("SHORTLIST")} label="Shortlist" count={shortlist.length} />
         <TabButton active={tab === "ONBOARDING"} onClick={() => setTab("ONBOARDING")} label="Onboarded" count={onboarding.length} />
         <TabButton active={tab === "REPORT"} onClick={() => setTab("REPORT")} label="Campaign Report" />
+        {(isClientView || canManageClients(role) || superAdmin) && (
+          <TabButton active={tab === "FINANCE"} onClick={() => setTab("FINANCE")} label="Finance" />
+        )}
       </div>
 
       <div className="py-2">
@@ -701,6 +739,18 @@ export default function CreatorKanban({
               />
             )}
           </div>
+        )}
+
+        {tab === "FINANCE" && (
+          <ClientInvoicesPanel
+            campaignId={campaignId}
+            canEdit={!isClientView && (canManageClients(role) || superAdmin)}
+            invoices={clientInvoices ?? []}
+            budgetQuoted={budgetQuoted ?? null}
+            financeFeeType={financeFeeType ?? null}
+            financeRetainerFee={financeRetainerFee ?? null}
+            financeAgencyFeePercent={financeAgencyFeePercent ?? null}
+          />
         )}
       </div>
     </div>

@@ -59,6 +59,7 @@ model User {
   escalationsOwned          Escalation[] @relation("EscalationOwner")
   monthsLocked              Month[]
   chaseLogs                 ChaseLog[]
+  clientInvoicesLogged      ClientInvoice[]
 }
 
 // External accounts — the brand-side contacts who log in to review shortlists,
@@ -273,6 +274,7 @@ model Campaign {
   platformBriefs       CampaignPlatformBrief[]
   escalations          Escalation[]
   chaseLogs            ChaseLog[]
+  clientInvoices       ClientInvoice[]
 
   // status/brand/createdAt all get filtered on directly (dashboard filter
   // bar, campaign directory) without going through a relation, so unlike
@@ -586,6 +588,38 @@ model ChaseLog {
   @@index([creatorId])
   @@index([campaignId])
   @@index([loggedByUserId])
+}
+
+// Steps 28/29 — Client Cash. One row per invoice raised to the client
+// (a campaign can have several over its life, e.g. a retainer billed
+// monthly, or a project split into milestones) — deliberately its own
+// table rather than flat columns on Campaign, so "how many invoices, which
+// are still due" is a real list instead of one running total. Brand
+// Solutions is the only internal role that writes this (Step 28, INPUT);
+// the client's own read-only Finance view (Step 29) is built from these
+// rows plus Campaign.budgetQuoted/financeFeeType/financeRetainerFee —
+// never from Creator.internalCost/quotedCost, which stay TBM-internal.
+model ClientInvoice {
+  id         String   @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  invoiceNumber   String?
+  invoiceRaisedAt DateTime?
+  invoiceAmount   Float
+  amountReceived  Float     @default(0)
+  receivedAt      DateTime?
+  paymentTerms    String? // free text, e.g. "Net 30", "50% advance"
+  remark          String?
+
+  createdByUserId String?
+  createdByUser   User?   @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([campaignId])
+  @@index([createdByUserId])
 }
 
 // Every negotiation round is logged, never overwritten (brief slide 10).

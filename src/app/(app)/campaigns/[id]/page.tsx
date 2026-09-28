@@ -22,7 +22,7 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
   // after-another (each router.refresh() after a panel edit re-runs this
   // whole page, so a sequential waterfall here directly adds to how long a
   // save takes to show up).
-  const [campaign, internalUsers] = await Promise.all([
+  const [campaign, internalUsers, clientInvoices] = await Promise.all([
     prisma.campaign.findUnique({
       where: { id },
       include: {
@@ -46,6 +46,10 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
     // The User table is internal-staff-only now (clients live in their own
     // Client table), so no role filter is needed here anymore.
     isClientView ? Promise.resolve([]) : prisma.user.findMany({ select: { id: true, name: true, role: true }, orderBy: { name: "asc" } }),
+    // Steps 28/29 — Client Cash invoices, queried separately (not nested in
+    // the include above) since the ClientInvoice model is new and the
+    // generated Prisma client hasn't been regenerated against it yet.
+    (prisma as any).clientInvoice.findMany({ where: { campaignId: id }, orderBy: { createdAt: "desc" } }) as Promise<any[]>,
   ]);
   if (!campaign) notFound();
 
@@ -206,6 +210,20 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
         insightCommentary={(campaign as any).insightCommentary ?? null}
         campaignLearnings={(campaign as any).campaignLearnings ?? null}
         recommendation={(campaign as any).recommendation ?? null}
+        budgetQuoted={campaign.budgetQuoted}
+        financeFeeType={campaign.financeFeeType}
+        financeRetainerFee={campaign.financeRetainerFee}
+        financeAgencyFeePercent={campaign.financeAgencyFeePercent}
+        clientInvoices={clientInvoices.map((inv) => ({
+          id: inv.id,
+          invoiceNumber: inv.invoiceNumber,
+          invoiceRaisedAt: inv.invoiceRaisedAt ? new Date(inv.invoiceRaisedAt).toISOString() : null,
+          invoiceAmount: inv.invoiceAmount,
+          amountReceived: inv.amountReceived,
+          receivedAt: inv.receivedAt ? new Date(inv.receivedAt).toISOString() : null,
+          paymentTerms: inv.paymentTerms,
+          remark: inv.remark,
+        }))}
       />
     </div>
   );
