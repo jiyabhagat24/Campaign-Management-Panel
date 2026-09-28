@@ -35,7 +35,9 @@ const NAV = [
   // not gated to a single role since any internal role can raise/own an
   // escalation and any internal role logs a client chase.
   { href: "/escalations", label: "Escalations", icon: AlertTriangle, internalOnly: true },
-  { href: "/action-tracker", label: "Action Tracker", icon: PhoneCall, internalOnly: true },
+  // Action Tracker: internal-only AND not CXO (Page Permissions matrix marks
+  // it Not available for CXO — see actionTrackerBlocked below).
+  { href: "/action-tracker", label: "Action Tracker", icon: PhoneCall, internalOnly: true, actionTrackerBlocked: true },
   // CXO-only — the Team admin page (add/re-role/remove logins).
   { href: "/team", label: "Team", icon: Users, teamOnly: true },
   // CXO + Brand Solutions — client login management (reset password/
@@ -69,10 +71,11 @@ export default function Sidebar({ role, name, notifications, userId }: { role: R
 
   const filteredNav = NAV.filter((item) => {
     if (superAdmin) return true;
-    if (role === "CLIENT" && item.href === "/pipeline") return false;
+    if (role === "CLIENT" && (item.href === "/pipeline" || item.href === "/dashboard")) return false;
     if ("teamOnly" in item && item.teamOnly && !canManageTeam(role)) return false;
     if ("clientsOnly" in item && item.clientsOnly && !canManageClients(role)) return false;
     if ("internalOnly" in item && item.internalOnly && isClient(role)) return false;
+    if ("actionTrackerBlocked" in item && item.actionTrackerBlocked && role === "CXO") return false;
     if ("pricingOnly" in item && item.pricingOnly && !canViewPricingQueue(role)) return false;
     if ("timeAnalyticsOnly" in item && item.timeAnalyticsOnly && !canViewTimeAnalytics(role)) return false;
     return true;

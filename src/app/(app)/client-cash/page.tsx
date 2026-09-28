@@ -17,6 +17,10 @@ export default async function ClientCashPage() {
   const user = await currentUser();
   if (!user) redirect("/login");
   if (!canManageClients(user.role) && !isSuperAdmin(user.id)) redirect("/dashboard");
+  // Page Permissions matrix: CXO gets View only here, Brand Solutions gets
+  // full edit — canManageClients (the page-level gate above) covers both
+  // roles, so the edit right needs its own, narrower check.
+  const canEditInvoices = user.role === "BRAND_SOLUTIONS" || isSuperAdmin(user.id);
 
   const campaigns = await prisma.campaign.findMany({
     where: { ...campaignVisibilityWhere(user), status: { notIn: ["CANCELLED"] } },
@@ -77,7 +81,7 @@ export default async function ClientCashPage() {
             </div>
             <ClientInvoicesPanel
               campaignId={c.id}
-              canEdit
+              canEdit={canEditInvoices}
               invoices={(invoicesByCampaign.get(c.id) ?? []).map((inv) => ({
                 id: inv.id,
                 invoiceNumber: inv.invoiceNumber,

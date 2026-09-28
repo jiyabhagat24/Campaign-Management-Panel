@@ -643,7 +643,11 @@ export async function updateCampaignFinance(
   }
 ) {
   const user = await requireUser();
-  if (!canSeeInternalCost(user.role)) throw new Error("Not authorized to edit finance figures.");
+  // Page Permissions matrix: Campaign Commercials edit is Campaign-Manager
+  // exclusive — Brand Solutions/IR Manager/IR Executive/CXO get view only
+  // (canSeeInternalCost, used elsewhere for read access, was wrongly reused
+  // here as the write gate too).
+  if (!canSetCommercials(user.role) && !isSuperAdmin(user.id)) throw new Error("Only a Campaign Manager can edit finance figures.");
   if (
     fields.financeClientInvoiceStatus != null &&
     !(INVOICE_STATUSES as readonly string[]).includes(fields.financeClientInvoiceStatus)
@@ -749,7 +753,7 @@ export type ClientInvoiceInput = {
 
 export async function addClientInvoice(campaignId: string, fields: ClientInvoiceInput) {
   const user = await requireUser();
-  if (!canManageClients(user.role) && !isSuperAdmin(user.id)) throw new Error("Only Brand Solutions can log a client invoice.");
+  if (user.role !== "BRAND_SOLUTIONS" && !isSuperAdmin(user.id)) throw new Error("Only Brand Solutions can log a client invoice.");
   const negativeError = negativeCostError(fields.invoiceAmount, "Invoice amount") || negativeCostError(fields.amountReceived, "Amount received");
   if (negativeError) throw new Error(negativeError);
 
@@ -784,7 +788,7 @@ export async function addClientInvoice(campaignId: string, fields: ClientInvoice
 
 export async function updateClientInvoice(invoiceId: string, fields: ClientInvoiceInput) {
   const user = await requireUser();
-  if (!canManageClients(user.role) && !isSuperAdmin(user.id)) throw new Error("Only Brand Solutions can edit a client invoice.");
+  if (user.role !== "BRAND_SOLUTIONS" && !isSuperAdmin(user.id)) throw new Error("Only Brand Solutions can edit a client invoice.");
   const negativeError = negativeCostError(fields.invoiceAmount, "Invoice amount") || negativeCostError(fields.amountReceived, "Amount received");
   if (negativeError) throw new Error(negativeError);
 
@@ -818,7 +822,7 @@ export async function updateClientInvoice(invoiceId: string, fields: ClientInvoi
 
 export async function deleteClientInvoice(invoiceId: string) {
   const user = await requireUser();
-  if (!canManageClients(user.role) && !isSuperAdmin(user.id)) throw new Error("Only Brand Solutions can delete a client invoice.");
+  if (user.role !== "BRAND_SOLUTIONS" && !isSuperAdmin(user.id)) throw new Error("Only Brand Solutions can delete a client invoice.");
 
   const existing = await (prisma as any).clientInvoice.delete({ where: { id: invoiceId } });
 

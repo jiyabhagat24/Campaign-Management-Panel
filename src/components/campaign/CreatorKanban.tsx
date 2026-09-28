@@ -277,7 +277,12 @@ export default function CreatorKanban({
   clientInvoices?: ClientInvoiceRow[];
 }) {
   const [addingCreator, setAddingCreator] = useState(false);
-  const [tab, setTab] = useState<"SHORTLIST" | "ONBOARDING" | "REPORT" | "FINANCE" | "FINANCE_INVOICING">("SHORTLIST");
+  // Page Permissions matrix: Shortlisting is Not available (RED) for CXO —
+  // they oversee via Pipeline/Reports, not by working the shortlist. Land
+  // CXO on Onboarded instead of a tab they can't see.
+  const [tab, setTab] = useState<"SHORTLIST" | "ONBOARDING" | "REPORT" | "FINANCE" | "FINANCE_INVOICING">(
+    role === "CXO" && !isSuperAdmin(currentUserId) ? "ONBOARDING" : "SHORTLIST"
+  );
   const [creatorList, setCreatorList] = useState(creators);
 
   useEffect(() => {
@@ -414,7 +419,11 @@ export default function CreatorKanban({
     <div className="mt-8 space-y-6">
       {/* Tab Navigation */}
       <div className="flex items-center gap-2 border-b border-slate-200/80 dark:border-slate-800 pb-0.5">
-        <TabButton active={tab === "SHORTLIST"} onClick={() => setTab("SHORTLIST")} label="Shortlist" count={shortlist.length} />
+        {/* Page Permissions matrix: Shortlisting is Not available (RED) for
+            CXO — they don't work the shortlist, only oversee post-onboard. */}
+        {(role !== "CXO" || superAdmin) && (
+          <TabButton active={tab === "SHORTLIST"} onClick={() => setTab("SHORTLIST")} label="Shortlist" count={shortlist.length} />
+        )}
         <TabButton active={tab === "ONBOARDING"} onClick={() => setTab("ONBOARDING")} label="Onboarded" count={onboarding.length} />
         <TabButton active={tab === "REPORT"} onClick={() => setTab("REPORT")} label="Campaign Report" />
         {/* Finance and Invoicing (TheBoredMonkey eyes only) — Campaign
@@ -853,7 +862,10 @@ export default function CreatorKanban({
               </p>
               <ClientInvoicesPanel
                 campaignId={campaignId}
-                canEdit={canManageClients(role) || superAdmin}
+                // Page Permissions matrix: Brand Solutions edits, CXO is
+                // view-only here — canManageClients covers both roles, so
+                // narrow to Brand-Solutions-only for the write right.
+                canEdit={role === "BRAND_SOLUTIONS" || superAdmin}
                 invoices={clientInvoices ?? []}
                 finalClosedCost={finalClosedCost ?? null}
                 financeFeeType={financeFeeType ?? null}

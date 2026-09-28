@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { currentUser } from "@/lib/auth";
-import { isClient } from "@/lib/rbac";
+import { isClient, isSuperAdmin } from "@/lib/rbac";
 import { getStaleChaseCandidates, logChase } from "@/lib/actions";
 import { PhoneCall } from "lucide-react";
 import ActionForm from "@/components/ActionForm";
@@ -13,6 +13,10 @@ export default async function ActionTrackerPage() {
   const user = await currentUser();
   if (!user) redirect("/login");
   if (isClient(user.role)) redirect("/dashboard");
+  // Page Permissions matrix: Action Tracker is Not available (RED) for CXO —
+  // they see chase status rolled up in Reports/Escalations, not this
+  // working list of overdue touchpoints.
+  if (user.role === "CXO" && !isSuperAdmin(user.id)) redirect("/dashboard");
 
   const stale = await getStaleChaseCandidates();
 

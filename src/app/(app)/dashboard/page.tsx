@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { currentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { canSeeInternalCost, campaignVisibilityWhere, isClient, canCreateCampaign, isSuperAdmin } from "@/lib/rbac";
@@ -30,6 +31,10 @@ const DORMANT_HOURS = 48;
 export default async function DashboardPage() {
   const user = await currentUser();
   if (!user) return null;
+  // Page Permissions matrix: Dashboard is Not available (RED) for Client —
+  // must not render, not just show a reduced view. Clients land on
+  // /campaigns instead, which the matrix does grant them.
+  if (isClient(user.role) && !isSuperAdmin(user.id)) redirect("/campaigns");
 
   // activity here is only for computing "Open Flags" below (breached
   // deadline or 48h+ no action, per onboarded creator) — not the same

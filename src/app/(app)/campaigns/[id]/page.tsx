@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { currentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { canCreateCampaign, canSeeInternalCost, canViewCampaign, isClient, serializeCreatorsForClient, filterCreatorsForShortlistScope, isSuperAdmin } from "@/lib/rbac";
+import { canCreateCampaign, canSeeInternalCost, canSetCommercials, canViewCampaign, isClient, serializeCreatorsForClient, filterCreatorsForShortlistScope, isSuperAdmin } from "@/lib/rbac";
 import CampaignHeaderEditor from "@/components/campaign/CampaignHeaderEditor";
 import TeamRow from "@/components/campaign/TeamRow";
 import ClientRow from "@/components/campaign/ClientRow";
@@ -131,8 +131,12 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
             budgetQuoted: campaign.budgetQuoted,
             startDate: campaign.startDate ? campaign.startDate.toISOString() : null,
             goLiveDeadline: campaign.goLiveDeadline ? campaign.goLiveDeadline.toISOString() : null,
-            brief: campaign.brief,
-            platformBriefs: campaign.platformBriefs,
+            // Page Permissions matrix: the internal creative brief (and
+            // per-platform brief notes) are TBM-internal working notes, not
+            // cleared for client eyes — hide them from the client view
+            // rather than relying on the client simply not editing them.
+            brief: isClientView ? null : campaign.brief,
+            platformBriefs: isClientView ? [] : campaign.platformBriefs,
             businessType: campaign.businessType,
             campaignType: campaign.campaignType,
             campaignObjective: campaign.campaignObjective,
@@ -174,7 +178,7 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
             <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Finance</p>
             <FinanceRow
               campaignId={campaign.id}
-              canEdit={canSeeCost}
+              canEdit={canSetCommercials(user.role) || isSuperAdmin(user.id)}
               initial={{
                 financeAgencyFeePercent: campaign.financeAgencyFeePercent,
                 financeClientInvoiceStatus: campaign.financeClientInvoiceStatus,
