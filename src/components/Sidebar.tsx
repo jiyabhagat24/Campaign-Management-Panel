@@ -3,14 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { Role } from "@/lib/constants";
-import { canSeeInternalCost, canManageTeam, canManageClients, canViewPricingQueue, canViewTimeAnalytics, isClient, isSuperAdmin } from "@/lib/rbac";
+import { canManageTeam, canManageClients, canViewPricingQueue, canViewTimeAnalytics, isClient, isSuperAdmin } from "@/lib/rbac";
 import ThemeToggle from "@/components/ThemeToggle";
 import NotificationBell, { type NotificationItem } from "@/components/NotificationBell";
 import {
   LayoutDashboard,
   FolderKanban,
   GitMerge,
-  Receipt,
   Users,
   UserCheck,
   LogOut,
@@ -26,11 +25,6 @@ const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/campaigns", label: "Campaigns", icon: FolderKanban },
   { href: "/pipeline", label: "Pipeline", icon: GitMerge },
-  // Gated below by canSeeInternalCost — every internal role sees this,
-  // only the client never does, matching the redirect on the /finance
-  // page itself. What each of them actually sees there is further scoped
-  // per campaign assignment (campaignVisibilityWhere in rbac.ts).
-  { href: "/finance", label: "Finance", icon: Receipt, financeOnly: true },
   // Campaign Manager + IR Manager — Pricing Queue (task #15), see
   // canViewPricingQueue in rbac.ts.
   { href: "/pricing-queue", label: "Pricing Queue", icon: DollarSign, pricingOnly: true },
@@ -76,7 +70,6 @@ export default function Sidebar({ role, name, notifications, userId }: { role: R
   const filteredNav = NAV.filter((item) => {
     if (superAdmin) return true;
     if (role === "CLIENT" && item.href === "/pipeline") return false;
-    if ("financeOnly" in item && item.financeOnly && (isClient(role) || !canSeeInternalCost(role))) return false;
     if ("teamOnly" in item && item.teamOnly && !canManageTeam(role)) return false;
     if ("clientsOnly" in item && item.clientsOnly && !canManageClients(role)) return false;
     if ("internalOnly" in item && item.internalOnly && isClient(role)) return false;

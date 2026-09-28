@@ -365,9 +365,9 @@ export default function CreatorKanban({
   // alongside ONBOARDED — see creatorKanbanColumn in constants.ts.
   const onboarding = creatorList.filter((c) => c.status === "ONBOARDED" || c.status === "BLOCKED");
 
-  // Finance and Invoicing, Section A — same PayoutCreatorRow shape the
-  // global /finance page builds, just scoped to this one campaign's
-  // onboarded/blocked creators instead of every campaign at once.
+  // Finance and Invoicing, Section A — same PayoutCreatorRow shape used
+  // everywhere else, scoped to this one campaign's onboarded/blocked
+  // creators.
   const payoutRows: PayoutCreatorRow[] = onboarding.map((c) => ({
     id: c.id,
     campaignId,

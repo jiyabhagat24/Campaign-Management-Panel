@@ -49,7 +49,7 @@ export default function ClientInvoicesPanel({
   invoices: ClientInvoiceRow[];
   // "Total quoted cost at which the campaign closed on the client side" —
   // the sum of onboarded creators' Final Quoted Cost (falling back to
-  // Quoted Cost), same computation as the global /finance page's Section B,
+  // Quoted Cost), same computation used everywhere else in Finance and Invoicing,
   // not Campaign.budgetQuoted (an optional top-level estimate that's often
   // left unset).
   finalClosedCost: number | null;

@@ -65,7 +65,7 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
   const onboardingCreators = campaign.creators.filter((c) => c.status === "ONBOARDED" || c.status === "BLOCKED");
   // Finance and Invoicing, Section B: "Final Closed Cost" is the sum of
   // each ONBOARDED creator's own Final Quoted Cost (falling back to Quoted
-  // Cost) — same computation as the global /finance page, not
+  // Cost) — same computation used in the dashboard's Finance Table, not
   // Campaign.budgetQuoted (an optional top-level estimate, often unset).
   const onboardedOnly = campaign.creators.filter((c) => c.status === "ONBOARDED");
   const finalClosedCost = onboardedOnly.length > 0 ? onboardedOnly.reduce((s, c) => s + (c.finalQuotedCost ?? c.quotedCost ?? 0), 0) : null;

@@ -171,11 +171,11 @@ export default async function DashboardPage() {
     };
   });
 
-  // The sheet's "Finance Table" section — moved onto the dashboard itself
-  // (per explicit instruction) rather than living only on the separate
-  // /finance page, which now holds the same table for anyone who wants a
-  // dedicated, less-crowded view of just this report. Built from the same
-  // `campaigns` fetch above, no second query. Only ACTIVE/COMPLETED
+  // The sheet's "Finance Table" section — lives on the dashboard itself.
+  // The old standalone /finance page (a portfolio-wide Section A/B report)
+  // was removed once that same breakdown moved onto each campaign's own
+  // "Finance and Invoicing" tab. Built from the same `campaigns` fetch
+  // above, no second query. Only ACTIVE/COMPLETED
   // campaigns show here — a paused or cancelled campaign's numbers
   // shouldn't appear in the live finance picture (FINANCE_VISIBLE_STATUSES).
   // Not computed at all for whoever can't see it (rather than computed and

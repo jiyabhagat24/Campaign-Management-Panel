@@ -726,31 +726,8 @@ export async function updateCreatorPayout(
     await notifyOrgRole("IR_MANAGER", payoutTitle, payoutBody);
   }
 
-  revalidatePath("/finance");
   revalidatePath("/dashboard");
-}
-
-// Finance & Invoicing — Client side (section B). Deliberately just a
-// boolean toggle, distinct from the richer financeClientInvoiceStatus used
-// by the Finance Table — see the schema comment on financeInvoiced.
-export async function updateCampaignInvoiced(campaignId: string, invoiced: boolean) {
-  const user = await requireUser();
-  if (!canSeeInternalCost(user.role)) throw new Error("Not authorized to edit invoicing status.");
-
-  await prisma.campaign.update({ where: { id: campaignId }, data: { financeInvoiced: invoiced } });
-
-  await logActivity({
-    campaignId,
-    actorId: user.id,
-    actorName: user.name,
-    action: "CAMPAIGN_INVOICED_UPDATED",
-    entityType: "Campaign",
-    entityId: campaignId,
-    meta: { invoiced },
-  });
-
-  revalidatePath("/finance");
-  revalidatePath("/dashboard");
+  revalidatePath(`/campaigns/${campaignId}`);
 }
 
 // ---------- Client Cash (Steps 28/29) ----------
@@ -3592,8 +3569,8 @@ export async function lockMonth(month: string, auditCorrectionNotes?: string) {
     notifyOrgRole("IR_MANAGER", lockTitle, lockBody, user.id),
   ]);
 
-  revalidatePath("/finance");
   revalidatePath("/admin/months");
+  revalidatePath("/dashboard");
   return record;
 }
 

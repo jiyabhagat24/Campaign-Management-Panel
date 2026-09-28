@@ -86,8 +86,9 @@ export const CAMPAIGN_TYPE_LABELS: Record<CampaignType, string> = {
 };
 
 // Which campaign statuses count toward the money figures shown on the
-// dashboard summary cards, the Finance Table, and the /finance page
-// (creator payouts + client invoicing) — explicit product call: a campaign
+// dashboard summary cards, the Finance Table, and each campaign's own
+// Finance and Invoicing tab (creator payouts + client invoicing) —
+// explicit product call: a campaign
 // that's actively running or wrapped up successfully still counts, one
 // that's paused or dead shouldn't inflate (or appear in) the live financial
 // picture. Does NOT affect the Campaign Table/Directory list itself, which

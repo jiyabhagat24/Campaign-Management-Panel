@@ -575,19 +575,16 @@ export default function PortfolioDashboardClient({
       </div>
 
       {/* Finance Table — the sheet's separate "Finance Table" section,
-          placed directly below the Campaign Table on the dashboard per
-          explicit instruction (the /finance page holds the same report
-          standalone, for a less-crowded view). */}
+          placed directly below the Campaign Table on the dashboard. The
+          standalone /finance page (a portfolio-wide flat report) was
+          removed once the same Section A/B breakdown moved onto each
+          campaign's own "Finance and Invoicing" tab, so there's no separate
+          full-report page to link out to anymore — the per-campaign tab is
+          reached from each campaign directly. */}
       {showFinance && (
         <div>
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-lg font-bold text-slate-900 dark:text-white">Finance Table</h2>
-            <Link
-              href="/finance"
-              className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 transition-colors"
-            >
-              Open full Finance report →
-            </Link>
           </div>
           <FinanceTableClient campaigns={financeCampaigns} />
         </div>
