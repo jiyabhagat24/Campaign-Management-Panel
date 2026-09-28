@@ -15,7 +15,12 @@ import ActionForm from "@/components/ActionForm";
 export default async function EscalationsPage() {
   const user = await currentUser();
   if (!user) redirect("/login");
-  if (isClient(user.role)) redirect("/dashboard");
+  // Page Permissions matrix: clients get Escalations access, scoped to
+  // raising one on a campaign they're on — not the full internal
+  // claim/close/reassign workflow below. listEscalations already returns
+  // only what a client raised themselves; campaignVisibilityWhere already
+  // narrows the campaign dropdown to campaigns they have access to.
+  const clientView = isClient(user.role);
 
   const [escalations, campaigns, internalUsers] = await Promise.all([
     listEscalations(),
@@ -24,7 +29,7 @@ export default async function EscalationsPage() {
       select: { id: true, name: true, brand: true },
       orderBy: { name: "asc" },
     }),
-    prisma.user.findMany({ select: { id: true, name: true, role: true }, orderBy: { name: "asc" } }),
+    clientView ? Promise.resolve([]) : prisma.user.findMany({ select: { id: true, name: true, role: true }, orderBy: { name: "asc" } }),
   ]);
 
   const open = escalations.filter((e) => e.status === "OPEN");
@@ -76,14 +81,16 @@ export default async function EscalationsPage() {
             </option>
           ))}
         </select>
-        <select name="proposedOwnerId" className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:bg-slate-800 dark:border-slate-700 dark:text-white">
-          <option value="">Propose owner (optional)…</option>
-          {internalUsers.map((u) => (
-            <option key={u.id} value={u.id}>
-              {u.name} ({u.role.replace(/_/g, " ")})
-            </option>
-          ))}
-        </select>
+        {!clientView && (
+          <select name="proposedOwnerId" className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:bg-slate-800 dark:border-slate-700 dark:text-white">
+            <option value="">Propose owner (optional)…</option>
+            {internalUsers.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.name} ({u.role.replace(/_/g, " ")})
+              </option>
+            ))}
+          </select>
+        )}
         <input
           name="title"
           required
@@ -150,7 +157,7 @@ export default async function EscalationsPage() {
                     )}
                   </div>
                   <div className="flex flex-shrink-0 gap-2">
-                    {e.status === "OPEN" && (
+                    {!clientView && e.status === "OPEN" && (
                       <ActionForm
                         action={async () => {
                           "use server";
@@ -167,7 +174,7 @@ export default async function EscalationsPage() {
                         </button>
                       </ActionForm>
                     )}
-                    {e.status === "OWNED" && (
+                    {!clientView && e.status === "OWNED" && (
                       <ActionForm
                         action={async (formData: FormData) => {
                           "use server";

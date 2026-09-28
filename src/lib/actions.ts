@@ -3736,6 +3736,11 @@ export async function raiseEscalation(input: {
   const user = await requireUser();
   const title = input.title.trim();
   if (!title) throw new Error("Title is required.");
+  // Page Permissions matrix: clients get Escalations access to raise on
+  // their own campaign, nothing wider — listEscalations already scopes
+  // what they can *see* afterward, but without this check a client could
+  // still raise against any campaignId, not just one they're on.
+  if (isClient(user.role)) await assertClientCampaignAccess(user.id, input.campaignId);
 
   const escalation = await prisma.escalation.create({
     data: {

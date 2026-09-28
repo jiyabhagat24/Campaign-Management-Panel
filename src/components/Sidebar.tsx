@@ -34,7 +34,10 @@ const NAV = [
   // Escalations (task #14) and Action Tracker (task #16) — internal-only,
   // not gated to a single role since any internal role can raise/own an
   // escalation and any internal role logs a client chase.
-  { href: "/escalations", label: "Escalations", icon: AlertTriangle, internalOnly: true },
+  // Escalations: available to clients too (raise-only, scoped to their own
+  // campaigns — see the page and raiseEscalation's assertClientCampaignAccess
+  // check), so no internalOnly flag here.
+  { href: "/escalations", label: "Escalations", icon: AlertTriangle },
   // Action Tracker: internal-only AND not CXO (Page Permissions matrix marks
   // it Not available for CXO — see actionTrackerBlocked below).
   { href: "/action-tracker", label: "Action Tracker", icon: PhoneCall, internalOnly: true, actionTrackerBlocked: true },
