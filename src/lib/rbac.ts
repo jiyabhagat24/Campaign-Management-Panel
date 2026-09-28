@@ -75,15 +75,16 @@ export function canSetCommercials(role: Role) {
 // pings them when a row sits 48h+ unpriced), but still can't set Quoted/
 // Final Cost themselves — that stays Campaign-Manager-exclusive above.
 export function canViewPricingQueue(role: Role) {
-  return canSetCommercials(role) || role === "IR_MANAGER";
+  return canSetCommercials(role) || role === "IR_MANAGER" || role === "BRAND_SOLUTIONS" || role === "CXO";
 }
 
 // Step 7's Time Analytics page — stage-duration reporting (pricing wait,
-// time to onboard, time to go live). Same audience as Pricing Queue plus
-// CXO, since this is oversight/bottleneck reporting rather than a worklist
-// tied to one action a single role performs.
+// time to onboard, time to go live). Same audience as Pricing Queue (which
+// already includes CXO) plus IR Executive, since this is oversight/
+// bottleneck reporting rather than a worklist tied to one action a single
+// role performs.
 export function canViewTimeAnalytics(role: Role) {
-  return canViewPricingQueue(role) || role === "CXO";
+  return canViewPricingQueue(role) || role === "IR_EXECUTIVE";
 }
 
 // IR Intern: works shortlisting/onboarding rows like an IR Executive, and
