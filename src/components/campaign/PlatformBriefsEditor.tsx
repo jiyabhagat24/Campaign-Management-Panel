@@ -314,11 +314,7 @@ function DeliverablesField({
   return (
     <div>
       <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Deliverables</label>
-      {categories.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-slate-300 px-3 py-2 text-xs text-slate-400 dark:border-slate-700 dark:text-slate-500">
-          Pick a category above — deliverables are tracked per category.
-        </p>
-      ) : (
+      {categories.length > 0 && (
         <div className="space-y-2">
           {categories.map((category) => (
             <div key={category} className="rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-950">
