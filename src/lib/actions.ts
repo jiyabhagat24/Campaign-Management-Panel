@@ -2605,6 +2605,147 @@ export async function updateContentStatus(deliverableId: string, contentStatus: 
   revalidatePath(`/campaigns/${deliverable.creator.campaignId}`);
 }
 
+// Page Permissions matrix: the client is supposed to be the one who
+// approves (or kicks back) a script/video once it's their turn — but
+// updateScriptStatus/updateContentStatus above gate on isCreatorPOC, which
+// only ever matches a User.id (an internal team member). A Client account
+// can never be a creator's pocUserId, so clients had no way to act at all;
+// the UI just showed them a read-only badge. These two actions are the
+// client-side equivalent: gated on campaign access (CampaignClientAccess)
+// instead of POC assignment, and only usable while the ball is actually on
+// the client (the exact statuses ballOwnerForScriptStatus/
+// ballOwnerForContentStatus already mark CLIENT) so a client can't jump the
+// queue and "approve" something still with TBM or the creator.
+const CLIENT_SCRIPT_WAITING_STATUSES = new Set(["CONCEPT_APPROVAL", "SENT_FOR_APPROVAL"]);
+const CLIENT_CONTENT_WAITING_STATUSES = new Set(["EXTERNAL_APPROVAL"]);
+
+async function assertClientCampaignAccess(userId: string, campaignId: string) {
+  if (isSuperAdmin(userId)) return;
+  const access = await prisma.campaignClientAccess.findFirst({ where: { campaignId, clientId: userId } });
+  if (!access) throw new Error("You do not have access to this campaign.");
+}
+
+export async function clientRespondToScript(deliverableId: string, decision: "APPROVE" | "CHANGES_REQUESTED", feedback?: string) {
+  const user = await requireUser();
+  if (!isClient(user.role) && !isSuperAdmin(user.id)) throw new Error("Only a client login can respond to a script here.");
+
+  const owner = await prisma.deliverable.findUnique({
+    where: { id: deliverableId },
+    select: { scriptStatus: true, creatorId: true, creator: { select: { campaignId: true, name: true, pocUserId: true } } },
+  });
+  if (!owner) throw new Error("Deliverable not found");
+  await assertClientCampaignAccess(user.id, owner.creator.campaignId);
+
+  const current = owner.scriptStatus;
+  if (!current || !CLIENT_SCRIPT_WAITING_STATUSES.has(current)) {
+    throw new Error("This script isn't currently waiting on your review.");
+  }
+
+  const isApproving = decision === "APPROVE";
+  // Concept approval and final script approval share the same client-facing
+  // "waiting on you" state but resolve to different next statuses on
+  // approval — CONCEPT_APPROVAL moves to CONCEPT_APPROVED (creator still
+  // has to write the full script), SENT_FOR_APPROVAL moves straight to
+  // APPROVED (script is locked). A rejection from either always lands on
+  // FEEDBACK, same as the internal dropdown's "Feedback marked" option.
+  const nextStatus = isApproving ? (current === "CONCEPT_APPROVAL" ? "CONCEPT_APPROVED" : "APPROVED") : "FEEDBACK";
+
+  const deliverable = await prisma.deliverable.update({
+    where: { id: deliverableId },
+    data: {
+      scriptStatus: nextStatus,
+      ...(nextStatus === "APPROVED" ? { scriptApprovedAt: new Date() } : {}),
+    },
+    include: { creator: true },
+  });
+
+  const scriptBallOwner = ballOwnerForScriptStatus(nextStatus);
+  if (scriptBallOwner) {
+    await prisma.creator.update({ where: { id: deliverable.creatorId }, data: { ballOwner: scriptBallOwner } });
+  }
+
+  await logActivity({
+    campaignId: deliverable.creator.campaignId,
+    actorId: user.id,
+    actorName: user.name,
+    action: isApproving ? "SCRIPT_APPROVED" : "SCRIPT_CHANGES_REQUESTED",
+    entityType: "Deliverable",
+    entityId: deliverable.id,
+    meta: { scriptStatus: nextStatus, feedback: feedback ?? null },
+  });
+
+  if (owner.creator.pocUserId) {
+    await notify({
+      userId: owner.creator.pocUserId,
+      channel: "INSTANT",
+      title: isApproving ? `Script approved by client` : `Client requested script changes`,
+      body: isApproving
+        ? `The client approved ${owner.creator.name}'s script.`
+        : `The client requested changes on ${owner.creator.name}'s script${feedback ? `: "${feedback}"` : "."}`,
+    });
+  }
+
+  revalidatePath(`/campaigns/${deliverable.creator.campaignId}`);
+}
+
+export async function clientRespondToContent(deliverableId: string, decision: "APPROVE" | "CHANGES_REQUESTED", feedback?: string) {
+  const user = await requireUser();
+  if (!isClient(user.role) && !isSuperAdmin(user.id)) throw new Error("Only a client login can respond to content here.");
+
+  const owner = await prisma.deliverable.findUnique({
+    where: { id: deliverableId },
+    select: { contentStatus: true, creatorId: true, creator: { select: { campaignId: true, name: true, pocUserId: true } } },
+  });
+  if (!owner) throw new Error("Deliverable not found");
+  await assertClientCampaignAccess(user.id, owner.creator.campaignId);
+
+  const current = owner.contentStatus;
+  if (!current || !CLIENT_CONTENT_WAITING_STATUSES.has(current)) {
+    throw new Error("This content isn't currently waiting on your review.");
+  }
+
+  const isApproving = decision === "APPROVE";
+  const nextStatus = isApproving ? "APPROVED" : "CHANGES_REQUESTED";
+
+  const deliverable = await prisma.deliverable.update({
+    where: { id: deliverableId },
+    data: {
+      contentStatus: nextStatus,
+      status: isApproving ? "CONTENT_APPROVED" : "PLANNED",
+      ...(isApproving ? { contentApprovedAt: new Date() } : {}),
+    },
+    include: { creator: true },
+  });
+
+  const contentBallOwner = ballOwnerForContentStatus(nextStatus);
+  if (contentBallOwner) {
+    await prisma.creator.update({ where: { id: deliverable.creatorId }, data: { ballOwner: contentBallOwner } });
+  }
+
+  await logActivity({
+    campaignId: deliverable.creator.campaignId,
+    actorId: user.id,
+    actorName: user.name,
+    action: isApproving ? "CONTENT_APPROVED" : "CONTENT_CHANGES_REQUESTED",
+    entityType: "Deliverable",
+    entityId: deliverable.id,
+    meta: { contentStatus: nextStatus, feedback: feedback ?? null },
+  });
+
+  if (owner.creator.pocUserId) {
+    await notify({
+      userId: owner.creator.pocUserId,
+      channel: "INSTANT",
+      title: isApproving ? `Content approved by client` : `Client requested content changes`,
+      body: isApproving
+        ? `The client approved ${owner.creator.name}'s content.`
+        : `The client requested changes on ${owner.creator.name}'s content${feedback ? `: "${feedback}"` : "."}`,
+    });
+  }
+
+  revalidatePath(`/campaigns/${deliverable.creator.campaignId}`);
+}
+
 export async function addLiveLink(deliverableId: string, liveLink: string) {
   const user = await requireUser();
   if (isClient(user.role)) throw new Error("Clients cannot add live links");

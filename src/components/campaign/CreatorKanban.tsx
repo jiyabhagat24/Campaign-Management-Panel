@@ -29,6 +29,8 @@ import {
   updateScriptStatus,
   updateScriptApprovalDeadline,
   updateContentStatus,
+  clientRespondToScript,
+  clientRespondToContent,
   updateVideoDraftDeadline,
   deleteDeliverable,
   addLiveLink,
@@ -2849,7 +2851,30 @@ function OnboardingCreatorRow({
                 {creator.deliverables.length > 1 && (
                   <span className="w-7 shrink-0 text-[10px] font-bold uppercase text-slate-400 dark:text-slate-500">{platformShortLabel(d.platform)}</span>
                 )}
-                {isClientView || !canExecute ? (
+                {isClientView ? (
+                  <div className="flex flex-col gap-1">
+                    <StatusBadge status={d.scriptStatus ?? "—"} />
+                    {(d.scriptStatus === "CONCEPT_APPROVAL" || d.scriptStatus === "SENT_FOR_APPROVAL") && (
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => withRefresh(clientRespondToScript(d.id, "APPROVE"))}
+                          className="rounded-md bg-emerald-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white hover:bg-emerald-500"
+                        >
+                          Approve
+                        </button>
+                        <button
+                          onClick={() => {
+                            const feedback = window.prompt("What needs to change?") ?? undefined;
+                            withRefresh(clientRespondToScript(d.id, "CHANGES_REQUESTED", feedback));
+                          }}
+                          className="rounded-md border border-slate-300 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                        >
+                          Request changes
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ) : !canExecute ? (
                   <StatusBadge status={d.scriptStatus ?? "—"} />
                 ) : (
                   <select
@@ -2976,7 +3001,30 @@ function OnboardingCreatorRow({
                 {creator.deliverables.length > 1 && (
                   <span className="w-7 shrink-0 text-[10px] font-bold uppercase text-slate-400 dark:text-slate-500">{platformShortLabel(d.platform)}</span>
                 )}
-                {isClientView || !canExecute ? (
+                {isClientView ? (
+                  <div className="flex flex-col gap-1">
+                    <StatusBadge status={d.status === "LIVE" ? "LIVE" : d.contentStatus ?? "—"} />
+                    {d.contentStatus === "EXTERNAL_APPROVAL" && (
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => withRefresh(clientRespondToContent(d.id, "APPROVE"))}
+                          className="rounded-md bg-emerald-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white hover:bg-emerald-500"
+                        >
+                          Approve
+                        </button>
+                        <button
+                          onClick={() => {
+                            const feedback = window.prompt("What needs to change?") ?? undefined;
+                            withRefresh(clientRespondToContent(d.id, "CHANGES_REQUESTED", feedback));
+                          }}
+                          className="rounded-md border border-slate-300 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                        >
+                          Request changes
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ) : !canExecute ? (
                   <StatusBadge status={d.status === "LIVE" ? "LIVE" : d.contentStatus ?? "—"} />
                 ) : (
                   <select
