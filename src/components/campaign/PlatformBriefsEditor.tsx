@@ -128,6 +128,172 @@ function CategoryField({ value, onChange }: { value: string; onChange: (v: strin
   );
 }
 
+// Instagram deliverables are counted (how many Reels/Posts/Carousels/
+// Stories), plus a yes/no repost tickbox. YouTube deliverables are all
+// yes/no deliverable types (no quantities) — a campaign either includes a
+// Dedicated video or it doesn't. Two different shapes, so DeliverablesField
+// below branches on platform rather than sharing one layout.
+const INSTA_QTY_TYPES: { key: "reel" | "post" | "carousel" | "story"; label: string }[] = [
+  { key: "reel", label: "Reel" },
+  { key: "post", label: "Post" },
+  { key: "carousel", label: "Carousel" },
+  { key: "story", label: "Story" },
+];
+
+const YT_TICK_TYPES: { key: "ytShorts" | "ytDedicated" | "ytConceptual" | "ytIntegrated" | "instaReelRepost"; label: string }[] = [
+  { key: "ytShorts", label: "YT Shorts" },
+  { key: "ytDedicated", label: "YT Dedicated" },
+  { key: "ytConceptual", label: "YT Conceptual" },
+  { key: "ytIntegrated", label: "YT Integrated" },
+  { key: "instaReelRepost", label: "Insta Reel Repost" },
+];
+
+// Best-effort re-parse of a previously saved plain-text deliverables string
+// (e.g. "Reel x3, Post x1 + YT Shorts Repost") back into the structured
+// checkbox/quantity state, so editing an existing brief doesn't blank the
+// form out. Anything it can't recognize (old free-text briefs written
+// before this field existed, e.g. "1 Collab Reel + 1 Month Usage Rights")
+// falls through to the "Other" box untouched — no data loss either way.
+function parseInstaDeliverables(raw: string) {
+  let rest = raw;
+  const qty: Record<string, string> = {};
+  for (const { key, label } of INSTA_QTY_TYPES) {
+    const re = new RegExp(`${label}s?\\s*x?\\s*(\\d+)`, "i");
+    const m = rest.match(re);
+    if (m) {
+      qty[key] = m[1];
+      rest = rest.replace(m[0], "");
+    }
+  }
+  const ytShortsRepost = /YT\s+Shorts\s+Repost/i.test(rest);
+  rest = rest.replace(/YT\s+Shorts\s+Repost/i, "");
+  const other = rest.replace(/^[\s,+|;-]+|[\s,+|;-]+$/g, "").replace(/\s{2,}/g, " ").trim();
+  return { qty, ytShortsRepost, other };
+}
+
+function parseYtDeliverables(raw: string) {
+  let rest = raw;
+  const ticks: Record<string, boolean> = {};
+  for (const { key, label } of YT_TICK_TYPES) {
+    const re = new RegExp(label.replace(/\s+/g, "\\s+"), "i");
+    if (re.test(rest)) {
+      ticks[key] = true;
+      rest = rest.replace(re, "");
+    }
+  }
+  const other = rest.replace(/^[\s,+|;-]+|[\s,+|;-]+$/g, "").replace(/\s{2,}/g, " ").trim();
+  return { ticks, other };
+}
+
+// Structured, platform-specific deliverables checklist — replaces the old
+// single free-text "Deliverables" input. Still serializes down to the same
+// plain string CampaignPlatformBrief.deliverables stores (e.g. "Reel x3,
+// Post x1 + YT Shorts Repost"), so no schema change is needed — same
+// "rich UI, flat string storage" pattern SkuField uses on the New Campaign
+// form.
+function DeliverablesField({ platform, value, onChange }: { platform: string; value: string; onChange: (v: string) => void }) {
+  const isInsta = platform === "Instagram";
+  const instaParsed = parseInstaDeliverables(value);
+  const ytParsed = parseYtDeliverables(value);
+
+  const [instaQty, setInstaQty] = useState<Record<string, string>>(instaParsed.qty);
+  const [ytShortsRepost, setYtShortsRepost] = useState(instaParsed.ytShortsRepost);
+  const [ytTicks, setYtTicks] = useState<Record<string, boolean>>(ytParsed.ticks);
+  const [other, setOther] = useState(isInsta ? instaParsed.other : ytParsed.other);
+
+  function serialize(nextInstaQty: Record<string, string>, nextYtShortsRepost: boolean, nextYtTicks: Record<string, boolean>, nextOther: string) {
+    const parts: string[] = [];
+    if (isInsta) {
+      const qtyParts = INSTA_QTY_TYPES.filter(({ key }) => parseInt(nextInstaQty[key] ?? "0", 10) > 0).map(
+        ({ key, label }) => `${label} x${nextInstaQty[key]}`
+      );
+      if (qtyParts.length) parts.push(qtyParts.join(", "));
+      if (nextYtShortsRepost) parts.push("YT Shorts Repost");
+    } else {
+      const tickParts = YT_TICK_TYPES.filter(({ key }) => nextYtTicks[key]).map(({ label }) => label);
+      if (tickParts.length) parts.push(tickParts.join(", "));
+    }
+    if (nextOther.trim()) parts.push(nextOther.trim());
+    return parts.join(" + ");
+  }
+
+  function updateInstaQty(key: string, v: string) {
+    const digits = v.replace(/[^\d]/g, "");
+    const next = { ...instaQty, [key]: digits };
+    setInstaQty(next);
+    onChange(serialize(next, ytShortsRepost, ytTicks, other));
+  }
+
+  function updateYtShortsRepost(checked: boolean) {
+    setYtShortsRepost(checked);
+    onChange(serialize(instaQty, checked, ytTicks, other));
+  }
+
+  function updateYtTick(key: string, checked: boolean) {
+    const next = { ...ytTicks, [key]: checked };
+    setYtTicks(next);
+    onChange(serialize(instaQty, ytShortsRepost, next, other));
+  }
+
+  function updateOther(v: string) {
+    setOther(v);
+    onChange(serialize(instaQty, ytShortsRepost, ytTicks, v));
+  }
+
+  return (
+    <div>
+      <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Deliverables</label>
+      {isInsta ? (
+        <div className="space-y-2">
+          <div className="grid grid-cols-4 gap-2">
+            {INSTA_QTY_TYPES.map(({ key, label }) => (
+              <div key={key}>
+                <label className="mb-0.5 block text-[11px] text-slate-500 dark:text-slate-400">{label}</label>
+                <input
+                  value={instaQty[key] ?? ""}
+                  onChange={(e) => updateInstaQty(key, e.target.value)}
+                  placeholder="0"
+                  inputMode="numeric"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:placeholder:text-slate-500"
+                />
+              </div>
+            ))}
+          </div>
+          <label className="flex w-fit cursor-pointer items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-300">
+            <input
+              type="checkbox"
+              checked={ytShortsRepost}
+              onChange={(e) => updateYtShortsRepost(e.target.checked)}
+              className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            YT Shorts Repost
+          </label>
+        </div>
+      ) : (
+        <div className="flex flex-wrap gap-3">
+          {YT_TICK_TYPES.map(({ key, label }) => (
+            <label key={key} className="flex cursor-pointer items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-300">
+              <input
+                type="checkbox"
+                checked={Boolean(ytTicks[key])}
+                onChange={(e) => updateYtTick(key, e.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+              />
+              {label}
+            </label>
+          ))}
+        </div>
+      )}
+      <input
+        value={other}
+        onChange={(e) => updateOther(e.target.value)}
+        placeholder="Other deliverable notes (optional)"
+        className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:placeholder:text-slate-500"
+      />
+    </div>
+  );
+}
+
 // Same combobox pattern as CategoryField, for one language row.
 function LanguageField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const listId = useId();
@@ -233,18 +399,12 @@ export default function PlatformBriefsEditor({
         >
           <p className="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">{brief.platform} brief</p>
 
-          <div className="grid grid-cols-2 gap-3">
-            <CategoryField value={brief.category} onChange={(v) => updateBrief(brief.platform, { category: v })} />
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Deliverables</label>
-              <input
-                value={brief.deliverables}
-                onChange={(e) => updateBrief(brief.platform, { deliverables: e.target.value })}
-                placeholder="e.g. 1 Collab Reel + 1 Month Usage Rights"
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:placeholder:text-slate-500"
-              />
-            </div>
-          </div>
+          <CategoryField value={brief.category} onChange={(v) => updateBrief(brief.platform, { category: v })} />
+          <DeliverablesField
+            platform={brief.platform}
+            value={brief.deliverables}
+            onChange={(v) => updateBrief(brief.platform, { deliverables: v })}
+          />
 
           <div className="grid grid-cols-2 gap-3">
             <div>
