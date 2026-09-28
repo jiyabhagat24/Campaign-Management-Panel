@@ -249,9 +249,15 @@ function AddTeamMemberForm({ onAdded }: { onAdded: () => void }) {
 export default function TeamManagementClient({
   users,
   currentUserId,
+  readOnly = false,
 }: {
   users: TeamUser[];
   currentUserId: string;
+  // Page Permissions matrix: IR Manager gets read access to People (IR-team
+  // rows only, filtered server-side before this component ever sees the
+  // list) — no add/edit-role/delete/password controls. CXO keeps full
+  // control (readOnly defaults false).
+  readOnly?: boolean;
 }) {
   const [rows, setRows] = useState(users);
   const [pendingId, setPendingId] = useState<string | null>(null);
@@ -304,7 +310,7 @@ export default function TeamManagementClient({
           <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">TheBoredMonkey staff sign in with Google by default — optionally give someone a password too (e.g. for testing a role, or if they can't use Google).</p>
         </div>
 
-        <AddTeamMemberForm onAdded={() => window.location.reload()} />
+        {!readOnly && <AddTeamMemberForm onAdded={() => window.location.reload()} />}
 
         <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white dark:border-slate-800 dark:bg-slate-900">
           <table className="w-full text-left text-sm">
@@ -326,17 +332,25 @@ export default function TeamManagementClient({
                   </td>
                   <td className="px-4 py-3 text-slate-500 dark:text-slate-400">{u.email}</td>
                   <td className="px-4 py-3">
-                    <RoleSelect value={u.role} onChange={(role) => handleRoleChange(u.id, role)} />
-                    {rowError[u.id] && <p className="mt-1 max-w-[220px] text-[10px] font-medium text-rose-600 dark:text-rose-400">{rowError[u.id]}</p>}
+                    {readOnly ? (
+                      <span className={`rounded-lg px-2 py-1 text-[11px] font-bold ${ROLE_BADGE[u.role as Role] ?? ROLE_BADGE.CXO}`}>
+                        {ROLE_LABEL[u.role as Role] ?? u.role}
+                      </span>
+                    ) : (
+                      <>
+                        <RoleSelect value={u.role} onChange={(role) => handleRoleChange(u.id, role)} />
+                        {rowError[u.id] && <p className="mt-1 max-w-[220px] text-[10px] font-medium text-rose-600 dark:text-rose-400">{rowError[u.id]}</p>}
+                      </>
+                    )}
                   </td>
                   <td className="px-4 py-3">
-                    <PasswordControl userId={u.id} />
+                    {!readOnly && <PasswordControl userId={u.id} />}
                   </td>
                   <td className="px-4 py-3 text-xs text-slate-400 dark:text-slate-500">
                     {new Date(u.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
                   </td>
                   <td className="px-4 py-3 text-right">
-                    {u.id !== currentUserId && (
+                    {!readOnly && u.id !== currentUserId && (
                       <button
                         onClick={() => handleDelete(u.id, u.name)}
                         disabled={pendingId === u.id}

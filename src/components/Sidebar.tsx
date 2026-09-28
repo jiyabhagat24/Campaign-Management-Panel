@@ -41,8 +41,11 @@ const NAV = [
   // Action Tracker: internal-only AND not CXO (Page Permissions matrix marks
   // it Not available for CXO — see actionTrackerBlocked below).
   { href: "/action-tracker", label: "Action Tracker", icon: PhoneCall, internalOnly: true, actionTrackerBlocked: true },
-  // CXO-only — the Team admin page (add/re-role/remove logins).
-  { href: "/team", label: "Team", icon: Users, teamOnly: true },
+  // CXO — full Team admin page (add/re-role/remove logins). IR Manager also
+  // gets in, but read-only and IR-team-scoped (see team/page.tsx) — separate
+  // flag so this doesn't widen canManageTeam itself, which still gates the
+  // actual create/update/delete server actions.
+  { href: "/team", label: "Team", icon: Users, teamOrIrManagerOnly: true },
   // CXO + Brand Solutions — client login management (reset password/
   // remove) plus grant/revoke which campaigns each client can see.
   // Separate flag from teamOnly (Team page / Month Lock stay CXO-only).
@@ -76,6 +79,7 @@ export default function Sidebar({ role, name, notifications, userId }: { role: R
     if (superAdmin) return true;
     if (role === "CLIENT" && (item.href === "/pipeline" || item.href === "/dashboard")) return false;
     if ("teamOnly" in item && item.teamOnly && !canManageTeam(role)) return false;
+    if ("teamOrIrManagerOnly" in item && item.teamOrIrManagerOnly && !canManageTeam(role) && role !== "IR_MANAGER") return false;
     if ("clientsOnly" in item && item.clientsOnly && !canManageClients(role)) return false;
     if ("internalOnly" in item && item.internalOnly && isClient(role)) return false;
     if ("actionTrackerBlocked" in item && item.actionTrackerBlocked && role === "CXO") return false;

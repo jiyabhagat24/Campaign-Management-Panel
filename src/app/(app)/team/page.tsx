@@ -2,19 +2,31 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { currentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { canManageTeam } from "@/lib/rbac";
+import { canManageTeam, isSuperAdmin } from "@/lib/rbac";
 import TeamManagementClient from "@/components/team/TeamManagementClient";
 
 // CXO-only admin page — the self-serve replacement for creating User rows
 // by hand (prisma/seed.ts or Prisma Studio). See src/lib/actions.ts's
 // createTeamUser/updateTeamUserRole/deleteTeamUser for the enforcement;
 // this page is just the UI, the real gate is in those server actions.
+//
+// Page Permissions matrix: IR Manager also gets in here, but read-only and
+// scoped to "IR team only" — not the whole roster, and no add/edit/delete
+// controls (those stay CXO-exclusive; createTeamUser/updateTeamUserRole/
+// deleteTeamUser still gate on canManageTeam server-side regardless of what
+// this page renders).
+const IR_TEAM_ROLES = ["IR_MANAGER", "IR_EXECUTIVE", "IR_INTERN"];
+
 export default async function TeamPage() {
   const user = await currentUser();
   if (!user) redirect("/login");
-  if (!canManageTeam(user.role)) redirect("/dashboard");
+  const isIrManager = user.role === "IR_MANAGER";
+  if (!canManageTeam(user.role) && !isIrManager && !isSuperAdmin(user.id)) redirect("/dashboard");
+
+  const readOnly = isIrManager && !isSuperAdmin(user.id);
 
   const users = await prisma.user.findMany({
+    where: readOnly ? { role: { in: IR_TEAM_ROLES } } : undefined,
     orderBy: [{ role: "asc" }, { name: "asc" }],
     select: { id: true, name: true, email: true, role: true, createdAt: true },
   });
@@ -35,6 +47,7 @@ export default async function TeamPage() {
       <TeamManagementClient
         users={users.map((u) => ({ ...u, createdAt: u.createdAt.toISOString() }))}
         currentUserId={user.id}
+        readOnly={readOnly}
       />
     </div>
   );
