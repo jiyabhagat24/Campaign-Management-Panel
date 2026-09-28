@@ -160,7 +160,14 @@ export default async function DashboardPage() {
       financeCreatorPayablePending: showFinance
         ? onboardedCreators.filter((cr) => cr.payoutPaymentStatus !== "PAID").reduce((s, cr) => s + (cr.internalCost ?? 0), 0)
         : 0,
-      financeAgencyFee: c.financeAgencyFee,
+      // Same showFinance gating as every other cost figure above — these
+      // are internal-cost-adjacent (what TBM is billing the client), not
+      // just hidden-in-the-UI for whoever can't see finance, actually
+      // zeroed out server-side so it never reaches their browser payload.
+      financeAgencyFee: showFinance ? c.financeAgencyFee : null,
+      financeAgencyFeePercent: showFinance ? c.financeAgencyFeePercent : null,
+      financeFeeType: showFinance ? c.financeFeeType : null,
+      financeRetainerFee: showFinance ? c.financeRetainerFee : null,
     };
   });
 
@@ -195,6 +202,8 @@ export default async function DashboardPage() {
         .reduce((s, cr) => s + (cr.finalQuotedCost ?? cr.quotedCost ?? 0), 0),
       financeAgencyFee: c.financeAgencyFee,
       financeAgencyFeePercent: c.financeAgencyFeePercent,
+      financeFeeType: c.financeFeeType,
+      financeRetainerFee: c.financeRetainerFee,
       financeClientInvoiceStatus: c.financeClientInvoiceStatus,
       onboardedCreators: c.creators
         .filter((cr) => cr.status === "ONBOARDED" && cr.onboardedAt)

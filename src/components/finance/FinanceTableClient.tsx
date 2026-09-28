@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import BrandAvatar from "@/components/campaign/BrandAvatar";
-import { INVOICE_STATUS_LABELS, type InvoiceStatus } from "@/lib/constants";
+import { INVOICE_STATUS_LABELS, type InvoiceStatus, ASSOCIATION_TYPE_LABELS, type FeeType } from "@/lib/constants";
 import { Calendar, X, Receipt } from "lucide-react";
 
 export type FinanceCampaignRow = {
@@ -20,6 +20,12 @@ export type FinanceCampaignRow = {
   internalValue: number;
   financeAgencyFee: number | null;
   financeAgencyFeePercent: number | null;
+  // Same PERCENTAGE/RETAINER split as FinanceRow.tsx on the campaign page —
+  // a Retainer-basis campaign has financeRetainerFee set, not
+  // financeAgencyFeePercent, so the Fee columns below need to know which
+  // applies rather than always reading the percentage field.
+  financeFeeType: string | null;
+  financeRetainerFee: number | null;
   financeClientInvoiceStatus: string | null;
   onboardedCreators: { onboardedAt: string; deliverableCount: number }[];
 };
@@ -130,8 +136,8 @@ export default function FinanceTableClient({ campaigns }: { campaigns: FinanceCa
                 <th className="sticky top-0 z-30 w-[140px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left dark:border-slate-700 dark:bg-slate-800">Quoted Value</th>
                 <th className="sticky top-0 z-30 w-[140px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left dark:border-slate-700 dark:bg-slate-800">Internal Value</th>
                 <th className="sticky top-0 z-30 w-[110px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left dark:border-slate-700 dark:bg-slate-800">Margin %</th>
-                <th className="sticky top-0 z-30 w-[130px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left dark:border-slate-700 dark:bg-slate-800">Agency Fee %</th>
-                <th className="sticky top-0 z-30 w-[140px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left dark:border-slate-700 dark:bg-slate-800">Agency Fee Value</th>
+                <th className="sticky top-0 z-30 w-[130px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left dark:border-slate-700 dark:bg-slate-800">Fee Type</th>
+                <th className="sticky top-0 z-30 w-[140px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left dark:border-slate-700 dark:bg-slate-800">Fee Value</th>
               </tr>
             </thead>
             <tbody className="font-medium">
@@ -166,9 +172,17 @@ export default function FinanceTableClient({ campaigns }: { campaigns: FinanceCa
                       {margin !== null ? `${margin.toFixed(1)}%` : "—"}
                     </td>
                     <td className="border-b border-slate-100 px-4 py-3 text-left text-slate-700 dark:border-slate-800 dark:text-slate-200">
-                      {c.financeAgencyFeePercent !== null ? `${c.financeAgencyFeePercent}%` : "—"}
+                      {c.financeFeeType === "RETAINER" || c.financeFeeType === "PERCENTAGE"
+                        ? ASSOCIATION_TYPE_LABELS[c.financeFeeType as FeeType]
+                        : "—"}
                     </td>
-                    <td className="border-b border-slate-100 px-4 py-3 text-left text-slate-700 dark:border-slate-800 dark:text-slate-200">{money(c.financeAgencyFee)}</td>
+                    <td className="border-b border-slate-100 px-4 py-3 text-left text-slate-700 dark:border-slate-800 dark:text-slate-200">
+                      {c.financeFeeType === "RETAINER"
+                        ? money(c.financeRetainerFee)
+                        : c.financeAgencyFeePercent !== null
+                        ? `${c.financeAgencyFeePercent}%`
+                        : "—"}
+                    </td>
                   </tr>
                 );
               })}

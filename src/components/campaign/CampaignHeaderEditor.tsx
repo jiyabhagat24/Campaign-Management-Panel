@@ -333,22 +333,6 @@ export default function CampaignHeaderEditor({
             </div>
           )}
 
-          <div
-            className={`flex items-center gap-2 text-xs font-medium border rounded-xl px-3 py-2 ${
-              breached
-                ? "bg-rose-50 border-rose-200 text-rose-700 dark:bg-rose-950/50 dark:border-rose-800 dark:text-rose-300"
-                : atRisk
-                ? "bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-950/50 dark:border-amber-800 dark:text-amber-300"
-                : "bg-slate-50 border-slate-200/70 text-slate-600 dark:bg-slate-800/50 dark:border-slate-700 dark:text-slate-300"
-            }`}
-          >
-            <Clock className="h-4 w-4" />
-            <span>Deadline:</span>
-            <span className="font-bold">
-              {campaign.goLiveDeadline ? new Date(campaign.goLiveDeadline).toLocaleDateString("en-IN") : "—"}
-            </span>
-          </div>
-
           {campaign.budgetQuoted && (
             <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-xl px-3 py-2 dark:bg-indigo-950/50 dark:border-indigo-800 dark:text-indigo-300">
               <IndianRupee className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />

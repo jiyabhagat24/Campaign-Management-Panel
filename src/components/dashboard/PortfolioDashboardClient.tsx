@@ -38,6 +38,13 @@ export type DashboardCampaignRow = {
   financeValueOfClearedDue: number | null;
   financeCreatorPayablePending: number | null;
   financeAgencyFee: number | null;
+  // Same PERCENTAGE/RETAINER split as FinanceRow.tsx and AssociationTypeField
+  // — the Agency Fee column below needs to know which one applies so a
+  // Retainer-basis campaign shows its retainer amount instead of a blank
+  // "—" just because financeAgencyFeePercent was never set for it.
+  financeAgencyFeePercent: number | null;
+  financeFeeType: string | null;
+  financeRetainerFee: number | null;
 };
 
 const money = formatCompactINR;
@@ -531,7 +538,19 @@ export default function PortfolioDashboardClient({
                     )}
                     {!isClientView && (
                       <td className="border-b border-slate-100 px-4 py-3 text-left text-slate-700 dark:border-slate-800 dark:text-slate-200">
-                        {c.financeAgencyFee ? `₹${c.financeAgencyFee.toLocaleString("en-IN")}` : "—"}
+                        {/* Retainer-basis campaigns never had financeAgencyFee
+                            set (only financeRetainerFee is) — show that
+                            instead of a blank "—", same association-type
+                            logic FinanceRow.tsx uses on the campaign page. */}
+                        {c.financeFeeType === "RETAINER"
+                          ? c.financeRetainerFee
+                            ? `₹${c.financeRetainerFee.toLocaleString("en-IN")} (Retainer)`
+                            : "—"
+                          : c.financeAgencyFeePercent !== null
+                          ? `${c.financeAgencyFeePercent}%`
+                          : c.financeAgencyFee
+                          ? `₹${c.financeAgencyFee.toLocaleString("en-IN")}`
+                          : "—"}
                       </td>
                     )}
                     {!isClientView && (
