@@ -761,6 +761,15 @@ model YoutubeChannelCache {
   // does from InstagramProfileCache.username.
   channelTitle          String?
   channelHandle         String?
+  // Business/contact email and phone, if captured — same idea as
+  // InstagramProfileCache.contactEmail (useful for outreach), shared across
+  // every campaign that adds this channel rather than re-entered per
+  // campaign. The official YouTube Data API doesn't return a channel's
+  // business contact info, so this isn't auto-fetched by lookupYoutubeChannelAction
+  // — it's a column only for now, filled in manually/by a future capture
+  // path, same as contactEmail was before the panel had UI for it.
+  contactEmail          String?
+  contactPhone          String?
   capturedAt            DateTime @default(now())
   updatedAt             DateTime @updatedAt
 }
