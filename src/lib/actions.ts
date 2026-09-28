@@ -2038,6 +2038,18 @@ export async function updateProductStatus(deliverableId: string, productStatus: 
 // creator (still stored per-Deliverable row under the hood — no schema
 // change — just always kept in sync) so the UI can show a single dropdown
 // instead of one repeated per deliverable.
+// Per spec Step 17: the panel's most important automation — ball owner
+// moves automatically off whatever status just got selected, not computed
+// on render. Still shipping/logistics -> TBM chasing it; delivered/installed
+// -> the ball's with the Creator to actually shoot. "Product not delivered"
+// itself is handled by the separate two-person pause flow (triggerPause),
+// not a status value here, so it isn't in this map.
+function ballOwnerForProductStatus(status: string): string | null {
+  if (status === "ORDERED" || status === "IN_TRANSIT" || status === "INSTALLATION_PENDING") return "TBM";
+  if (status === "DELIVERED" || status === "INSTALLED") return "CREATOR";
+  return null;
+}
+
 export async function updateCreatorProductStatus(creatorId: string, productStatus: string, productEta?: string) {
   const user = await requireUser();
   const creator = await prisma.creator.findUnique({ where: { id: creatorId }, select: { campaignId: true, pocUserId: true } });
@@ -2050,6 +2062,10 @@ export async function updateCreatorProductStatus(creatorId: string, productStatu
     where: { creatorId },
     data: { productStatus, ...(productEta ? { productEta: new Date(productEta) } : {}) },
   });
+  const productBallOwner = ballOwnerForProductStatus(productStatus);
+  if (productBallOwner) {
+    await prisma.creator.update({ where: { id: creatorId }, data: { ballOwner: productBallOwner } });
+  }
   await logActivity({
     campaignId: creator.campaignId,
     actorId: user.id,
@@ -2060,6 +2076,21 @@ export async function updateCreatorProductStatus(creatorId: string, productStatu
     meta: { productStatus },
   });
   revalidatePath(`/campaigns/${creator.campaignId}`);
+}
+
+// Per spec Step 17 mapping: "Script sent for approval" -> Client;
+// "Concept development" -> TBM (explicit in the spec); everything else is a
+// reasonable extrapolation of the same pattern for this dropdown's fuller
+// set of stages (Concept approval/Feedback/Revised/Approved don't have
+// literal spec names, so they follow the same "whoever needs to act next
+// holds the ball" logic the named ones establish).
+function ballOwnerForScriptStatus(status: string): string | null {
+  if (status === "CONCEPT_DEVELOPMENT") return "TBM";
+  if (status === "CONCEPT_APPROVAL" || status === "SENT_FOR_APPROVAL") return "CLIENT";
+  if (status === "CONCEPT_APPROVED" || status === "FEEDBACK") return "CREATOR";
+  if (status === "REVISED") return "CLIENT";
+  if (status === "APPROVED") return "TBM";
+  return null;
 }
 
 export async function updateScriptStatus(deliverableId: string, scriptStatus: string, scriptDocUrl?: string) {
@@ -2084,6 +2115,10 @@ export async function updateScriptStatus(deliverableId: string, scriptStatus: st
     },
     include: { creator: true },
   });
+  const scriptBallOwner = ballOwnerForScriptStatus(scriptStatus);
+  if (scriptBallOwner) {
+    await prisma.creator.update({ where: { id: deliverable.creatorId }, data: { ballOwner: scriptBallOwner } });
+  }
   await logActivity({
     campaignId: deliverable.creator.campaignId,
     actorId: user.id,
@@ -2139,6 +2174,20 @@ export async function updateVideoDraftDeadline(creatorId: string, deadline: stri
   revalidatePath(`/campaigns/${creator.campaignId}`);
 }
 
+// Per spec Step 17 mapping: "In shoot" -> Creator; "Sent for approval" (the
+// spec's "Video sent for approval") -> Client; "Internal quality check" ->
+// TBM — all three explicit in the spec. Changes Requested/Approved follow
+// the same "whoever acts next" logic (creator redoes it on a change
+// request; TBM's turn to add the live link once approved).
+function ballOwnerForContentStatus(status: string): string | null {
+  if (status === "IN_SHOOT") return "CREATOR";
+  if (status === "INTERNAL_APPROVAL") return "TBM";
+  if (status === "EXTERNAL_APPROVAL") return "CLIENT";
+  if (status === "CHANGES_REQUESTED") return "CREATOR";
+  if (status === "APPROVED") return "TBM";
+  return null;
+}
+
 export async function updateContentStatus(deliverableId: string, contentStatus: string) {
   const user = await requireUser();
   const owner = await prisma.deliverable.findUnique({ where: { id: deliverableId }, select: { creator: { select: { pocUserId: true } } } });
@@ -2168,6 +2217,11 @@ export async function updateContentStatus(deliverableId: string, contentStatus: 
         body: `${deliverable.creator.name}'s content on ${deliverable.creator.campaign.name} is ready for your approval.`,
       });
     }
+  }
+
+  const contentBallOwner = ballOwnerForContentStatus(contentStatus);
+  if (contentBallOwner) {
+    await prisma.creator.update({ where: { id: deliverable.creatorId }, data: { ballOwner: contentBallOwner } });
   }
 
   await logActivity({
