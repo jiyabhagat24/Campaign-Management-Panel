@@ -54,7 +54,7 @@ export default async function PipelinePage() {
   for (const c of campaigns) byColumn[campaignColumn(c.creators)].push(c);
 
   return (
-    <div className="flex h-screen flex-col p-8 overflow-hidden">
+    <div className="flex h-dvh flex-col p-8 overflow-hidden">
       {/* Header */}
       <div className="border-b border-slate-200/60 dark:border-slate-800 pb-5 flex-shrink-0">
         <div className="flex items-center gap-2">
