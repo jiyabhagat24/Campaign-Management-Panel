@@ -986,6 +986,66 @@ export async function removeTeamMember(teamMemberId: string, campaignId: string)
 
 // ---------- Creator / Shortlist ----------
 
+// The write-back half of the "static creator directory" round-trip: name,
+// location, language and category almost never change for a given
+// Instagram username or YouTube channel, so once someone fills them in on
+// one Creator row, every other campaign that adds the same profile should
+// get them for free instead of re-typing — this upserts whatever was just
+// entered into the matching InstagramProfileCache/YoutubeChannelCache row
+// (keyed by username/channelUrl, same identity the paste-URL auto-fill
+// already reads from), the read half being handleAutoFill/
+// handleYoutubeAutoFill in CreatorKanban.tsx via lookupInstagramProfileAction/
+// lookupYoutubeChannelAction. Only ever fills a blank on the cache row —
+// never overwrites a value already captured there, so one campaign's
+// possibly-wrong entry can't clobber data another campaign already
+// confirmed. Fire-and-forget from the caller's perspective: failures here
+// (e.g. cache row doesn't exist yet for a channel with no prior lookup)
+// are swallowed so they never block the actual Creator save.
+async function syncCreatorStaticProfileToCache(creator: {
+  profileUrl: string | null;
+  youtubeUrl: string | null;
+  channelHandle: string | null;
+  location: string | null;
+  language: string | null;
+  category: string | null;
+}) {
+  if (!creator.location && !creator.language && !creator.category) return;
+
+  try {
+    const igUsername = extractInstagramUsername(creator.channelHandle || creator.profileUrl || "");
+    if (igUsername) {
+      const cached = await prisma.instagramProfileCache.findUnique({ where: { username: igUsername } });
+      if (cached) {
+        await (prisma.instagramProfileCache as any).update({
+          where: { username: igUsername },
+          data: {
+            ...(!( cached as any).location && creator.location ? { location: creator.location } : {}),
+            ...(!(cached as any).language && creator.language ? { language: creator.language } : {}),
+            ...(!(cached as any).category && creator.category ? { category: creator.category } : {}),
+          },
+        });
+      }
+    }
+
+    if (creator.youtubeUrl) {
+      const cacheKey = normalizeYoutubeChannelUrl(creator.youtubeUrl);
+      const cached = await prisma.youtubeChannelCache.findUnique({ where: { channelUrl: cacheKey } });
+      if (cached) {
+        await (prisma.youtubeChannelCache as any).update({
+          where: { channelUrl: cacheKey },
+          data: {
+            ...(!(cached as any).location && creator.location ? { location: creator.location } : {}),
+            ...(!(cached as any).language && creator.language ? { language: creator.language } : {}),
+            ...(!(cached as any).category && creator.category ? { category: creator.category } : {}),
+          },
+        });
+      }
+    }
+  } catch {
+    // Best-effort — never let a cache sync failure block the real save.
+  }
+}
+
 export async function addCreator(campaignId: string, formData: FormData, force = false) {
   const user = await requireUser();
   if (!canOperateShortlist(user.role) && !isSuperAdmin(user.id)) throw new Error("Not authorized to add creators to the shortlist.");
@@ -1011,6 +1071,13 @@ export async function addCreator(campaignId: string, formData: FormData, force =
   const youtubeLongMedianERPercent = Number(formData.get("youtubeLongMedianERPercent") ?? 0) || null;
   const youtubeShortsMedianViews = Number(formData.get("youtubeShortsMedianViews") ?? 0) || null;
   const youtubeShortsMedianERPercent = Number(formData.get("youtubeShortsMedianERPercent") ?? 0) || null;
+  // Carried over the same way as the YouTube stats above, from whichever
+  // platform cache (Instagram/YouTube) already had these static attributes
+  // captured for this exact username/channel — see handleAutoFill/
+  // handleYoutubeAutoFill's hidden-input population in CreatorKanban.tsx.
+  const location = String(formData.get("location") ?? "").trim() || null;
+  const language = String(formData.get("language") ?? "").trim() || null;
+  const category = String(formData.get("category") ?? "").trim() || null;
   if (!name || !channelHandle) throw new Error("Name and handle are required");
   if (profileUrl && !isValidUrl(profileUrl)) throw new Error("Instagram profile must be a valid URL.");
   if (youtubeUrl && !isValidUrl(youtubeUrl)) throw new Error("YouTube channel must be a valid URL.");
@@ -1066,6 +1133,12 @@ export async function addCreator(campaignId: string, formData: FormData, force =
         ...(youtubeShortsMedianERPercent !== null ? { youtubeShortsMedianERPercent } : {}),
         ...(internalCost !== null ? { internalCost } : {}),
         ...(internalCost !== null && !(existing as any).pricingQueueEnteredAt ? { pricingQueueEnteredAt: new Date() } : {}),
+        // Only overwrite if this row doesn't already have a value and this
+        // submission brought one — never clobber a value someone already
+        // set inline on the existing row with a blank from a re-add.
+        ...(location && !existing.location ? { location } : {}),
+        ...(language && !existing.language ? { language } : {}),
+        ...(category && !existing.category ? { category } : {}),
         shortlistDeliverables: newDeliverableTypes.length ? { create: newDeliverableTypes.map((type) => ({ deliverableType: type })) } : undefined,
       } as any,
       include: {
@@ -1087,6 +1160,7 @@ export async function addCreator(campaignId: string, formData: FormData, force =
     });
 
     await autoActivateCampaign(campaignId, user.id, user.name);
+    await syncCreatorStaticProfileToCache(updated);
 
     revalidatePath(`/campaigns/${campaignId}`);
     return updated;
@@ -1113,6 +1187,9 @@ export async function addCreator(campaignId: string, formData: FormData, force =
       youtubeLongMedianERPercent,
       youtubeShortsMedianViews,
       youtubeShortsMedianERPercent,
+      location,
+      language,
+      category,
       internalCost,
       quotedCost,
       ...(internalCost !== null ? { pricingQueueEnteredAt: new Date() } : {}),
@@ -1148,6 +1225,7 @@ export async function addCreator(campaignId: string, formData: FormData, force =
   // Assigned in assignTeamMember, so nobody has to remember to flip a
   // dropdown by hand.
   await autoActivateCampaign(campaignId, user.id, user.name);
+  await syncCreatorStaticProfileToCache(creator);
 
   revalidatePath(`/campaigns/${campaignId}`);
   return creator;
@@ -1203,7 +1281,10 @@ export async function updateCreatorShortlist(
     return { error: "Not authorized to edit shortlist details." };
   }
 
-  const creator = await prisma.creator.findUnique({ where: { id: creatorId }, select: { campaignId: true, internalCost: true } });
+  const creator = await prisma.creator.findUnique({
+    where: { id: creatorId },
+    select: { campaignId: true, internalCost: true, profileUrl: true, youtubeUrl: true, channelHandle: true },
+  });
   if (!creator) return { error: "Creator not found" };
 
   // No cost field can go negative — checked before anything else.
@@ -1231,6 +1312,19 @@ export async function updateCreatorShortlist(
     } as any,
   });
 
+  // Whoever just typed a Language/Location/Category value inline on this
+  // row feeds the shared Instagram/YouTube cache too — see
+  // syncCreatorStaticProfileToCache's docstring for the full round-trip.
+  if (fields.language !== undefined || fields.location !== undefined || fields.category !== undefined) {
+    await syncCreatorStaticProfileToCache({
+      profileUrl: creator.profileUrl,
+      youtubeUrl: creator.youtubeUrl,
+      channelHandle: creator.channelHandle,
+      location: fields.location ?? null,
+      language: fields.language ?? null,
+      category: fields.category ?? null,
+    });
+  }
 
   revalidatePath(`/campaigns/${creator.campaignId}`);
   return { error: null };
@@ -1446,6 +1540,13 @@ export async function lookupInstagramProfileAction(profileUrl: string) {
       avgViews: cached.avgViews,
       engagementRate: cached.engagementRate,
       capturedAt: cached.capturedAt,
+      // Static attributes (never re-fetched, only ever set by
+      // syncCreatorStaticProfileToCache below) — cast since the local dev
+      // Prisma client hasn't been regenerated against the new columns yet
+      // (see withYtMeta's comment for why).
+      location: (cached as any).location ?? null,
+      language: (cached as any).language ?? null,
+      category: (cached as any).category ?? null,
     },
   };
 }
@@ -1464,8 +1565,10 @@ const YOUTUBE_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 1 day — stays within the 
 // runs `prisma generate`) — this cast only covers the local dev client here
 // not having been regenerated against them yet (no network to Prisma's
 // binary host in this sandbox).
-function withYtMeta<T>(row: T): T & { channelTitle: string | null; channelHandle: string | null } {
-  return row as T & { channelTitle: string | null; channelHandle: string | null };
+function withYtMeta<T>(
+  row: T
+): T & { channelTitle: string | null; channelHandle: string | null; location: string | null; language: string | null; category: string | null } {
+  return row as T & { channelTitle: string | null; channelHandle: string | null; location: string | null; language: string | null; category: string | null };
 }
 
 export async function lookupYoutubeChannelAction(channelUrl: string) {

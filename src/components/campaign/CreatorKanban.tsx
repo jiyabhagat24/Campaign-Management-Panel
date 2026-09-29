@@ -1004,6 +1004,19 @@ function AddCreatorForm({
     if (!nameInput.value.trim()) nameInput.value = data.username;
     setInstagramAdded(true);
 
+    // Static attributes (location/language/category) — pulled from your
+    // creator database the same way followers/engagement above are, filled
+    // only if this form doesn't already have a value (e.g. the YouTube
+    // lookup already set one first).
+    const setStatic = (name: string, value: string | null | undefined) => {
+      if (!value) return;
+      const el = form.elements.namedItem(name) as HTMLInputElement | null;
+      if (el && !el.value.trim()) el.value = value;
+    };
+    setStatic("location", data.location);
+    setStatic("language", data.language);
+    setStatic("category", data.category);
+
     const parts = [`${data.followers.toLocaleString("en-IN")} followers`];
     if (data.engagementRate !== null && data.engagementRate !== undefined) parts.push(`${data.engagementRate}% engagement`);
     if (data.avgViews !== null && data.avgViews !== undefined) parts.push(`${data.avgViews.toLocaleString("en-IN")} avg views`);
@@ -1060,6 +1073,18 @@ function AddCreatorForm({
     setHidden("youtubeShortsMedianViews", data.shortsMedianViews);
     setHidden("youtubeShortsMedianERPercent", data.shortsMedianERPercent);
     setYoutubeAdded(true);
+
+    // Static attributes — same "fill only if this form doesn't already have
+    // a value" rule as the Instagram lookup, so whichever platform's cache
+    // gets looked up first wins and the second lookup doesn't clobber it.
+    const setStaticYt = (name: string, value: string | null | undefined) => {
+      if (!value) return;
+      const el = form.elements.namedItem(name) as HTMLInputElement | null;
+      if (el && !el.value.trim()) el.value = value;
+    };
+    setStaticYt("location", data.location);
+    setStaticYt("language", data.language);
+    setStaticYt("category", data.category);
 
     const parts: string[] = [];
     if (data.subscribers !== null && data.subscribers !== undefined) parts.push(`${data.subscribers.toLocaleString("en-IN")} subscribers`);
@@ -1169,6 +1194,20 @@ function AddCreatorForm({
               Instagram/YouTube URL pasted below (or the name, as a last
               resort). See the onSubmit handler above. */}
           <input type="hidden" name="channelHandle" />
+          {/* Static profile attributes (name/location/language/category) —
+              never shown as inputs on this form itself, just carried
+              through from whichever cache (Instagram/YouTube) already had
+              them captured for this exact username/channel, so a creator
+              who's been shortlisted on an earlier campaign doesn't need
+              these re-typed here. Populated by handleAutoFill/
+              handleYoutubeAutoFill below; if neither cache has them yet,
+              these stay blank and get filled in the normal way afterward
+              from the Shortlist table's Language/Location/Category
+              dropdowns, which then feed back into the cache for next time
+              (see syncCreatorStaticProfileToCache in actions.ts). */}
+          <input type="hidden" name="location" />
+          <input type="hidden" name="language" />
+          <input type="hidden" name="category" />
 
           {/* Budget given (quotedCost) removed from this form on purpose —
               that's the cost the Campaign Manager quotes to the client, so

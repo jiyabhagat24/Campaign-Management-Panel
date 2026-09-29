@@ -806,6 +806,17 @@ model InstagramProfileCache {
   postsCount     Int?
   avgViews       Int?
   engagementRate Float?
+  // Static attributes — unlike followers/avgViews/engagementRate above,
+  // these don't move day to day, so once captured for a username they're
+  // reused forever across every campaign that adds this creator instead of
+  // being re-typed each time. No live source fetches these (Instagram's API
+  // doesn't return them) — they're written the first time someone fills
+  // Language/Location/Category on a Creator row linked to this username
+  // (see syncCreatorStaticProfileToCache in actions.ts), then read back on
+  // every future paste-URL auto-fill.
+  location       String?
+  language       String?
+  category       String?
   capturedAt     DateTime @default(now()) // when the extension actually captured it, not when we synced it
   updatedAt         DateTime @updatedAt
 }
@@ -842,6 +853,14 @@ model YoutubeChannelCache {
   // path, same as contactEmail was before the panel had UI for it.
   contactEmail          String?
   contactPhone          String?
+  // Static attributes — same idea and same round-trip as
+  // InstagramProfileCache.location/language/category above: not returned by
+  // the YouTube Data API, so these are written the first time someone fills
+  // Language/Location/Category on a Creator row linked to this channel, then
+  // reused on every future paste-URL auto-fill instead of being re-typed.
+  location              String?
+  language              String?
+  category              String?
   capturedAt            DateTime @default(now())
   updatedAt             DateTime @updatedAt
 }
