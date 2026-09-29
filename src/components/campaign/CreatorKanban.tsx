@@ -442,11 +442,12 @@ export default function CreatorKanban({
         )}
         <TabButton active={tab === "ONBOARDING"} onClick={() => setTab("ONBOARDING")} label="Onboarded" count={onboarding.length} />
         <TabButton active={tab === "REPORT"} onClick={() => setTab("REPORT")} label="Campaign Report" />
-        {/* Finance and Invoicing (TheBoredMonkey eyes only) — Campaign
-            Manager + Brand Solutions (+ every other canSeeCost role, same
-            gate the rest of this app already uses for internal financial
-            data). Never shown to a client. */}
-        {!isClientView && canSeeCost && (
+        {/* Finance and Invoicing (TheBoredMonkey eyes only) — restricted to
+            Campaign Manager + Brand Solutions only, not every canSeeCost
+            role (CXO/IR Manager/IR Executive could see internal cost
+            elsewhere but not this tab specifically). Never shown to a
+            client. */}
+        {!isClientView && (role === "CAMPAIGN_MANAGER" || role === "BRAND_SOLUTIONS" || superAdmin) && (
           <TabButton active={tab === "FINANCE_INVOICING"} onClick={() => setTab("FINANCE_INVOICING")} label="Finance and Invoicing" />
         )}
         {/* Client's own read-only Finance view (Step 29) — separate tab so
@@ -864,7 +865,7 @@ export default function CreatorKanban({
           </div>
         )}
 
-        {tab === "FINANCE_INVOICING" && (
+        {tab === "FINANCE_INVOICING" && !isClientView && (role === "CAMPAIGN_MANAGER" || role === "BRAND_SOLUTIONS" || superAdmin) && (
           <div className="space-y-6">
             <div>
               <p className="mb-2 text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
