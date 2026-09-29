@@ -3148,32 +3148,43 @@ function OnboardingCreatorRow({
             {creator.deliverables.map((d) => {
               if (d.liveLink) {
                 return isClientView || !canExecute || !editingLiveLinkIds.has(d.id) ? (
-                  <div key={d.id} className="flex items-center gap-1.5">
-                    <a href={d.liveLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline">
-                      <span>Live</span>
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
-                    {!isClientView && canExecute && (
-                      <button
-                        onClick={() => setEditingLiveLinkIds((prev) => new Set(prev).add(d.id))}
-                        className="text-slate-300 hover:text-indigo-600 dark:text-slate-600 dark:hover:text-indigo-400"
-                        title="Edit video link"
-                      >
-                        <Pencil className="h-3 w-3" />
-                      </button>
-                    )}
-                    {!isClientView && canExecute && (
-                      <button
-                        onClick={() => {
-                          if (confirm("Remove this live link? The deliverable drops back to Content Approved and its tracked views/likes/comments are cleared.")) {
-                            withRefresh(removeLiveLink(d.id));
-                          }
-                        }}
-                        className="text-slate-300 hover:text-rose-600 dark:text-slate-600 dark:hover:text-rose-400"
-                        title="Delete video link"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </button>
+                  <div key={d.id} className="flex flex-col gap-0.5">
+                    <div className="flex items-center gap-1.5">
+                      <a href={d.liveLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline">
+                        <span>Live</span>
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                      {!isClientView && canExecute && (
+                        <button
+                          onClick={() => setEditingLiveLinkIds((prev) => new Set(prev).add(d.id))}
+                          className="text-slate-300 hover:text-indigo-600 dark:text-slate-600 dark:hover:text-indigo-400"
+                          title="Edit video link"
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </button>
+                      )}
+                      {!isClientView && canExecute && (
+                        <button
+                          onClick={() => {
+                            if (confirm("Remove this live link? The deliverable drops back to Content Approved and its tracked views/likes/comments are cleared.")) {
+                              withRefresh(removeLiveLink(d.id));
+                            }
+                          }}
+                          className="text-slate-300 hover:text-rose-600 dark:text-slate-600 dark:hover:text-rose-400"
+                          title="Delete video link"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      )}
+                    </div>
+                    {/* liveDate — the video's actual YouTube upload
+                        timestamp (see addLiveLink in actions.ts), not when
+                        the link happened to be pasted in. Shown under the
+                        Live link same as the script approval date above. */}
+                    {d.liveDate && (
+                      <span className="text-[10px] text-slate-400 dark:text-slate-500">
+                        {new Date(d.liveDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                      </span>
                     )}
                   </div>
                 ) : (
