@@ -359,6 +359,24 @@ export async function fetchYoutubeVideoStatsBatch(videoIds: string[]): Promise<M
   return stats;
 }
 
+// The video's real upload date (snippet.publishedAt) — used to set a
+// deliverable's Live Date to when the video actually went live on YouTube,
+// not whenever someone happened to paste the link into the panel (see
+// addLiveLink in actions.ts). Same 1-quota-unit videos.list call as the
+// stats batch above, just asking for the snippet part instead of/alongside
+// statistics. Returns null on any failure (not configured, video not
+// found, quota hit) — callers fall back to "now" rather than blocking the
+// live-link save on this.
+export async function fetchYoutubeVideoPublishedAt(videoId: string): Promise<Date | null> {
+  try {
+    const json = await apiGet("/videos", { part: "snippet", id: videoId });
+    const publishedAt: string | undefined = json.items?.[0]?.snippet?.publishedAt;
+    return publishedAt ? new Date(publishedAt) : null;
+  } catch {
+    return null;
+  }
+}
+
 export type YoutubeChannelSearchResult = {
   channelId: string;
   handle: string | null;

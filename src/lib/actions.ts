@@ -36,6 +36,7 @@ import {
   YoutubeLookupError,
   parseYoutubeVideoId,
   fetchYoutubeVideoStatsBatch,
+  fetchYoutubeVideoPublishedAt,
 } from "@/lib/youtube";
 import { appendInstagramHandleToSheet } from "@/lib/googleSheets";
 import { isValidEmail, isValidName, isValidBrandName, isValidPhone, normalizePhone, isValidUrl } from "@/lib/validation";
@@ -2860,9 +2861,19 @@ export async function addLiveLink(deliverableId: string, liveLink: string) {
     throw new Error("Only this creator's assigned POC can add live links.");
   }
 
+  // Live Date should reflect when the video actually went live on YouTube
+  // (its own upload timestamp), not whenever someone happened to paste the
+  // link into the panel — those can be days apart if the link is added
+  // late. Falls back to "now" for anything that isn't a YouTube URL
+  // (Instagram has no equivalent public API for this) or if the lookup
+  // fails for any reason (quota, video not found, API not configured).
+  const videoId = parseYoutubeVideoId(liveLink);
+  const publishedAt = videoId ? await fetchYoutubeVideoPublishedAt(videoId) : null;
+  const liveDate = publishedAt ?? new Date();
+
   const deliverable = await prisma.deliverable.update({
     where: { id: deliverableId },
-    data: { liveLink, liveDate: new Date(), status: "LIVE" },
+    data: { liveLink, liveDate, status: "LIVE" },
     include: { creator: true },
   });
 
