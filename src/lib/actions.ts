@@ -2985,6 +2985,47 @@ export async function removeScriptLink(deliverableId: string) {
   revalidatePath(`/campaigns/${existing.creator.campaignId}`);
 }
 
+// Draft/review video link — shown on the Onboarding table's Video Link
+// column while contentStatus is anything before APPROVED. Deliberately its
+// own field and its own action, never touching liveLink/status: pasting a
+// review link here must never make the deliverable count as Live in
+// reporting, only addLiveLink (called once the video is Approved) does
+// that. Same POC gate as every other execution-side setter.
+export async function updateReviewLink(deliverableId: string, reviewLink: string) {
+  const user = await requireUser();
+  if (isClient(user.role)) throw new Error("Clients cannot set review links");
+  if (reviewLink && !isValidUrl(reviewLink)) throw new Error("Review link must be a valid URL.");
+
+  const existing = await prisma.deliverable.findUnique({
+    where: { id: deliverableId },
+    select: { creator: { select: { campaignId: true, pocUserId: true } } },
+  });
+  if (!existing) throw new Error("Deliverable not found");
+  if (!isCreatorPOC(user.id, existing.creator) && !isSuperAdmin(user.id)) {
+    throw new Error("Only this creator's assigned POC can set review links.");
+  }
+
+  await prisma.deliverable.update({ where: { id: deliverableId }, data: { reviewLink: reviewLink || null } as any });
+  revalidatePath(`/campaigns/${existing.creator.campaignId}`);
+}
+
+export async function removeReviewLink(deliverableId: string) {
+  const user = await requireUser();
+  if (isClient(user.role)) throw new Error("Clients cannot remove review links");
+
+  const existing = await prisma.deliverable.findUnique({
+    where: { id: deliverableId },
+    select: { creator: { select: { campaignId: true, pocUserId: true } } },
+  });
+  if (!existing) throw new Error("Deliverable not found");
+  if (!isCreatorPOC(user.id, existing.creator) && !isSuperAdmin(user.id)) {
+    throw new Error("Only this creator's assigned POC can remove review links.");
+  }
+
+  await prisma.deliverable.update({ where: { id: deliverableId }, data: { reviewLink: null } as any });
+  revalidatePath(`/campaigns/${existing.creator.campaignId}`);
+}
+
 // Manual metric refresh stub — production build should call this from a
 // scheduled job per deliverable with status LIVE (see src/lib/tracking.ts).
 export async function refreshDeliverableMetrics(

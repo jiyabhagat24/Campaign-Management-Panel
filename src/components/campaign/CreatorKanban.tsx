@@ -35,6 +35,8 @@ import {
   deleteDeliverable,
   addLiveLink,
   removeLiveLink,
+  updateReviewLink,
+  removeReviewLink,
   removeScriptLink,
   lookupInstagramProfileAction,
   lookupYoutubeChannelAction,
@@ -98,6 +100,7 @@ export type Deliverable = {
   scriptApprovalDeadline?: string | Date | null;
   contentStatus: string | null;
   videoDraftDeadline?: string | Date | null;
+  reviewLink?: string | null;
   liveLink: string | null;
   liveDate: string | Date | null;
   views: number | null;
@@ -2273,6 +2276,7 @@ function OnboardingCreatorRow({
   // (e.g. multiple Shorts) each needing its own independent edit toggle.
   const [editingLiveLinkIds, setEditingLiveLinkIds] = useState<Set<string>>(new Set());
   const [editingScriptLinkIds, setEditingScriptLinkIds] = useState<Set<string>>(new Set());
+  const [editingReviewLinkIds, setEditingReviewLinkIds] = useState<Set<string>>(new Set());
   const router = useRouter();
 
   // Every inline edit below saves via a server action directly (not a <form
@@ -3078,7 +3082,24 @@ function OnboardingCreatorRow({
                 ) : (
                   <select
                     defaultValue={d.contentStatus ?? ""}
-                    onChange={(e) => withRefresh(updateContentStatus(d.id, e.target.value))}
+                    onChange={async (e) => {
+                      const next = e.target.value;
+                      // Approving is the moment the video actually goes
+                      // live — prompt for the Drive/live link right here
+                      // instead of leaving the right-hand column to fill it
+                      // in separately. Cancelling just approves without a
+                      // link yet; the Video Link column then falls back to
+                      // a plain paste box for it (see below).
+                      if (next === "APPROVED" && !d.liveLink) {
+                        const link = window.prompt("Paste the Drive/live video link to publish it now (Cancel to approve without one and add it later):");
+                        await withRefresh(updateContentStatus(d.id, next));
+                        if (link && link.trim()) {
+                          await withRefresh(addLiveLink(d.id, link.trim()));
+                        }
+                      } else {
+                        await withRefresh(updateContentStatus(d.id, next));
+                      }
+                    }}
                     className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
                   >
                     <option value="">—</option>
@@ -3095,44 +3116,134 @@ function OnboardingCreatorRow({
         )}
       </td>
 
-      {/* Video Link — per deliverable; pasting one triggers tracking. A set
-          link shows as a clickable "Live" open-in-new-tab link, with a
-          pencil to switch that one row into an editable input (for fixing a
-          wrong paste) instead of being stuck read-only. */}
+      {/* Video Link — per deliverable. Three states, not one field:
+          - Live (d.liveLink set, only reachable via the Approve prompt or
+            the paste-box fallback below) — clickable "Live" link, edit/
+            delete icons, unchanged from before.
+          - Approved but no live link yet (the Approve prompt was
+            cancelled) — plain "Paste live URL" box, same as before;
+            pasting here calls addLiveLink and goes straight Live.
+          - Not yet approved (In shoot/Internal check/Sent for approval/
+            Changes requested) — a separate, non-live "review link" field
+            (reviewLink), never treated as Live no matter what's pasted, so
+            a draft link shared for review can't accidentally get reported
+            as the go-live link (see updateReviewLink in actions.ts). */}
       <td className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
         {creator.deliverables.length === 0 ? (
           <span className="text-xs text-slate-400 dark:text-slate-500">—</span>
         ) : (
           <div className="flex flex-col gap-1">
-            {creator.deliverables.map((d) =>
-              isClientView || !canExecute || (d.liveLink && !editingLiveLinkIds.has(d.id)) ? (
-                <div key={d.id} className="flex items-center gap-1.5">
-                  {d.liveLink ? (
+            {creator.deliverables.map((d) => {
+              if (d.liveLink) {
+                return isClientView || !canExecute || !editingLiveLinkIds.has(d.id) ? (
+                  <div key={d.id} className="flex items-center gap-1.5">
                     <a href={d.liveLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline">
                       <span>Live</span>
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                    {!isClientView && canExecute && (
+                      <button
+                        onClick={() => setEditingLiveLinkIds((prev) => new Set(prev).add(d.id))}
+                        className="text-slate-300 hover:text-indigo-600 dark:text-slate-600 dark:hover:text-indigo-400"
+                        title="Edit video link"
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </button>
+                    )}
+                    {!isClientView && canExecute && (
+                      <button
+                        onClick={() => {
+                          if (confirm("Remove this live link? The deliverable drops back to Content Approved and its tracked views/likes/comments are cleared.")) {
+                            withRefresh(removeLiveLink(d.id));
+                          }
+                        }}
+                        className="text-slate-300 hover:text-rose-600 dark:text-slate-600 dark:hover:text-rose-400"
+                        title="Delete video link"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <input
+                    key={d.id}
+                    type="url"
+                    autoFocus
+                    defaultValue={d.liveLink ?? ""}
+                    placeholder="Paste live URL"
+                    onBlur={async (e) => {
+                      const next = e.target.value.trim();
+                      setEditingLiveLinkIds((prev) => {
+                        const copy = new Set(prev);
+                        copy.delete(d.id);
+                        return copy;
+                      });
+                      if (!next || next === (d.liveLink ?? "")) return;
+                      try {
+                        await withRefresh(addLiveLink(d.id, next));
+                      } catch (err: any) {
+                        window.alert(err?.message ?? "Failed to save — value was not stored.");
+                        e.target.value = d.liveLink ?? "";
+                      }
+                    }}
+                    className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+                  />
+                );
+              }
+
+              if (d.contentStatus === "APPROVED") {
+                // Approved, but the Approve-prompt was cancelled — same
+                // "Paste live URL" box as always, pasting here goes Live
+                // immediately via addLiveLink.
+                return (
+                  <input
+                    key={d.id}
+                    type="url"
+                    defaultValue=""
+                    placeholder="Paste live URL"
+                    disabled={isClientView || !canExecute}
+                    onBlur={async (e) => {
+                      const next = e.target.value.trim();
+                      if (!next) return;
+                      try {
+                        await withRefresh(addLiveLink(d.id, next));
+                      } catch (err: any) {
+                        window.alert(err?.message ?? "Failed to save — value was not stored.");
+                        e.target.value = "";
+                      }
+                    }}
+                    className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium disabled:opacity-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+                  />
+                );
+              }
+
+              // Not yet approved — the review link, never live.
+              return isClientView || !canExecute || (d.reviewLink && !editingReviewLinkIds.has(d.id)) ? (
+                <div key={d.id} className="flex items-center gap-1.5">
+                  {d.reviewLink ? (
+                    <a href={d.reviewLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline">
+                      <span>Open</span>
                       <ExternalLink className="h-3 w-3" />
                     </a>
                   ) : (
                     <span className="text-xs text-slate-400 dark:text-slate-500">—</span>
                   )}
-                  {!isClientView && canExecute && d.liveLink && (
+                  {!isClientView && canExecute && d.reviewLink && (
                     <button
-                      onClick={() => setEditingLiveLinkIds((prev) => new Set(prev).add(d.id))}
+                      onClick={() => setEditingReviewLinkIds((prev) => new Set(prev).add(d.id))}
                       className="text-slate-300 hover:text-indigo-600 dark:text-slate-600 dark:hover:text-indigo-400"
-                      title="Edit video link"
+                      title="Edit review link"
                     >
                       <Pencil className="h-3 w-3" />
                     </button>
                   )}
-                  {!isClientView && canExecute && d.liveLink && (
+                  {!isClientView && canExecute && d.reviewLink && (
                     <button
                       onClick={() => {
-                        if (confirm("Remove this live link? The deliverable drops back to Content Approved and its tracked views/likes/comments are cleared.")) {
-                          withRefresh(removeLiveLink(d.id));
-                        }
+                        if (confirm("Remove this review link?")) withRefresh(removeReviewLink(d.id));
                       }}
                       className="text-slate-300 hover:text-rose-600 dark:text-slate-600 dark:hover:text-rose-400"
-                      title="Delete video link"
+                      title="Delete review link"
                     >
                       <Trash2 className="h-3 w-3" />
                     </button>
@@ -3142,28 +3253,28 @@ function OnboardingCreatorRow({
                 <input
                   key={d.id}
                   type="url"
-                  autoFocus={editingLiveLinkIds.has(d.id)}
-                  defaultValue={d.liveLink ?? ""}
-                  placeholder="Paste live URL"
+                  autoFocus={editingReviewLinkIds.has(d.id)}
+                  defaultValue={d.reviewLink ?? ""}
+                  placeholder="Paste review link"
                   onBlur={async (e) => {
                     const next = e.target.value.trim();
-                    setEditingLiveLinkIds((prev) => {
+                    setEditingReviewLinkIds((prev) => {
                       const copy = new Set(prev);
                       copy.delete(d.id);
                       return copy;
                     });
-                    if (!next || next === (d.liveLink ?? "")) return;
+                    if (next === (d.reviewLink ?? "")) return;
                     try {
-                      await withRefresh(addLiveLink(d.id, next));
+                      await withRefresh(updateReviewLink(d.id, next));
                     } catch (err: any) {
                       window.alert(err?.message ?? "Failed to save — value was not stored.");
-                      e.target.value = d.liveLink ?? "";
+                      e.target.value = d.reviewLink ?? "";
                     }
                   }}
                   className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
                 />
-              )
-            )}
+              );
+            })}
           </div>
         )}
       </td>

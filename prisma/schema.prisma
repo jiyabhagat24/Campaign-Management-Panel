@@ -666,6 +666,13 @@ model Deliverable {
   contentStatus String? // IN_SHOOT | INTERNAL_APPROVAL | EXTERNAL_APPROVAL | CHANGES | APPROVED
   contentApprovedSnapshotUrl String?
   contentApprovedAt DateTime?
+  // The draft/review video link shown while contentStatus is anything
+  // before APPROVED (e.g. an unlisted YouTube link or Drive preview sent
+  // for internal/client review) — deliberately separate from liveLink
+  // below. Never treated as "live" for reporting/go-live purposes, no
+  // matter what's pasted here; only liveLink (entered once the video is
+  // Approved) does that.
+  reviewLink String?
   // Target date for the video draft — manually entered by IR, same
   // "planned vs. actual" split as scriptApprovalDeadline above.
   videoDraftDeadline DateTime?
