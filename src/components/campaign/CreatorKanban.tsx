@@ -3135,7 +3135,7 @@ function OnboardingCreatorRow({
                 <div key={d.id} className="flex items-center gap-1.5">
                   {d.reviewLink ? (
                     <a href={d.reviewLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline">
-                      <span>Open</span>
+                      <span>Video Link</span>
                       <ExternalLink className="h-3 w-3" />
                     </a>
                   ) : (
