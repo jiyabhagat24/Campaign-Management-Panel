@@ -97,6 +97,7 @@ export type Deliverable = {
   productEta?: string | Date | null;
   scriptStatus: string | null;
   scriptDocUrl: string | null;
+  scriptApprovedAt?: string | Date | null;
   scriptApprovalDeadline?: string | Date | null;
   contentStatus: string | null;
   videoDraftDeadline?: string | Date | null;
@@ -2963,34 +2964,45 @@ function OnboardingCreatorRow({
           <div className="flex flex-col gap-1">
             {creator.deliverables.map((d) =>
               isClientView || !canExecute || (d.scriptDocUrl && !editingScriptLinkIds.has(d.id)) ? (
-                <div key={d.id} className="flex items-center gap-1.5">
-                  {d.scriptDocUrl ? (
-                    <a href={d.scriptDocUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline">
-                      <span>Open</span>
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
-                  ) : (
-                    <span className="text-xs text-slate-400 dark:text-slate-500">—</span>
-                  )}
-                  {!isClientView && canExecute && d.scriptDocUrl && (
-                    <button
-                      onClick={() => setEditingScriptLinkIds((prev) => new Set(prev).add(d.id))}
-                      className="text-slate-300 hover:text-indigo-600 dark:text-slate-600 dark:hover:text-indigo-400"
-                      title="Edit script link"
-                    >
-                      <Pencil className="h-3 w-3" />
-                    </button>
-                  )}
-                  {!isClientView && canExecute && d.scriptDocUrl && (
-                    <button
-                      onClick={() => {
-                        if (confirm("Remove this script link?")) withRefresh(removeScriptLink(d.id));
-                      }}
-                      className="text-slate-300 hover:text-rose-600 dark:text-slate-600 dark:hover:text-rose-400"
-                      title="Delete script link"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </button>
+                <div key={d.id} className="flex flex-col gap-0.5">
+                  <div className="flex items-center gap-1.5">
+                    {d.scriptDocUrl ? (
+                      <a href={d.scriptDocUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline">
+                        <span>Open</span>
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    ) : (
+                      <span className="text-xs text-slate-400 dark:text-slate-500">—</span>
+                    )}
+                    {!isClientView && canExecute && d.scriptDocUrl && (
+                      <button
+                        onClick={() => setEditingScriptLinkIds((prev) => new Set(prev).add(d.id))}
+                        className="text-slate-300 hover:text-indigo-600 dark:text-slate-600 dark:hover:text-indigo-400"
+                        title="Edit script link"
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </button>
+                    )}
+                    {!isClientView && canExecute && d.scriptDocUrl && (
+                      <button
+                        onClick={() => {
+                          if (confirm("Remove this script link?")) withRefresh(removeScriptLink(d.id));
+                        }}
+                        className="text-slate-300 hover:text-rose-600 dark:text-slate-600 dark:hover:text-rose-400"
+                        title="Delete script link"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+                  {/* Script's own frozen approval timestamp (updateScriptStatus
+                      stamps scriptApprovedAt the moment scriptStatus becomes
+                      APPROVED) — shown under the link so it's clear when
+                      sign-off actually happened, not just that it did. */}
+                  {d.scriptStatus === "APPROVED" && d.scriptApprovedAt && (
+                    <span className="text-[10px] text-slate-400 dark:text-slate-500">
+                      Approved {new Date(d.scriptApprovedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                    </span>
                   )}
                 </div>
               ) : (
