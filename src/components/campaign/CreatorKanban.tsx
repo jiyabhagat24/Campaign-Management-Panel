@@ -595,6 +595,7 @@ export default function CreatorKanban({
                     <th className="sticky top-0 z-30 w-[260px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Deadline for Script Approval</th>
                     <th className="sticky top-0 z-30 w-[270px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Video Status</th>
                     <th className="sticky top-0 z-30 w-[150px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Video Link</th>
+                    <th className="sticky top-0 z-30 w-[170px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Live Link</th>
                     <th className="sticky top-0 z-30 w-[250px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Deadline for Video Draft</th>
                     <th className="sticky top-0 z-30 w-[170px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Deadline</th>
                     <th className="sticky top-0 z-30 w-[170px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Time Remaining</th>
@@ -3096,22 +3097,12 @@ function OnboardingCreatorRow({
                   <select
                     defaultValue={d.contentStatus ?? ""}
                     onChange={async (e) => {
-                      const next = e.target.value;
-                      // Approving is the moment the video actually goes
-                      // live — prompt for the Drive/live link right here
-                      // instead of leaving the right-hand column to fill it
-                      // in separately. Cancelling just approves without a
-                      // link yet; the Video Link column then falls back to
-                      // a plain paste box for it (see below).
-                      if (next === "APPROVED" && !d.liveLink) {
-                        const link = window.prompt("Paste the Drive/live video link to publish it now (Cancel to approve without one and add it later):");
-                        await withRefresh(updateContentStatus(d.id, next));
-                        if (link && link.trim()) {
-                          await withRefresh(addLiveLink(d.id, link.trim()));
-                        }
-                      } else {
-                        await withRefresh(updateContentStatus(d.id, next));
-                      }
+                      // Approving no longer prompts for the live link here —
+                      // that now lives in its own "Live Link" column, which
+                      // only opens up for pasting once the deliverable is
+                      // Approved. Keeps the two ideas (approval vs. going
+                      // live) visually and functionally separate.
+                      await withRefresh(updateContentStatus(d.id, e.target.value));
                     }}
                     className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
                   >
@@ -3129,18 +3120,83 @@ function OnboardingCreatorRow({
         )}
       </td>
 
-      {/* Video Link — per deliverable. Three states, not one field:
-          - Live (d.liveLink set, only reachable via the Approve prompt or
-            the paste-box fallback below) — clickable "Live" link, edit/
-            delete icons, unchanged from before.
-          - Approved but no live link yet (the Approve prompt was
-            cancelled) — plain "Paste live URL" box, same as before;
-            pasting here calls addLiveLink and goes straight Live.
-          - Not yet approved (In shoot/Internal check/Sent for approval/
-            Changes requested) — a separate, non-live "review link" field
-            (reviewLink), never treated as Live no matter what's pasted, so
-            a draft link shared for review can't accidentally get reported
-            as the go-live link (see updateReviewLink in actions.ts). */}
+      {/* Video Link — per deliverable. Always the draft/review link
+          (reviewLink), independent of approval or live status. This is the
+          working link the team shares while the content is being made and
+          reviewed; it never turns into "Live" on its own — going live is
+          now entirely the separate Live Link column's job. */}
+      <td className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
+        {creator.deliverables.length === 0 ? (
+          <span className="text-xs text-slate-400 dark:text-slate-500">—</span>
+        ) : (
+          <div className="flex flex-col gap-1">
+            {creator.deliverables.map((d) =>
+              isClientView || !canExecute || (d.reviewLink && !editingReviewLinkIds.has(d.id)) ? (
+                <div key={d.id} className="flex items-center gap-1.5">
+                  {d.reviewLink ? (
+                    <a href={d.reviewLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline">
+                      <span>Open</span>
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  ) : (
+                    <span className="text-xs text-slate-400 dark:text-slate-500">—</span>
+                  )}
+                  {!isClientView && canExecute && d.reviewLink && (
+                    <button
+                      onClick={() => setEditingReviewLinkIds((prev) => new Set(prev).add(d.id))}
+                      className="text-slate-300 hover:text-indigo-600 dark:text-slate-600 dark:hover:text-indigo-400"
+                      title="Edit video link"
+                    >
+                      <Pencil className="h-3 w-3" />
+                    </button>
+                  )}
+                  {!isClientView && canExecute && d.reviewLink && (
+                    <button
+                      onClick={() => {
+                        if (confirm("Remove this video link?")) withRefresh(removeReviewLink(d.id));
+                      }}
+                      className="text-slate-300 hover:text-rose-600 dark:text-slate-600 dark:hover:text-rose-400"
+                      title="Delete video link"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <input
+                  key={d.id}
+                  type="url"
+                  autoFocus={editingReviewLinkIds.has(d.id)}
+                  defaultValue={d.reviewLink ?? ""}
+                  placeholder="Paste video link"
+                  onBlur={async (e) => {
+                    const next = e.target.value.trim();
+                    setEditingReviewLinkIds((prev) => {
+                      const copy = new Set(prev);
+                      copy.delete(d.id);
+                      return copy;
+                    });
+                    if (next === (d.reviewLink ?? "")) return;
+                    try {
+                      await withRefresh(updateReviewLink(d.id, next));
+                    } catch (err: any) {
+                      window.alert(err?.message ?? "Failed to save — value was not stored.");
+                      e.target.value = d.reviewLink ?? "";
+                    }
+                  }}
+                  className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+                />
+              )
+            )}
+          </div>
+        )}
+      </td>
+
+      {/* Live Link — per deliverable, its own column beside Video Link.
+          Pasting a link here is what actually marks the deliverable Live
+          (status: LIVE) so it shows as live on the panel and in reporting.
+          Only usable once the deliverable is Approved — before that it's a
+          disabled placeholder, since there's nothing to go live yet. */}
       <td className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
         {creator.deliverables.length === 0 ? (
           <span className="text-xs text-slate-400 dark:text-slate-500">—</span>
@@ -3159,7 +3215,7 @@ function OnboardingCreatorRow({
                         <button
                           onClick={() => setEditingLiveLinkIds((prev) => new Set(prev).add(d.id))}
                           className="text-slate-300 hover:text-indigo-600 dark:text-slate-600 dark:hover:text-indigo-400"
-                          title="Edit video link"
+                          title="Edit live link"
                         >
                           <Pencil className="h-3 w-3" />
                         </button>
@@ -3172,7 +3228,7 @@ function OnboardingCreatorRow({
                             }
                           }}
                           className="text-slate-300 hover:text-rose-600 dark:text-slate-600 dark:hover:text-rose-400"
-                          title="Delete video link"
+                          title="Delete live link"
                         >
                           <Trash2 className="h-3 w-3" />
                         </button>
@@ -3180,8 +3236,7 @@ function OnboardingCreatorRow({
                     </div>
                     {/* liveDate — the video's actual YouTube upload
                         timestamp (see addLiveLink in actions.ts), not when
-                        the link happened to be pasted in. Shown under the
-                        Live link same as the script approval date above. */}
+                        the link happened to be pasted in. */}
                     {d.liveDate && (
                       <span className="text-[10px] text-slate-400 dark:text-slate-500">
                         {new Date(d.liveDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
@@ -3216,9 +3271,8 @@ function OnboardingCreatorRow({
               }
 
               if (d.contentStatus === "APPROVED") {
-                // Approved, but the Approve-prompt was cancelled — same
-                // "Paste live URL" box as always, pasting here goes Live
-                // immediately via addLiveLink.
+                // Approved and no live link yet — open for pasting.
+                // Pasting here goes Live immediately via addLiveLink.
                 return (
                   <input
                     key={d.id}
@@ -3241,62 +3295,11 @@ function OnboardingCreatorRow({
                 );
               }
 
-              // Not yet approved — the review link, never live.
-              return isClientView || !canExecute || (d.reviewLink && !editingReviewLinkIds.has(d.id)) ? (
-                <div key={d.id} className="flex items-center gap-1.5">
-                  {d.reviewLink ? (
-                    <a href={d.reviewLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline">
-                      <span>Open</span>
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
-                  ) : (
-                    <span className="text-xs text-slate-400 dark:text-slate-500">—</span>
-                  )}
-                  {!isClientView && canExecute && d.reviewLink && (
-                    <button
-                      onClick={() => setEditingReviewLinkIds((prev) => new Set(prev).add(d.id))}
-                      className="text-slate-300 hover:text-indigo-600 dark:text-slate-600 dark:hover:text-indigo-400"
-                      title="Edit review link"
-                    >
-                      <Pencil className="h-3 w-3" />
-                    </button>
-                  )}
-                  {!isClientView && canExecute && d.reviewLink && (
-                    <button
-                      onClick={() => {
-                        if (confirm("Remove this review link?")) withRefresh(removeReviewLink(d.id));
-                      }}
-                      className="text-slate-300 hover:text-rose-600 dark:text-slate-600 dark:hover:text-rose-400"
-                      title="Delete review link"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </button>
-                  )}
-                </div>
-              ) : (
-                <input
-                  key={d.id}
-                  type="url"
-                  autoFocus={editingReviewLinkIds.has(d.id)}
-                  defaultValue={d.reviewLink ?? ""}
-                  placeholder="Paste review link"
-                  onBlur={async (e) => {
-                    const next = e.target.value.trim();
-                    setEditingReviewLinkIds((prev) => {
-                      const copy = new Set(prev);
-                      copy.delete(d.id);
-                      return copy;
-                    });
-                    if (next === (d.reviewLink ?? "")) return;
-                    try {
-                      await withRefresh(updateReviewLink(d.id, next));
-                    } catch (err: any) {
-                      window.alert(err?.message ?? "Failed to save — value was not stored.");
-                      e.target.value = d.reviewLink ?? "";
-                    }
-                  }}
-                  className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
-                />
+              // Not yet approved — nothing to go live yet.
+              return (
+                <span key={d.id} className="text-xs text-slate-400 dark:text-slate-500" title="Available once this deliverable is Approved">
+                  —
+                </span>
               );
             })}
           </div>
