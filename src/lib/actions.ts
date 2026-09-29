@@ -3072,6 +3072,10 @@ export async function addRemark(
   opts?: { creatorId?: string; visibility?: "INTERNAL" | "CLIENT"; mentionUserIds?: string[] }
 ) {
   const user = await requireUser();
+  // Same ownership check as clientRespondToScript/raiseEscalation — a
+  // client posting into the communications thread should only ever be able
+  // to reach a campaign they actually have clientAccess to.
+  if (isClient(user.role)) await assertClientCampaignAccess(user.id, campaignId);
   const visibility = isClient(user.role) ? "CLIENT" : opts?.visibility ?? "INTERNAL";
 
   const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { name: true } });

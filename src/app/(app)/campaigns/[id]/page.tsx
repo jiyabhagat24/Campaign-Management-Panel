@@ -173,7 +173,13 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
           />
         </div>
 
-        {canSeeCost && (
+        {/* Agency Fee %/Retainer Fee and Client Invoice status are billing
+            terms the client is already being charged under, not internal
+            cost/margin data — safe to show read-only (canEdit below already
+            excludes clients via canSetCommercials). Previously gated behind
+            canSeeCost (canSeeInternalCost), which also excludes clients, so
+            this whole row silently never rendered for them. */}
+        {(canSeeCost || isClientView) && (
           <div className="mt-4 border-t border-slate-100 dark:border-slate-800 pt-4">
             <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Finance</p>
             <FinanceRow
@@ -189,17 +195,20 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
           </div>
         )}
 
-        {!isClientView && (
-          <div className="mt-4 flex items-center justify-between border-t border-slate-100 dark:border-slate-800 pt-4">
-            <Link
-              href={`/communications/${campaign.id}`}
-              className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-3.5 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-indigo-50 hover:text-indigo-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-indigo-950/60 dark:hover:text-indigo-400"
-            >
-              <MessageSquare className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
-              <span>View Campaign Communication Thread & Remarks</span>
-            </Link>
-          </div>
-        )}
+        {/* Clients get this too, not just internal — the destination page
+            (communications/[id]/page.tsx) already scopes what a client sees
+            correctly (their own campaign only, remarks filtered to
+            visibility: CLIENT), so hiding the entry point here just meant a
+            client had no way to reach a page that already worked for them. */}
+        <div className="mt-4 flex items-center justify-between border-t border-slate-100 dark:border-slate-800 pt-4">
+          <Link
+            href={`/communications/${campaign.id}`}
+            className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-3.5 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-indigo-50 hover:text-indigo-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-indigo-950/60 dark:hover:text-indigo-400"
+          >
+            <MessageSquare className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
+            <span>View Campaign Communication Thread & Remarks</span>
+          </Link>
+        </div>
       </div>
 
       {/* Creator Kanban Workspace */}
