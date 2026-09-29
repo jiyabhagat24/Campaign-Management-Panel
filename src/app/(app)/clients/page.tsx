@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { currentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { canManageClients, campaignVisibilityWhere, isOrgWide } from "@/lib/rbac";
+import { canManageClients, campaignVisibilityWhere } from "@/lib/rbac";
 import ClientAccessManager, { type ClientRow, type CampaignOption } from "@/components/team/ClientAccessManager";
 
 // CXO + Brand Solutions — where a signed-up (or manually added) client
@@ -12,25 +12,28 @@ import ClientAccessManager, { type ClientRow, type CampaignOption } from "@/comp
 //
 // Page Permissions matrix: CXO sees every client (org-wide, same as
 // campaignVisibilityWhere already gives CXO for campaigns). Brand Solutions
-// is scoped to "own" — clients tied to a campaign they're a team member on
-// — but a brand-new self-signup with no campaign access granted yet has to
-// stay visible too, otherwise nobody could ever onboard them in the first
-// place; campaignOptions (which campaigns a client can be granted) is
-// scoped the same way so Brand Solutions can't hand out access to a
-// campaign outside their own scope.
+// is scoped to "own" — but "own" only ever applies to which campaigns they
+// can *grant*, not to which client logins they can *see*: a Client account
+// isn't tied to one owner, the same client contact often needs adding to a
+// second campaign run by a different Brand Solutions person than the one
+// who originally onboarded them. An earlier version of this page filtered
+// the client list itself to "no access yet OR access to a scoped campaign",
+// which silently hid any client who already had access to even one
+// campaign outside this viewer's scope — so a real client account existed,
+// but the person who needed to grant them a new campaign couldn't find them
+// to check the box. Every client login is listed for every canManageClients
+// role; only campaignOptions (which campaigns can actually be granted) stays
+// scoped, so Brand Solutions still can't hand out access to a campaign
+// they're not on.
 export default async function ClientsAccessPage() {
   const user = await currentUser();
   if (!user) redirect("/login");
   if (!canManageClients(user.role)) redirect("/dashboard");
 
   const campaignScope = campaignVisibilityWhere(user);
-  const orgWide = isOrgWide(user.role);
 
   const [clients, campaigns] = await Promise.all([
     prisma.client.findMany({
-      where: orgWide
-        ? undefined
-        : { OR: [{ campaignAccess: { none: {} } }, { campaignAccess: { some: { campaign: campaignScope } } }] },
       orderBy: { createdAt: "desc" },
       select: {
         id: true,
