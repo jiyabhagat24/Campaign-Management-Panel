@@ -53,6 +53,25 @@ export default async function DashboardPage() {
     orderBy: { updatedAt: "desc" },
   });
 
+  // Section B's actual per-invoice ledger (the campaign's own Finance and
+  // Invoicing tab / Client Cash) — the real system of record for what's
+  // been invoiced and received from the client. Fetched as its own query
+  // rather than an include on campaign.findMany above, same as
+  // campaigns/[id]/page.tsx already does, since the ClientInvoice relation
+  // isn't in the locally generated Prisma client yet (no network to
+  // Prisma's binary host in this sandbox — see the `as any` cast below;
+  // Vercel's postinstall regenerates the real client at deploy time).
+  const clientInvoiceRows = await (prisma as any).clientInvoice.findMany({
+    where: { campaignId: { in: campaigns.map((c) => c.id) } },
+    select: { campaignId: true, invoiceAmount: true, amountReceived: true },
+  }) as { campaignId: string; invoiceAmount: number; amountReceived: number | null }[];
+  const invoicesByCampaign = new Map<string, { invoiceAmount: number; amountReceived: number | null }[]>();
+  for (const inv of clientInvoiceRows) {
+    const list = invoicesByCampaign.get(inv.campaignId) ?? [];
+    list.push(inv);
+    invoicesByCampaign.set(inv.campaignId, list);
+  }
+
   // Computed up front (was previously computed further down, after rows/
   // financeRows/revenueRows already existed) so every cost-derived number
   // below can be zeroed out for whoever shouldn't see it, rather than
@@ -125,12 +144,20 @@ export default async function DashboardPage() {
     // which was silently zeroing out Total Active Value and Margin %
     // whenever it was null even though real per-creator costing existed.
     const quotedValue = onboardedCreators.reduce((s, cr) => s + (cr.finalQuotedCost ?? cr.quotedCost ?? 0), 0);
-    // Yet to be Invoiced / Yet to be Received / Value of Cleared Due used to
-    // be typed in by hand. They're derivable from data already tracked
-    // elsewhere: financeClientInvoiceStatus (set via FinanceRow) says which
-    // bucket a campaign's quotedValue sits in right now, so no separate
-    // number needs re-entering in sync with it.
-    const invoiceStatus = c.financeClientInvoiceStatus ?? "NOT_INVOICED";
+    // Yet to be Invoiced / Yet to be Received / Value of Cleared Due —
+    // derived from the campaign's actual ClientInvoice ledger (Section B /
+    // Client Cash), not the older financeClientInvoiceStatus dropdown on
+    // FinanceRow. That single NOT_INVOICED/INVOICED/PAID field predates the
+    // per-invoice ledger built for "invoiced 3 times against one closed
+    // cost" campaigns — once a campaign has real invoice rows logged, its
+    // three actual amounts (invoiced so far, received so far, still
+    // outstanding) diverge from what that one dropdown alone could ever
+    // represent, and it's easy to log invoices without remembering to also
+    // flip the dropdown, which is exactly why these cards were showing ₹0
+    // even for campaigns with real invoices and payments recorded.
+    const campaignInvoices = invoicesByCampaign.get(c.id) ?? [];
+    const totalInvoiced = campaignInvoices.reduce((s, inv) => s + inv.invoiceAmount, 0);
+    const totalReceived = campaignInvoices.reduce((s, inv) => s + (inv.amountReceived ?? 0), 0);
 
     return {
       id: c.id,
@@ -157,9 +184,15 @@ export default async function DashboardPage() {
       internalValue: showFinance ? onboardedCreators.reduce((s, cr) => s + (cr.internalCost ?? 0), 0) : 0,
       quotedValue,
       openFlags,
-      financeYetToBeInvoiced: showFinance ? (invoiceStatus === "NOT_INVOICED" ? quotedValue : 0) : 0,
-      financeYetToBeReceived: showFinance ? (invoiceStatus === "INVOICED" ? quotedValue : 0) : 0,
-      financeValueOfClearedDue: showFinance ? (invoiceStatus === "PAID" ? quotedValue : 0) : 0,
+      // Not yet invoiced at all: quoted value minus whatever's already been
+      // invoiced (clamped at 0 so an over-invoiced campaign, e.g. extra
+      // charges, doesn't show a negative "yet to invoice").
+      financeYetToBeInvoiced: showFinance ? Math.max(quotedValue - totalInvoiced, 0) : 0,
+      // Invoiced but payment hasn't come in yet.
+      financeYetToBeReceived: showFinance ? Math.max(totalInvoiced - totalReceived, 0) : 0,
+      // Actually invoiced AND received from the client — this is the real
+      // "cleared due" number, summed straight off the ledger.
+      financeValueOfClearedDue: showFinance ? totalReceived : 0,
       // What TBM still owes onboarded creators — their own Payout Amount
       // (internalCost) wherever payoutPaymentStatus hasn't reached PAID yet.
       financeCreatorPayablePending: showFinance
