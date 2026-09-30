@@ -3075,37 +3075,28 @@ export async function refreshDeliverableMetrics(
   revalidatePath(`/campaigns/${deliverable.creator.campaignId}`);
 }
 
-// "Refresh stats" button on the Campaign Report: hands this campaign's live
-// deliverables to the n8n automation (N8N_REFRESH_STATS_WEBHOOK_URL), which
-// fetches fresh views/likes/comments/shares and posts them back to
-// /api/n8n/deliverable-metrics (secured with CRON_SECRET). Internal roles only.
+// "Refresh stats" button on the Campaign Report: pings the existing n8n
+// workflow "yt fetching campaign values" through its Webhook trigger (GET).
+// That workflow calls /api/cron/refresh-youtube-metrics, which refreshes
+// views/likes/comments/ER% for every live YouTube deliverable. Internal roles
+// only. Override the URL with N8N_REFRESH_STATS_WEBHOOK_URL if it ever moves.
+const DEFAULT_N8N_REFRESH_WEBHOOK =
+  "https://n8n.srv1799142.hstgr.cloud/webhook/3fe03e87-3364-4e6a-8bfd-d3c0de9901e2/3fe03e87-3364-4e6a-8bfd-d3c0de9901e2";
+
 export async function triggerCampaignStatsRefresh(campaignId: string) {
   const user = await requireUser();
   if (isClient(user.role)) throw new Error("Clients cannot refresh stats");
 
-  const webhookUrl = process.env.N8N_REFRESH_STATS_WEBHOOK_URL;
-  if (!webhookUrl) {
-    throw new Error("N8N_REFRESH_STATS_WEBHOOK_URL isn't set on the server yet — add the n8n webhook URL to the environment.");
-  }
+  const webhookUrl = process.env.N8N_REFRESH_STATS_WEBHOOK_URL || DEFAULT_N8N_REFRESH_WEBHOOK;
 
-  const deliverables = await prisma.deliverable.findMany({
+  const count = await prisma.deliverable.count({
     where: { liveLink: { not: null }, creator: { campaignId } },
-    select: { id: true, platform: true, liveLink: true },
   });
 
-  const res = await fetch(webhookUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      campaignId,
-      requestedBy: user.name,
-      callbackUrl: `${process.env.NEXTAUTH_URL ?? ""}/api/n8n/deliverable-metrics`,
-      deliverables,
-    }),
-  });
+  const res = await fetch(webhookUrl, { method: "GET" });
   if (!res.ok) throw new Error(`n8n didn't accept the refresh request (HTTP ${res.status}).`);
 
-  return { ok: true as const, count: deliverables.length };
+  return { ok: true as const, count };
 }
 
 // Daily automated version of refreshDeliverableMetrics above, scoped to
