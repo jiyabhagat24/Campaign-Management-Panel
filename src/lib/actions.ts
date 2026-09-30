@@ -2663,19 +2663,24 @@ function ballOwnerForContentStatus(status: string): string | null {
 
 export async function updateContentStatus(deliverableId: string, contentStatus: string) {
   const user = await requireUser();
-  const owner = await prisma.deliverable.findUnique({ where: { id: deliverableId }, select: { creator: { select: { pocUserId: true } } } });
+  const owner = (await prisma.deliverable.findUnique({ where: { id: deliverableId }, select: { creator: { select: { pocUserId: true } }, ...({ videoSubmittedAt: true } as any) } })) as any;
   if (!owner) throw new Error("Deliverable not found");
   if (!isCreatorPOC(user.id, owner.creator) && !isSuperAdmin(user.id)) {
     throw new Error("Only this creator's assigned POC can update content status.");
   }
   const isApproving = contentStatus === "APPROVED";
+  // First time the video reaches a review stage counts as "video submitted"
+  // (turnaround-time milestone); never overwritten once set.
+  const isFirstVideoSubmission =
+    !owner.videoSubmittedAt && (contentStatus === "INTERNAL_APPROVAL" || contentStatus === "EXTERNAL_APPROVAL");
   const deliverable = await prisma.deliverable.update({
     where: { id: deliverableId },
     data: {
       contentStatus,
       status: isApproving ? "CONTENT_APPROVED" : "PLANNED",
       ...(isApproving ? { contentApprovedAt: new Date() } : {}),
-    },
+      ...(isFirstVideoSubmission ? { videoSubmittedAt: new Date() } : {}),
+    } as any,
     include: { creator: { include: { campaign: true } } },
   });
 

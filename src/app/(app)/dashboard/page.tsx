@@ -379,6 +379,15 @@ export default async function DashboardPage() {
     // goLiveDeadline, the same effective-deadline field the rest of the app
     // already tracks per onboarded creator (there's no separate
     // per-deliverable deadline field).
+    // Same effective deadline the rest of the app uses per onboarded creator:
+    // the creator's own go-live deadline, else onboarding date + 15 days — so
+    // every pending deliverable lands in exactly one of the three buckets.
+    const effectiveDeadlineMs = (cr: { goLiveDeadline: Date | null; onboardedAt: Date | null }) =>
+      cr.goLiveDeadline
+        ? new Date(cr.goLiveDeadline).getTime()
+        : cr.onboardedAt
+        ? new Date(cr.onboardedAt).getTime() + DEFAULT_GO_LIVE_DAYS * 24 * 60 * 60 * 1000
+        : null;
     const now = Date.now();
     const HOUR_MS = 60 * 60 * 1000;
     let deliverablesOnTime = 0;
@@ -386,7 +395,7 @@ export default async function DashboardPage() {
     let deliverablesDelayed = 0;
     for (const d of myDeliverables) {
       if (d.liveLink) continue;
-      const deadline = d.creator.goLiveDeadline ? new Date(d.creator.goLiveDeadline).getTime() : null;
+      const deadline = effectiveDeadlineMs(d.creator);
       if (deadline === null) continue;
       const remainingMs = deadline - now;
       if (remainingMs < 0) deliverablesDelayed++;
@@ -412,34 +421,46 @@ export default async function DashboardPage() {
       };
     };
 
-    const myOnboardToScript = stageStats(myDeliverables.map((d) => ({ start: d.creator.onboardedAt, end: d.scriptApprovedAt })));
-    // "Video submission" — the real milestone now: the first time a review
-    // link was saved for this deliverable (Deliverable.videoSubmittedAt,
-    // falling back to Content Approved for older deliverables that were
-    // approved before this timestamp existed, so they still count,
-    // stamped once in updateReviewLink). Older deliverables submitted
-    // before this field existed simply won't have a value here and are
-    // excluded from the average, same "only records with both timestamps"
-    // rule as every other stage.
-    const myScriptToVideo = stageStats(myDeliverables.map((d) => ({ start: d.scriptApprovedAt, end: d.videoSubmittedAt ?? d.contentApprovedAt })));
-    const myEndToEnd = stageStats(myDeliverables.map((d) => ({ start: d.creator.onboardedAt, end: d.contentApprovedAt })));
+    // Per-creator milestones (one record per creator, per the spec's "creator
+    // records"): first script approval, first video submission, and final
+    // content approval (only once every deliverable of the creator is
+    // approved).
+    type Milestones = { onboardedAt: Date | null; scriptAt: Date | null; videoAt: Date | null; contentAt: Date | null };
+    const milestonesFor = (
+      onboardedAt: Date | null,
+      dels: { scriptApprovedAt: Date | null; contentApprovedAt: Date | null; videoSubmittedAt: Date | null }[]
+    ): Milestones => {
+      const earliest = (xs: (Date | null)[]) => {
+        const ts = xs.filter((x): x is Date => !!x).map((x) => new Date(x).getTime());
+        return ts.length ? new Date(Math.min(...ts)) : null;
+      };
+      const allApproved = dels.length > 0 && dels.every((d) => !!d.contentApprovedAt);
+      const contentTs = dels.map((d) => d.contentApprovedAt).filter((x): x is Date => !!x).map((x) => new Date(x).getTime());
+      return {
+        onboardedAt,
+        scriptAt: earliest(dels.map((d) => d.scriptApprovedAt)),
+        videoAt: earliest(dels.map((d) => d.videoSubmittedAt)),
+        contentAt: allApproved ? new Date(Math.max(...contentTs)) : null,
+      };
+    };
+    const myMilestones = myCreators.map((cr) => ({ creator: cr, m: milestonesFor(cr.onboardedAt, cr.deliverables) }));
+    const myOnboardToScript = stageStats(myMilestones.map(({ m }) => ({ start: m.onboardedAt, end: m.scriptAt })));
+    const myScriptToVideo = stageStats(myMilestones.map(({ m }) => ({ start: m.scriptAt, end: m.videoAt })));
+    const myEndToEnd = stageStats(myMilestones.map(({ m }) => ({ start: m.onboardedAt, end: m.contentAt })));
 
-    // Company average — same three stages, same timestamp fields, across
-    // every onboarded creator org-wide (not scoped to this executive), per
-    // the feedback doc's "company average across all IR executives".
+    // Company average — same three stages across every onboarded creator
+    // sourced by an IR Executive (all IR Executives, not just this one).
     const allOnboarded = (await (prisma as any).creator.findMany({
-      where: { status: "ONBOARDED" },
+      where: { status: "ONBOARDED", sourcedBy: { role: "IR_EXECUTIVE" } },
       select: {
         onboardedAt: true,
         deliverables: { select: { scriptApprovedAt: true, contentApprovedAt: true, videoSubmittedAt: true } },
       },
     })) as { onboardedAt: Date | null; deliverables: { scriptApprovedAt: Date | null; contentApprovedAt: Date | null; videoSubmittedAt: Date | null }[] }[];
-    const allPairs = allOnboarded.flatMap((cr) =>
-      cr.deliverables.map((d) => ({ onboardedAt: cr.onboardedAt, scriptApprovedAt: d.scriptApprovedAt, contentApprovedAt: d.contentApprovedAt, videoSubmittedAt: d.videoSubmittedAt }))
-    );
-    const companyOnboardToScript = stageStats(allPairs.map((d) => ({ start: d.onboardedAt, end: d.scriptApprovedAt })));
-    const companyScriptToVideo = stageStats(allPairs.map((d) => ({ start: d.scriptApprovedAt, end: d.videoSubmittedAt ?? d.contentApprovedAt })));
-    const companyEndToEnd = stageStats(allPairs.map((d) => ({ start: d.onboardedAt, end: d.contentApprovedAt })));
+    const allMilestones = allOnboarded.map((cr) => milestonesFor(cr.onboardedAt, cr.deliverables));
+    const companyOnboardToScript = stageStats(allMilestones.map((m) => ({ start: m.onboardedAt, end: m.scriptAt })));
+    const companyScriptToVideo = stageStats(allMilestones.map((m) => ({ start: m.scriptAt, end: m.videoAt })));
+    const companyEndToEnd = stageStats(allMilestones.map((m) => ({ start: m.onboardedAt, end: m.contentAt })));
 
     // Creator financials — Total Value of Active Creators = Value Paid +
     // Value Due, per the feedback doc, all driven off each creator's own
@@ -480,7 +501,7 @@ export default async function DashboardPage() {
       id: d.id,
       primary: `${d.creator.name} — ${d.platform}`,
       secondary: d.creator.campaign.name,
-      value: d.liveLink ? "Live" : d.creator.goLiveDeadline ? shortDate(d.creator.goLiveDeadline) : undefined,
+      value: d.liveLink ? "Live" : effectiveDeadlineMs(d.creator) !== null ? shortDate(new Date(effectiveDeadlineMs(d.creator)!)) : undefined,
       href: campaignHref(d.creator.campaignId),
     });
     const notLive = myDeliverables.filter((d) => !d.liveLink);
@@ -508,25 +529,25 @@ export default async function DashboardPage() {
       deliverablesLive: myDeliverables.filter((d) => !!d.liveLink).map(deliverableRow),
       deliverablesOnTime: notLive
         .filter((d) => {
-          const deadline = d.creator.goLiveDeadline ? new Date(d.creator.goLiveDeadline).getTime() : null;
+          const deadline = effectiveDeadlineMs(d.creator);
           return deadline !== null && deadline - now > 24 * HOUR_MS;
         })
         .map(deliverableRow),
       deliverablesNearingDeadline: notLive
         .filter((d) => {
-          const deadline = d.creator.goLiveDeadline ? new Date(d.creator.goLiveDeadline).getTime() : null;
+          const deadline = effectiveDeadlineMs(d.creator);
           return deadline !== null && deadline - now >= 0 && deadline - now <= 24 * HOUR_MS;
         })
         .map(deliverableRow),
       deliverablesDelayed: notLive
         .filter((d) => {
-          const deadline = d.creator.goLiveDeadline ? new Date(d.creator.goLiveDeadline).getTime() : null;
+          const deadline = effectiveDeadlineMs(d.creator);
           return deadline !== null && deadline - now < 0;
         })
         .map(deliverableRow),
-      turnaroundOnboardToScript: durationRow("onboard-script", myDeliverables.map((d) => ({ start: d.creator.onboardedAt, end: d.scriptApprovedAt, creator: d.creator }))),
-      turnaroundScriptToVideo: durationRow("script-video", myDeliverables.map((d) => ({ start: d.scriptApprovedAt, end: d.videoSubmittedAt ?? d.contentApprovedAt, creator: d.creator }))),
-      turnaroundEndToEnd: durationRow("end-to-end", myDeliverables.map((d) => ({ start: d.creator.onboardedAt, end: d.contentApprovedAt, creator: d.creator }))),
+      turnaroundOnboardToScript: durationRow("onboard-script", myMilestones.map(({ m, creator }) => ({ start: m.onboardedAt, end: m.scriptAt, creator }))),
+      turnaroundScriptToVideo: durationRow("script-video", myMilestones.map(({ m, creator }) => ({ start: m.scriptAt, end: m.videoAt, creator }))),
+      turnaroundEndToEnd: durationRow("end-to-end", myMilestones.map(({ m, creator }) => ({ start: m.onboardedAt, end: m.contentAt, creator }))),
       totalCreatorValue: myCreators.map((cr) => ({
         ...creatorRow(cr),
         value: formatCompactINR(cr.internalCost ?? 0),
