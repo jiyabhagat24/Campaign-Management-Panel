@@ -11,6 +11,9 @@ import PortfolioDashboardClient, {
 import type { FinanceCampaignRow } from "@/components/finance/FinanceTableClient";
 import { FINANCE_VISIBLE_STATUSES } from "@/lib/constants";
 import type { RevenueDataRow } from "@/components/dashboard/RevenueBreakdownChart";
+import IrExecutivePersonalDashboard, {
+  type IrExecutiveDashboardData,
+} from "@/components/dashboard/IrExecutivePersonalDashboard";
 
 // Default onboard-to-go-live window, mirrors DEFAULT_GO_LIVE_DAYS in
 // CreatorKanban.tsx and DEFAULT_SLA.onboardToGoLiveDays in constants.ts —
@@ -294,6 +297,164 @@ export default async function DashboardPage() {
         campaign: { name: a.campaign.name },
       }));
 
+  // IR Executive personal dashboard — additive only, computed exactly per
+  // the IR team's written feedback doc, alongside (not instead of) the
+  // shared PortfolioDashboardClient above. Does not touch any of the
+  // computations above it. Scope: creators this IR Executive personally
+  // sourced (Creator.sourcedByUserId) who have since been onboarded — per
+  // the feedback's own definition ("only counts once shortlisted by that
+  // executive AND onboarded"). Every other IR Executive-only number below
+  // (deliverables, turnaround time, financials, invoices) is derived from
+  // that same creator set, so the whole section is internally consistent.
+  let irExecutiveData: IrExecutiveDashboardData | null = null;
+  if (user.role === "IR_EXECUTIVE") {
+    const activeCampaigns = await prisma.campaign.count({
+      where: { ...campaignVisibilityWhere(user), status: "ACTIVE" },
+    });
+
+    const myCreators = (await (prisma as any).creator.findMany({
+      where: { sourcedByUserId: user.id, status: "ONBOARDED" },
+      select: {
+        id: true,
+        onboardedAt: true,
+        goLiveDeadline: true,
+        finalQuotedCost: true,
+        quotedCost: true,
+        internalCost: true,
+        payoutPaymentStatus: true,
+        payoutInvoiceRaised: true,
+        payoutInvoiceReceived: true,
+        deliverables: {
+          select: {
+            id: true,
+            liveLink: true,
+            scriptApprovedAt: true,
+            contentApprovedAt: true,
+          },
+        },
+      },
+    })) as {
+      id: string;
+      onboardedAt: Date | null;
+      goLiveDeadline: Date | null;
+      finalQuotedCost: number | null;
+      quotedCost: number | null;
+      internalCost: number | null;
+      payoutPaymentStatus: string;
+      payoutInvoiceRaised: boolean;
+      payoutInvoiceReceived: boolean;
+      deliverables: { id: string; liveLink: string | null; scriptApprovedAt: Date | null; contentApprovedAt: Date | null }[];
+    }[];
+
+    const myDeliverables = myCreators.flatMap((cr) => cr.deliverables.map((d) => ({ ...d, creator: cr })));
+    const deliverablesTotal = myDeliverables.length;
+    const deliverablesLive = myDeliverables.filter((d) => !!d.liveLink).length;
+
+    // On time / nearing deadline (<=24h left) / delayed (deadline passed) —
+    // only applies to deliverables not yet live, and only where the parent
+    // creator has a deadline to measure against. Uses each creator's
+    // goLiveDeadline, the same effective-deadline field the rest of the app
+    // already tracks per onboarded creator (there's no separate
+    // per-deliverable deadline field).
+    const now = Date.now();
+    const HOUR_MS = 60 * 60 * 1000;
+    let deliverablesOnTime = 0;
+    let deliverablesNearingDeadline = 0;
+    let deliverablesDelayed = 0;
+    for (const d of myDeliverables) {
+      if (d.liveLink) continue;
+      const deadline = d.creator.goLiveDeadline ? new Date(d.creator.goLiveDeadline).getTime() : null;
+      if (deadline === null) continue;
+      const remainingMs = deadline - now;
+      if (remainingMs < 0) deliverablesDelayed++;
+      else if (remainingMs <= 24 * HOUR_MS) deliverablesNearingDeadline++;
+      else deliverablesOnTime++;
+    }
+
+    // Turnaround-time stage stats — average/best/worst across every
+    // deliverable in scope that has both the start and end timestamp for
+    // that stage (per the feedback doc: "only creator records containing
+    // both the relevant start and completion timestamps should be
+    // included").
+    const stageStats = (pairs: { start: Date | null; end: Date | null }[]) => {
+      const durations = pairs
+        .filter((p): p is { start: Date; end: Date } => !!p.start && !!p.end)
+        .map((p) => p.end.getTime() - p.start.getTime())
+        .filter((ms) => ms >= 0);
+      if (durations.length === 0) return { avgMs: null, bestMs: null, worstMs: null };
+      return {
+        avgMs: durations.reduce((s, v) => s + v, 0) / durations.length,
+        bestMs: Math.min(...durations),
+        worstMs: Math.max(...durations),
+      };
+    };
+
+    const myOnboardToScript = stageStats(myDeliverables.map((d) => ({ start: d.creator.onboardedAt, end: d.scriptApprovedAt })));
+    // "Video submission" has no dedicated tracked timestamp in the schema
+    // (the Video Link/reviewLink field isn't timestamped) — Content
+    // Approved is the nearest real milestone the app records for "the
+    // video is done", so it's used here as that stage's end point.
+    const myScriptToVideo = stageStats(myDeliverables.map((d) => ({ start: d.scriptApprovedAt, end: d.contentApprovedAt })));
+    const myEndToEnd = stageStats(myDeliverables.map((d) => ({ start: d.creator.onboardedAt, end: d.contentApprovedAt })));
+
+    // Company average — same three stages, same timestamp fields, across
+    // every onboarded creator org-wide (not scoped to this executive), per
+    // the feedback doc's "company average across all IR executives".
+    const allOnboarded = (await (prisma as any).creator.findMany({
+      where: { status: "ONBOARDED" },
+      select: {
+        onboardedAt: true,
+        deliverables: { select: { scriptApprovedAt: true, contentApprovedAt: true } },
+      },
+    })) as { onboardedAt: Date | null; deliverables: { scriptApprovedAt: Date | null; contentApprovedAt: Date | null }[] }[];
+    const allPairs = allOnboarded.flatMap((cr) =>
+      cr.deliverables.map((d) => ({ onboardedAt: cr.onboardedAt, scriptApprovedAt: d.scriptApprovedAt, contentApprovedAt: d.contentApprovedAt }))
+    );
+    const companyOnboardToScript = stageStats(allPairs.map((d) => ({ start: d.onboardedAt, end: d.scriptApprovedAt })));
+    const companyScriptToVideo = stageStats(allPairs.map((d) => ({ start: d.scriptApprovedAt, end: d.contentApprovedAt })));
+    const companyEndToEnd = stageStats(allPairs.map((d) => ({ start: d.onboardedAt, end: d.contentApprovedAt })));
+
+    // Creator financials — Total Value of Active Creators = Value Paid +
+    // Value Due, per the feedback doc, all driven off each creator's own
+    // Payout Amount (internalCost) and payoutPaymentStatus, same source of
+    // truth the campaign page's Finance and Invoicing tab already uses.
+    const valuePaid = myCreators.filter((cr) => cr.payoutPaymentStatus === "PAID").reduce((s, cr) => s + (cr.internalCost ?? 0), 0);
+    const valueDue = myCreators.filter((cr) => cr.payoutPaymentStatus !== "PAID").reduce((s, cr) => s + (cr.internalCost ?? 0), 0);
+
+    // Invoice status — one expected invoice per onboarded creator, counted
+    // once its invoice has actually been raised (payoutInvoiceRaised), then
+    // split by whether it's been received (payoutInvoiceReceived). Value is
+    // that creator's Payout Amount (internalCost), so count and value both
+    // reconcile exactly: received + pending = total, on both dimensions.
+    const invoicesRaised = myCreators.filter((cr) => cr.payoutInvoiceRaised);
+    const invoicesReceived = invoicesRaised.filter((cr) => cr.payoutInvoiceReceived);
+    const invoicesPending = invoicesRaised.filter((cr) => !cr.payoutInvoiceReceived);
+
+    irExecutiveData = {
+      activeCampaigns,
+      creatorsUnderExecution: myCreators.length,
+      deliverablesTotal,
+      deliverablesLive,
+      deliverablesOnTime,
+      deliverablesNearingDeadline,
+      deliverablesDelayed,
+      turnaround: [
+        { label: "Onboarding to script approval", yourAvgMs: myOnboardToScript.avgMs, yourBestMs: myOnboardToScript.bestMs, yourWorstMs: myOnboardToScript.worstMs, companyAvgMs: companyOnboardToScript.avgMs },
+        { label: "Script approval to video", yourAvgMs: myScriptToVideo.avgMs, yourBestMs: myScriptToVideo.bestMs, yourWorstMs: myScriptToVideo.worstMs, companyAvgMs: companyScriptToVideo.avgMs },
+        { label: "End-to-end (onboarding to content approved)", yourAvgMs: myEndToEnd.avgMs, yourBestMs: myEndToEnd.bestMs, yourWorstMs: myEndToEnd.worstMs, companyAvgMs: companyEndToEnd.avgMs },
+      ],
+      totalCreatorValue: valuePaid + valueDue,
+      valueDue,
+      valuePaid,
+      invoiceTotalCount: invoicesRaised.length,
+      invoiceTotalValue: invoicesRaised.reduce((s, cr) => s + (cr.internalCost ?? 0), 0),
+      invoiceReceivedCount: invoicesReceived.length,
+      invoiceReceivedValue: invoicesReceived.reduce((s, cr) => s + (cr.internalCost ?? 0), 0),
+      invoicePendingCount: invoicesPending.length,
+      invoicePendingValue: invoicesPending.reduce((s, cr) => s + (cr.internalCost ?? 0), 0),
+    };
+  }
+
   const todayStr = new Date().toLocaleDateString("en-IN", {
     weekday: "long",
     day: "numeric",
@@ -325,6 +486,8 @@ export default async function DashboardPage() {
           </Link>
         )}
       </div>
+
+      {irExecutiveData && <IrExecutivePersonalDashboard data={irExecutiveData} />}
 
       <PortfolioDashboardClient
         campaigns={rows}
