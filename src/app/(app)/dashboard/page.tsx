@@ -415,11 +415,13 @@ export default async function DashboardPage() {
     const myOnboardToScript = stageStats(myDeliverables.map((d) => ({ start: d.creator.onboardedAt, end: d.scriptApprovedAt })));
     // "Video submission" — the real milestone now: the first time a review
     // link was saved for this deliverable (Deliverable.videoSubmittedAt,
+    // falling back to Content Approved for older deliverables that were
+    // approved before this timestamp existed, so they still count,
     // stamped once in updateReviewLink). Older deliverables submitted
     // before this field existed simply won't have a value here and are
     // excluded from the average, same "only records with both timestamps"
     // rule as every other stage.
-    const myScriptToVideo = stageStats(myDeliverables.map((d) => ({ start: d.scriptApprovedAt, end: d.videoSubmittedAt })));
+    const myScriptToVideo = stageStats(myDeliverables.map((d) => ({ start: d.scriptApprovedAt, end: d.videoSubmittedAt ?? d.contentApprovedAt })));
     const myEndToEnd = stageStats(myDeliverables.map((d) => ({ start: d.creator.onboardedAt, end: d.contentApprovedAt })));
 
     // Company average — same three stages, same timestamp fields, across
@@ -436,7 +438,7 @@ export default async function DashboardPage() {
       cr.deliverables.map((d) => ({ onboardedAt: cr.onboardedAt, scriptApprovedAt: d.scriptApprovedAt, contentApprovedAt: d.contentApprovedAt, videoSubmittedAt: d.videoSubmittedAt }))
     );
     const companyOnboardToScript = stageStats(allPairs.map((d) => ({ start: d.onboardedAt, end: d.scriptApprovedAt })));
-    const companyScriptToVideo = stageStats(allPairs.map((d) => ({ start: d.scriptApprovedAt, end: d.videoSubmittedAt })));
+    const companyScriptToVideo = stageStats(allPairs.map((d) => ({ start: d.scriptApprovedAt, end: d.videoSubmittedAt ?? d.contentApprovedAt })));
     const companyEndToEnd = stageStats(allPairs.map((d) => ({ start: d.onboardedAt, end: d.contentApprovedAt })));
 
     // Creator financials — Total Value of Active Creators = Value Paid +
@@ -523,7 +525,7 @@ export default async function DashboardPage() {
         })
         .map(deliverableRow),
       turnaroundOnboardToScript: durationRow("onboard-script", myDeliverables.map((d) => ({ start: d.creator.onboardedAt, end: d.scriptApprovedAt, creator: d.creator }))),
-      turnaroundScriptToVideo: durationRow("script-video", myDeliverables.map((d) => ({ start: d.scriptApprovedAt, end: d.videoSubmittedAt, creator: d.creator }))),
+      turnaroundScriptToVideo: durationRow("script-video", myDeliverables.map((d) => ({ start: d.scriptApprovedAt, end: d.videoSubmittedAt ?? d.contentApprovedAt, creator: d.creator }))),
       turnaroundEndToEnd: durationRow("end-to-end", myDeliverables.map((d) => ({ start: d.creator.onboardedAt, end: d.contentApprovedAt, creator: d.creator }))),
       totalCreatorValue: myCreators.map((cr) => ({
         ...creatorRow(cr),

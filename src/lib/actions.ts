@@ -2873,7 +2873,9 @@ export async function addLiveLink(deliverableId: string, liveLink: string) {
 
   const deliverable = await prisma.deliverable.update({
     where: { id: deliverableId },
-    data: { liveLink, liveDate, status: "LIVE" },
+    // A video going live was necessarily submitted; stamp the submission
+    // time if no review link ever did (never overwrites an earlier one).
+    data: { liveLink, liveDate, status: "LIVE", ...(((await prisma.deliverable.findUnique({ where: { id: deliverableId }, select: { id: true, ...( { videoSubmittedAt: true } as any) } })) as any)?.videoSubmittedAt ? {} : { videoSubmittedAt: new Date() }) } as any,
     include: { creator: true },
   });
 

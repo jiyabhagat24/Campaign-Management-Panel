@@ -262,9 +262,15 @@ export default function IrExecutivePersonalDashboard({ data }: { data: IrExecuti
             <InvoiceBar label="Total invoices" count={data.invoiceTotalCount} value={data.invoiceTotalValue} fraction={1} barClassName="bg-indigo-500" onClick={() => toggle("invoiceTotal")} active={openKey === "invoiceTotal"} />
             <InvoiceBar label="Received" count={data.invoiceReceivedCount} value={data.invoiceReceivedValue} fraction={data.invoiceTotalCount ? data.invoiceReceivedCount / data.invoiceTotalCount : 0} barClassName="bg-emerald-500" onClick={() => toggle("invoiceReceived")} active={openKey === "invoiceReceived"} />
             <InvoiceBar label="Yet to be received" count={data.invoicePendingCount} value={data.invoicePendingValue} fraction={data.invoiceTotalCount ? data.invoicePendingCount / data.invoiceTotalCount : 0} barClassName="bg-amber-500" onClick={() => toggle("invoicePending")} active={openKey === "invoicePending"} />
-            <div className="flex flex-col gap-1 border-t border-slate-100 pt-3 text-[11px] text-slate-500 dark:border-slate-800 dark:text-slate-400 sm:flex-row sm:justify-between">
-              <span>Count reconciliation: {data.invoiceReceivedCount} + {data.invoicePendingCount} = {data.invoiceTotalCount}</span>
-              <span>Value reconciliation: {formatCompactINR(data.invoiceReceivedValue)} + {formatCompactINR(data.invoicePendingValue)} = {formatCompactINR(data.invoiceTotalValue)}</span>
+            <div className="-mx-6 -mb-6 mt-2 space-y-2 border-t border-slate-100 bg-slate-50/60 px-6 py-4 text-sm dark:border-slate-800 dark:bg-slate-800/30">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-600 dark:text-slate-300">Count reconciliation</span>
+                <span className="font-bold text-slate-900 dark:text-white">{data.invoiceReceivedCount} + {data.invoicePendingCount} = {data.invoiceTotalCount}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-600 dark:text-slate-300">Value reconciliation</span>
+                <span className="font-bold text-slate-900 dark:text-white">{formatCompactINR(data.invoiceReceivedValue)} + {formatCompactINR(data.invoicePendingValue)} = {formatCompactINR(data.invoiceTotalValue)}</span>
+              </div>
             </div>
             {panelFor(["invoiceTotal", "invoiceReceived", "invoicePending"])}
           </>
