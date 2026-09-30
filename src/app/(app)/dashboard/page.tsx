@@ -201,15 +201,15 @@ export default async function DashboardPage() {
       // Not yet invoiced at all: quoted value minus whatever's already been
       // invoiced (clamped at 0 so an over-invoiced campaign, e.g. extra
       // charges, doesn't show a negative "yet to invoice").
-      financeYetToBeInvoiced: showFinance ? Math.max(quotedValue - totalInvoiced, 0) : 0,
+      financeYetToBeInvoiced: showFinance && user.role !== "IR_EXECUTIVE" ? Math.max(quotedValue - totalInvoiced, 0) : 0,
       // Invoiced but payment hasn't come in yet.
-      financeYetToBeReceived: showFinance ? Math.max(totalInvoiced - totalReceived, 0) : 0,
+      financeYetToBeReceived: showFinance && user.role !== "IR_EXECUTIVE" ? Math.max(totalInvoiced - totalReceived, 0) : 0,
       // Actually invoiced AND received from the client — this is the real
       // "cleared due" number, summed straight off the ledger.
-      financeValueOfClearedDue: showFinance ? totalReceived : 0,
+      financeValueOfClearedDue: showFinance && user.role !== "IR_EXECUTIVE" ? totalReceived : 0,
       // What TBM still owes onboarded creators — their own Payout Amount
       // (internalCost) wherever payoutPaymentStatus hasn't reached PAID yet.
-      financeCreatorPayablePending: showFinance
+      financeCreatorPayablePending: showFinance && user.role !== "IR_EXECUTIVE"
         ? onboardedCreators.filter((cr) => cr.payoutPaymentStatus !== "PAID").reduce((s, cr) => s + (cr.internalCost ?? 0), 0)
         : 0,
       // Same showFinance gating as every other cost figure above — these
@@ -602,6 +602,7 @@ export default async function DashboardPage() {
         showRecentActivity={!isClient(user.role)}
         financeCampaigns={financeRows}
         showFinance={showFinance}
+        hideFinanceCards={user.role === "IR_EXECUTIVE"}
         revenueRows={revenueRows}
         isClientView={isClient(user.role)}
       />

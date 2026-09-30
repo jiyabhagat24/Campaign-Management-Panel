@@ -66,30 +66,46 @@ function formatDuration(ms: number | null): string {
   return `${days}d ${hours}h`;
 }
 
+const STAT_BAR = "absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500";
+const STAT_LABEL = "text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider";
+
+// Same stat-card look as the summary row in PortfolioDashboardClient.
 function MetricTile({
   label,
   value,
   hint,
   onClick,
   active,
+  valueClassName,
 }: {
   label: string;
   value: string;
   hint?: string;
   onClick: () => void;
   active: boolean;
+  valueClassName?: string;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-expanded={active}
-      className="rounded-xl bg-slate-50 p-4 text-left dark:bg-slate-800/60"
-    >
-      <p className="text-xs font-medium text-slate-500 dark:text-slate-400">{label}</p>
-      <p className="mt-1.5 text-2xl font-bold text-slate-900 dark:text-white">{value}</p>
-      {hint && <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">{hint}</p>}
+    <button type="button" onClick={onClick} aria-expanded={active} className="stat-card group w-full text-left dark:bg-slate-900 dark:border-slate-800">
+      <div className={STAT_BAR} />
+      <p className={STAT_LABEL}>{label}</p>
+      <p className={`mt-3 text-3xl font-extrabold ${valueClassName ?? "text-slate-900 dark:text-white"}`}>{value}</p>
+      {hint && <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 font-medium">{hint}</p>}
     </button>
+  );
+}
+
+// Same section-card look as the Campaign Table card.
+function SectionCard({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-2xl border border-slate-200/80 bg-white dark:bg-slate-900 dark:border-slate-800 shadow-card overflow-hidden">
+      <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 px-6 py-4 bg-slate-50/50 dark:bg-slate-800/40">
+        <div className="h-2 w-2 rounded-full bg-indigo-600" />
+        <h2 className="text-sm font-bold text-slate-900 dark:text-white">{title}</h2>
+        {subtitle && <span className="text-[11px] text-slate-500 dark:text-slate-400">{subtitle}</span>}
+      </div>
+      <div className="space-y-3 p-6">{children}</div>
+    </div>
   );
 }
 
@@ -167,186 +183,93 @@ export default function IrExecutivePersonalDashboard({ data }: { data: IrExecuti
   const openPanel = openKey ? (
     <DetailPanel title={panelTitles[openKey] ?? openKey} rows={data.details[openKey] ?? []} onClose={() => setOpenKey(null)} />
   ) : null;
+  const panelFor = (keys: string[]) => (openKey && keys.includes(openKey) ? openPanel : null);
 
   return (
-    <div className="space-y-6 rounded-2xl border border-slate-200/60 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
-      <div>
-        <h2 className="text-lg font-bold text-slate-900 dark:text-white">Your dashboard</h2>
-        <p className="text-xs text-slate-500 dark:text-slate-400">Campaigns, creators and deliverables you own</p>
-      </div>
-
+    <div className="space-y-8">
       {/* 1. Campaign and execution summary */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <MetricTile
-          label="Active campaigns"
-          value={String(data.activeCampaigns)}
-          onClick={() => toggle("activeCampaigns")}
-          active={openKey === "activeCampaigns"}
-        />
-        <MetricTile
-          label="Creators under execution"
-          value={String(data.creatorsUnderExecution)}
-          hint="Sourced by you and onboarded"
-          onClick={() => toggle("creatorsUnderExecution")}
-          active={openKey === "creatorsUnderExecution"}
-        />
-        <MetricTile
-          label="Deliverables"
-          value={String(data.deliverablesTotal)}
-          hint={`${data.deliverablesLive} live`}
-          onClick={() => toggle("deliverablesTotal")}
-          active={openKey === "deliverablesTotal"}
-        />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <MetricTile label="Active Campaigns" value={String(data.activeCampaigns)} onClick={() => toggle("activeCampaigns")} active={openKey === "activeCampaigns"} />
+        <MetricTile label="Creators Under Execution" value={String(data.creatorsUnderExecution)} hint="Sourced by you and onboarded" onClick={() => toggle("creatorsUnderExecution")} active={openKey === "creatorsUnderExecution"} />
+        <MetricTile label="Deliverables" value={String(data.deliverablesTotal)} hint={`${data.deliverablesLive} live`} onClick={() => toggle("deliverablesTotal")} active={openKey === "deliverablesTotal"} />
       </div>
-      {openKey && ["activeCampaigns", "creatorsUnderExecution", "deliverablesTotal"].includes(openKey) && openPanel}
+      {panelFor(["activeCampaigns", "creatorsUnderExecution", "deliverablesTotal"])}
 
-      {!hasDeliverables ? (
-        <p className="text-xs text-slate-400 dark:text-slate-500">No data available</p>
-      ) : (
+      {hasDeliverables ? (
         <>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <button
-              type="button"
-              onClick={() => toggle("deliverablesOnTime")}
-              className="rounded-xl bg-emerald-50 p-3 text-left dark:bg-emerald-950/40"
-            >
-              <p className="text-xs font-medium text-emerald-800 dark:text-emerald-200">On time</p>
-              <p className="mt-1 text-xl font-bold text-emerald-800 dark:text-emerald-200">{data.deliverablesOnTime}</p>
-            </button>
-            <button
-              type="button"
-              onClick={() => toggle("deliverablesNearingDeadline")}
-              className="rounded-xl bg-amber-50 p-3 text-left dark:bg-amber-950/40"
-            >
-              <p className="text-xs font-medium text-amber-800 dark:text-amber-200">Nearing deadline</p>
-              <p className="mt-1 text-xl font-bold text-amber-800 dark:text-amber-200">{data.deliverablesNearingDeadline}</p>
-            </button>
-            <button
-              type="button"
-              onClick={() => toggle("deliverablesDelayed")}
-              className="rounded-xl bg-rose-50 p-3 text-left dark:bg-rose-950/40"
-            >
-              <p className="text-xs font-medium text-rose-800 dark:text-rose-200">Delayed</p>
-              <p className="mt-1 text-xl font-bold text-rose-800 dark:text-rose-200">{data.deliverablesDelayed}</p>
-            </button>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <MetricTile label="On Time" value={String(data.deliverablesOnTime)} valueClassName="text-emerald-600 dark:text-emerald-400" onClick={() => toggle("deliverablesOnTime")} active={openKey === "deliverablesOnTime"} />
+            <MetricTile label="Nearing Deadline" value={String(data.deliverablesNearingDeadline)} valueClassName="text-amber-600 dark:text-amber-400" onClick={() => toggle("deliverablesNearingDeadline")} active={openKey === "deliverablesNearingDeadline"} />
+            <MetricTile label="Delayed" value={String(data.deliverablesDelayed)} valueClassName="text-rose-600 dark:text-rose-400" onClick={() => toggle("deliverablesDelayed")} active={openKey === "deliverablesDelayed"} />
           </div>
-          {openKey && ["deliverablesLive", "deliverablesOnTime", "deliverablesNearingDeadline", "deliverablesDelayed"].includes(openKey) && openPanel}
+          {panelFor(["deliverablesLive", "deliverablesOnTime", "deliverablesNearingDeadline", "deliverablesDelayed"])}
         </>
+      ) : (
+        <p className="text-xs text-slate-400 dark:text-slate-500">No data available</p>
       )}
 
       {/* 2. Turnaround-time analysis */}
-      <div>
-        <h3 className="text-sm font-bold text-slate-900 dark:text-white">Turnaround time</h3>
+      <SectionCard title="Turnaround Time">
         {!hasTurnaroundData ? (
-          <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">No data available</p>
+          <p className="text-xs text-slate-400 dark:text-slate-500">No data available</p>
         ) : (
           <>
-            <div className="mt-2 overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="text-slate-500 dark:text-slate-400">
-                    <th className="py-1.5 text-left font-medium">Stage</th>
-                    <th className="py-1.5 text-right font-medium">Your average</th>
-                    <th className="py-1.5 text-right font-medium">Your best</th>
-                    <th className="py-1.5 text-right font-medium">Your worst</th>
-                    <th className="py-1.5 text-right font-medium">Company average</th>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  <tr>
+                    <th className="py-2 text-left">Stage</th>
+                    <th className="py-2 text-right">Your average</th>
+                    <th className="py-2 text-right">Your best</th>
+                    <th className="py-2 text-right">Your worst</th>
+                    <th className="py-2 text-right">Company average</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {data.turnaround.map((stage) => (
-                    <tr
-                      key={stage.label}
-                      onClick={() => toggle(stage.detailKey)}
-                      className="cursor-pointer"
-                    >
-                      <td className="py-1.5 font-semibold text-slate-700 dark:text-slate-300">{stage.label}</td>
-                      <td className="py-1.5 text-right font-bold text-slate-900 dark:text-white">{formatDuration(stage.yourAvgMs)}</td>
-                      <td className="py-1.5 text-right text-slate-600 dark:text-slate-300">{formatDuration(stage.yourBestMs)}</td>
-                      <td className="py-1.5 text-right text-slate-600 dark:text-slate-300">{formatDuration(stage.yourWorstMs)}</td>
-                      <td className="py-1.5 text-right text-slate-400 dark:text-slate-500">{formatDuration(stage.companyAvgMs)}</td>
+                    <tr key={stage.label} onClick={() => toggle(stage.detailKey)} className="cursor-pointer">
+                      <td className="py-2 font-semibold text-slate-700 dark:text-slate-300">{stage.label}</td>
+                      <td className="py-2 text-right font-bold text-slate-900 dark:text-white">{formatDuration(stage.yourAvgMs)}</td>
+                      <td className="py-2 text-right text-slate-600 dark:text-slate-300">{formatDuration(stage.yourBestMs)}</td>
+                      <td className="py-2 text-right text-slate-600 dark:text-slate-300">{formatDuration(stage.yourWorstMs)}</td>
+                      <td className="py-2 text-right text-slate-500 dark:text-slate-400">{formatDuration(stage.companyAvgMs)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-            {openKey && data.turnaround.some((s) => s.detailKey === openKey) && <div className="mt-2">{openPanel}</div>}
+            {panelFor(data.turnaround.map((s) => s.detailKey))}
           </>
         )}
-      </div>
+      </SectionCard>
 
-      {/* 3. Financial overview (creator payouts you're responsible for) */}
-      <div>
-        <h3 className="text-sm font-bold text-slate-900 dark:text-white">Creator financials</h3>
-        <p className="text-[11px] text-slate-400 dark:text-slate-500">Active, onboarded creators</p>
-        <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <MetricTile
-            label="Total creator value"
-            value={formatCompactINR(data.totalCreatorValue)}
-            onClick={() => toggle("totalCreatorValue")}
-            active={openKey === "totalCreatorValue"}
-          />
-          <MetricTile
-            label="Value due"
-            value={formatCompactINR(data.valueDue)}
-            onClick={() => toggle("valueDue")}
-            active={openKey === "valueDue"}
-          />
-          <MetricTile
-            label="Value paid"
-            value={formatCompactINR(data.valuePaid)}
-            onClick={() => toggle("valuePaid")}
-            active={openKey === "valuePaid"}
-          />
+      {/* 3. Financial overview */}
+      <SectionCard title="Creator Financials" subtitle="Active, onboarded creators">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <MetricTile label="Total Creator Value" value={formatCompactINR(data.totalCreatorValue)} onClick={() => toggle("totalCreatorValue")} active={openKey === "totalCreatorValue"} />
+          <MetricTile label="Value Due" value={formatCompactINR(data.valueDue)} onClick={() => toggle("valueDue")} active={openKey === "valueDue"} />
+          <MetricTile label="Value Paid" value={formatCompactINR(data.valuePaid)} onClick={() => toggle("valuePaid")} active={openKey === "valuePaid"} />
         </div>
-        {openKey && ["totalCreatorValue", "valueDue", "valuePaid"].includes(openKey) && <div className="mt-2">{openPanel}</div>}
-      </div>
+        {panelFor(["totalCreatorValue", "valueDue", "valuePaid"])}
+      </SectionCard>
 
       {/* 4. Invoice status */}
-      <div>
-        <h3 className="text-sm font-bold text-slate-900 dark:text-white">Invoice status</h3>
+      <SectionCard title="Invoice Status">
         {!hasInvoices ? (
-          <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">No data available</p>
+          <p className="text-xs text-slate-400 dark:text-slate-500">No data available</p>
         ) : (
-          <div className="mt-2 space-y-3">
-            <InvoiceBar
-              label="Total invoices"
-              count={data.invoiceTotalCount}
-              value={data.invoiceTotalValue}
-              fraction={1}
-              barClassName="bg-indigo-500"
-              onClick={() => toggle("invoiceTotal")}
-              active={openKey === "invoiceTotal"}
-            />
-            <InvoiceBar
-              label="Received"
-              count={data.invoiceReceivedCount}
-              value={data.invoiceReceivedValue}
-              fraction={data.invoiceTotalCount ? data.invoiceReceivedCount / data.invoiceTotalCount : 0}
-              barClassName="bg-emerald-500"
-              onClick={() => toggle("invoiceReceived")}
-              active={openKey === "invoiceReceived"}
-            />
-            <InvoiceBar
-              label="Yet to be received"
-              count={data.invoicePendingCount}
-              value={data.invoicePendingValue}
-              fraction={data.invoiceTotalCount ? data.invoicePendingCount / data.invoiceTotalCount : 0}
-              barClassName="bg-amber-500"
-              onClick={() => toggle("invoicePending")}
-              active={openKey === "invoicePending"}
-            />
+          <>
+            <InvoiceBar label="Total invoices" count={data.invoiceTotalCount} value={data.invoiceTotalValue} fraction={1} barClassName="bg-indigo-500" onClick={() => toggle("invoiceTotal")} active={openKey === "invoiceTotal"} />
+            <InvoiceBar label="Received" count={data.invoiceReceivedCount} value={data.invoiceReceivedValue} fraction={data.invoiceTotalCount ? data.invoiceReceivedCount / data.invoiceTotalCount : 0} barClassName="bg-emerald-500" onClick={() => toggle("invoiceReceived")} active={openKey === "invoiceReceived"} />
+            <InvoiceBar label="Yet to be received" count={data.invoicePendingCount} value={data.invoicePendingValue} fraction={data.invoiceTotalCount ? data.invoicePendingCount / data.invoiceTotalCount : 0} barClassName="bg-amber-500" onClick={() => toggle("invoicePending")} active={openKey === "invoicePending"} />
             <div className="flex flex-col gap-1 border-t border-slate-100 pt-3 text-[11px] text-slate-500 dark:border-slate-800 dark:text-slate-400 sm:flex-row sm:justify-between">
-              <span>
-                Count reconciliation: {data.invoiceReceivedCount} + {data.invoicePendingCount} = {data.invoiceTotalCount}
-              </span>
-              <span>
-                Value reconciliation: {formatCompactINR(data.invoiceReceivedValue)} + {formatCompactINR(data.invoicePendingValue)} = {formatCompactINR(data.invoiceTotalValue)}
-              </span>
+              <span>Count reconciliation: {data.invoiceReceivedCount} + {data.invoicePendingCount} = {data.invoiceTotalCount}</span>
+              <span>Value reconciliation: {formatCompactINR(data.invoiceReceivedValue)} + {formatCompactINR(data.invoicePendingValue)} = {formatCompactINR(data.invoiceTotalValue)}</span>
             </div>
-            {openKey && ["invoiceTotal", "invoiceReceived", "invoicePending"].includes(openKey) && openPanel}
-          </div>
+            {panelFor(["invoiceTotal", "invoiceReceived", "invoicePending"])}
+          </>
         )}
-      </div>
+      </SectionCard>
     </div>
   );
 }

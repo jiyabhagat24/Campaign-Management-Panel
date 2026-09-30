@@ -76,6 +76,7 @@ export default function PortfolioDashboardClient({
   showRecentActivity,
   financeCampaigns,
   showFinance,
+  hideFinanceCards = false,
   revenueRows,
   isClientView,
 }: {
@@ -84,6 +85,8 @@ export default function PortfolioDashboardClient({
   showRecentActivity: boolean;
   financeCampaigns: FinanceCampaignRow[];
   showFinance: boolean;
+  // IR Executives don't see the four client-invoicing/payable cards.
+  hideFinanceCards?: boolean;
   revenueRows: RevenueDataRow[];
   // Client-role viewer: the campaign list handed in is already scoped to
   // just their own campaigns (campaignVisibilityWhere on the server), same
@@ -354,7 +357,7 @@ export default function PortfolioDashboardClient({
             status and each onboarded creator's payout status (see
             dashboard/page.tsx). TBM-internal money movement, never shown to
             a client. */}
-        {!isClientView && (
+        {!isClientView && !hideFinanceCards && (
           <div className="stat-card group dark:bg-slate-900 dark:border-slate-800">
             <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
             <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Yet to be Invoiced</p>
@@ -363,7 +366,7 @@ export default function PortfolioDashboardClient({
           </div>
         )}
 
-        {!isClientView && (
+        {!isClientView && !hideFinanceCards && (
           <div className="stat-card group dark:bg-slate-900 dark:border-slate-800">
             <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
             <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Yet to be Received</p>
@@ -372,7 +375,7 @@ export default function PortfolioDashboardClient({
           </div>
         )}
 
-        {!isClientView && (
+        {!isClientView && !hideFinanceCards && (
           <div className="stat-card group dark:bg-slate-900 dark:border-slate-800">
             <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
             <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Value of Cleared Due</p>
@@ -381,7 +384,7 @@ export default function PortfolioDashboardClient({
           </div>
         )}
 
-        {!isClientView && (
+        {!isClientView && !hideFinanceCards && (
           <div className="stat-card group dark:bg-slate-900 dark:border-slate-800">
             <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
             <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Creator Payable Pending</p>
