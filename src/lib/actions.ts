@@ -3009,14 +3009,25 @@ export async function updateReviewLink(deliverableId: string, reviewLink: string
 
   const existing = await prisma.deliverable.findUnique({
     where: { id: deliverableId },
-    select: { creator: { select: { campaignId: true, pocUserId: true } } },
-  });
+    select: { creator: { select: { campaignId: true, pocUserId: true } }, ...( { reviewLink: true, videoSubmittedAt: true } as any) },
+  }) as any;
   if (!existing) throw new Error("Deliverable not found");
   if (!isCreatorPOC(user.id, existing.creator) && !isSuperAdmin(user.id)) {
     throw new Error("Only this creator's assigned POC can set review links.");
   }
 
-  await prisma.deliverable.update({ where: { id: deliverableId }, data: { reviewLink: reviewLink || null } as any });
+  // videoSubmittedAt stamps once, the first time a real link is saved here
+  // (empty -> non-empty), and is never touched again on later edits — the
+  // "video submission" turnaround-time milestone.
+  const isFirstSubmission = !existing.reviewLink && !!reviewLink && !existing.videoSubmittedAt;
+
+  await prisma.deliverable.update({
+    where: { id: deliverableId },
+    data: {
+      reviewLink: reviewLink || null,
+      ...(isFirstSubmission ? { videoSubmittedAt: new Date() } : {}),
+    } as any,
+  });
   revalidatePath(`/campaigns/${existing.creator.campaignId}`);
 }
 

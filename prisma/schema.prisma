@@ -673,6 +673,12 @@ model Deliverable {
   // matter what's pasted here; only liveLink (entered once the video is
   // Approved) does that.
   reviewLink String?
+  // Stamped once, the first time a reviewLink is saved for this
+  // deliverable — the real "video submission" milestone for turnaround-time
+  // reporting (IR Executive dashboard's "script approval to video" stage).
+  // Never overwritten on later edits to reviewLink, same one-time-stamp
+  // convention as scriptApprovedAt/contentApprovedAt.
+  videoSubmittedAt DateTime?
   // Target date for the video draft — manually entered by IR, same
   // "planned vs. actual" split as scriptApprovalDeadline above.
   videoDraftDeadline DateTime?

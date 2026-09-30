@@ -330,6 +330,7 @@ export default async function DashboardPage() {
             liveLink: true,
             scriptApprovedAt: true,
             contentApprovedAt: true,
+            videoSubmittedAt: true,
           },
         },
       },
@@ -343,7 +344,7 @@ export default async function DashboardPage() {
       payoutPaymentStatus: string;
       payoutInvoiceRaised: boolean;
       payoutInvoiceReceived: boolean;
-      deliverables: { id: string; liveLink: string | null; scriptApprovedAt: Date | null; contentApprovedAt: Date | null }[];
+      deliverables: { id: string; liveLink: string | null; scriptApprovedAt: Date | null; contentApprovedAt: Date | null; videoSubmittedAt: Date | null }[];
     }[];
 
     const myDeliverables = myCreators.flatMap((cr) => cr.deliverables.map((d) => ({ ...d, creator: cr })));
@@ -390,11 +391,13 @@ export default async function DashboardPage() {
     };
 
     const myOnboardToScript = stageStats(myDeliverables.map((d) => ({ start: d.creator.onboardedAt, end: d.scriptApprovedAt })));
-    // "Video submission" has no dedicated tracked timestamp in the schema
-    // (the Video Link/reviewLink field isn't timestamped) — Content
-    // Approved is the nearest real milestone the app records for "the
-    // video is done", so it's used here as that stage's end point.
-    const myScriptToVideo = stageStats(myDeliverables.map((d) => ({ start: d.scriptApprovedAt, end: d.contentApprovedAt })));
+    // "Video submission" — the real milestone now: the first time a review
+    // link was saved for this deliverable (Deliverable.videoSubmittedAt,
+    // stamped once in updateReviewLink). Older deliverables submitted
+    // before this field existed simply won't have a value here and are
+    // excluded from the average, same "only records with both timestamps"
+    // rule as every other stage.
+    const myScriptToVideo = stageStats(myDeliverables.map((d) => ({ start: d.scriptApprovedAt, end: d.videoSubmittedAt })));
     const myEndToEnd = stageStats(myDeliverables.map((d) => ({ start: d.creator.onboardedAt, end: d.contentApprovedAt })));
 
     // Company average — same three stages, same timestamp fields, across
@@ -404,14 +407,14 @@ export default async function DashboardPage() {
       where: { status: "ONBOARDED" },
       select: {
         onboardedAt: true,
-        deliverables: { select: { scriptApprovedAt: true, contentApprovedAt: true } },
+        deliverables: { select: { scriptApprovedAt: true, contentApprovedAt: true, videoSubmittedAt: true } },
       },
-    })) as { onboardedAt: Date | null; deliverables: { scriptApprovedAt: Date | null; contentApprovedAt: Date | null }[] }[];
+    })) as { onboardedAt: Date | null; deliverables: { scriptApprovedAt: Date | null; contentApprovedAt: Date | null; videoSubmittedAt: Date | null }[] }[];
     const allPairs = allOnboarded.flatMap((cr) =>
-      cr.deliverables.map((d) => ({ onboardedAt: cr.onboardedAt, scriptApprovedAt: d.scriptApprovedAt, contentApprovedAt: d.contentApprovedAt }))
+      cr.deliverables.map((d) => ({ onboardedAt: cr.onboardedAt, scriptApprovedAt: d.scriptApprovedAt, contentApprovedAt: d.contentApprovedAt, videoSubmittedAt: d.videoSubmittedAt }))
     );
     const companyOnboardToScript = stageStats(allPairs.map((d) => ({ start: d.onboardedAt, end: d.scriptApprovedAt })));
-    const companyScriptToVideo = stageStats(allPairs.map((d) => ({ start: d.scriptApprovedAt, end: d.contentApprovedAt })));
+    const companyScriptToVideo = stageStats(allPairs.map((d) => ({ start: d.scriptApprovedAt, end: d.videoSubmittedAt })));
     const companyEndToEnd = stageStats(allPairs.map((d) => ({ start: d.onboardedAt, end: d.contentApprovedAt })));
 
     // Creator financials — Total Value of Active Creators = Value Paid +
