@@ -233,6 +233,22 @@ export default function CampaignReport({
         </div>
       </div>
 
+      {/* Refresh stats — right-aligned, above Cost & Delivery Overview */}
+      {canRefreshStats && campaignId && (
+        <div className="flex items-center justify-end gap-3">
+          {refreshMsg && <span className="text-[11px] text-slate-500 dark:text-slate-400">{refreshMsg}</span>}
+          <button
+            type="button"
+            onClick={handleRefreshStats}
+            disabled={refreshing}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
+            <span>{refreshing ? "Refreshing…" : "Refresh stats"}</span>
+          </button>
+        </div>
+      )}
+
       {/* 2. Cost and delivery overview */}
       <div className={sectionClass}>
         <p className="mb-3 text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">Cost &amp; Delivery Overview</p>
@@ -325,23 +341,7 @@ export default function CampaignReport({
 
       {/* 5. Live deliverables, line item */}
       <div className={`${sectionClass} overflow-hidden !p-0`}>
-        <div className="flex items-center justify-between gap-3 px-5 pt-5 pb-3">
-          <p className="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">Live Deliverables</p>
-          {canRefreshStats && campaignId && (
-            <div className="flex items-center gap-3">
-              {refreshMsg && <span className="text-[11px] text-slate-500 dark:text-slate-400">{refreshMsg}</span>}
-              <button
-                type="button"
-                onClick={handleRefreshStats}
-                disabled={refreshing}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-              >
-                <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
-                <span>{refreshing ? "Refreshing…" : "Refresh stats"}</span>
-              </button>
-            </div>
-          )}
-        </div>
+        <p className="px-5 pt-5 pb-3 text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">Live Deliverables</p>
         <div className="overflow-x-auto scrollbar-x-hidden">
           <table className="w-full text-left text-sm">
             <thead className="border-t border-b border-slate-100 bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-400">
