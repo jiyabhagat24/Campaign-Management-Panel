@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronUp } from "lucide-react";
 import { formatCompactINR } from "@/lib/format";
 
 // IR Executive personal dashboard — built exactly to the IR team's written
@@ -83,9 +83,8 @@ function MetricTile({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-xl p-4 text-left transition-colors ${
-        active ? "bg-indigo-50 ring-1 ring-indigo-300 dark:bg-indigo-950/40 dark:ring-indigo-700" : "bg-slate-50 hover:bg-slate-100 dark:bg-slate-800/60 dark:hover:bg-slate-800"
-      }`}
+      aria-expanded={active}
+      className="rounded-xl bg-slate-50 p-4 text-left dark:bg-slate-800/60"
     >
       <p className="text-xs font-medium text-slate-500 dark:text-slate-400">{label}</p>
       <p className="mt-1.5 text-2xl font-bold text-slate-900 dark:text-white">{value}</p>
@@ -209,7 +208,7 @@ export default function IrExecutivePersonalDashboard({ data }: { data: IrExecuti
             <button
               type="button"
               onClick={() => toggle("deliverablesOnTime")}
-              className={`rounded-xl p-3 text-left transition-colors ${openKey === "deliverablesOnTime" ? "ring-1 ring-emerald-400" : ""} bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-950/60`}
+              className="rounded-xl bg-emerald-50 p-3 text-left dark:bg-emerald-950/40"
             >
               <p className="text-xs font-medium text-emerald-800 dark:text-emerald-200">On time</p>
               <p className="mt-1 text-xl font-bold text-emerald-800 dark:text-emerald-200">{data.deliverablesOnTime}</p>
@@ -217,7 +216,7 @@ export default function IrExecutivePersonalDashboard({ data }: { data: IrExecuti
             <button
               type="button"
               onClick={() => toggle("deliverablesNearingDeadline")}
-              className={`rounded-xl p-3 text-left transition-colors ${openKey === "deliverablesNearingDeadline" ? "ring-1 ring-amber-400" : ""} bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-950/60`}
+              className="rounded-xl bg-amber-50 p-3 text-left dark:bg-amber-950/40"
             >
               <p className="text-xs font-medium text-amber-800 dark:text-amber-200">Nearing deadline</p>
               <p className="mt-1 text-xl font-bold text-amber-800 dark:text-amber-200">{data.deliverablesNearingDeadline}</p>
@@ -225,7 +224,7 @@ export default function IrExecutivePersonalDashboard({ data }: { data: IrExecuti
             <button
               type="button"
               onClick={() => toggle("deliverablesDelayed")}
-              className={`rounded-xl p-3 text-left transition-colors ${openKey === "deliverablesDelayed" ? "ring-1 ring-rose-400" : ""} bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-950/60`}
+              className="rounded-xl bg-rose-50 p-3 text-left dark:bg-rose-950/40"
             >
               <p className="text-xs font-medium text-rose-800 dark:text-rose-200">Delayed</p>
               <p className="mt-1 text-xl font-bold text-rose-800 dark:text-rose-200">{data.deliverablesDelayed}</p>
@@ -258,7 +257,7 @@ export default function IrExecutivePersonalDashboard({ data }: { data: IrExecuti
                     <tr
                       key={stage.label}
                       onClick={() => toggle(stage.detailKey)}
-                      className={`cursor-pointer ${openKey === stage.detailKey ? "bg-indigo-50 dark:bg-indigo-950/30" : "hover:bg-slate-50 dark:hover:bg-slate-800/40"}`}
+                      className="cursor-pointer"
                     >
                       <td className="py-1.5 font-semibold text-slate-700 dark:text-slate-300">{stage.label}</td>
                       <td className="py-1.5 text-right font-bold text-slate-900 dark:text-white">{formatDuration(stage.yourAvgMs)}</td>
@@ -371,12 +370,9 @@ function InvoiceBar({
 }) {
   const pct = Math.max(0, Math.min(1, fraction)) * 100;
   return (
-    <button type="button" onClick={onClick} className={`w-full rounded-lg p-1.5 text-left transition-colors ${active ? "bg-indigo-50 dark:bg-indigo-950/30" : "hover:bg-slate-50 dark:hover:bg-slate-800/40"}`}>
+    <button type="button" onClick={onClick} aria-expanded={active} className="block w-full text-left">
       <div className="flex items-baseline justify-between text-xs">
-        <span className="flex items-center gap-1 font-semibold text-slate-700 dark:text-slate-300">
-          {label}
-          <ChevronDown className="h-3 w-3 text-slate-300 dark:text-slate-600" />
-        </span>
+        <span className="font-semibold text-slate-700 dark:text-slate-300">{label}</span>
         <span className="text-slate-400 dark:text-slate-500">
           {count} &middot; {formatCompactINR(value)}
         </span>

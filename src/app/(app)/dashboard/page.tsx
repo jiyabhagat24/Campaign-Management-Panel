@@ -451,7 +451,11 @@ export default async function DashboardPage() {
     // split by whether it's been received (payoutInvoiceReceived). Value is
     // that creator's Payout Amount (internalCost), so count and value both
     // reconcile exactly: received + pending = total, on both dimensions.
-    const invoicesRaised = myCreators.filter((cr) => cr.payoutInvoiceRaised);
+    // Total = every onboarded creator in scope (one expected invoice each,
+    // per the doc's "total number of expected creator invoices"), not just
+    // ones already raised — otherwise this whole section read "No data
+    // available" until someone flipped Invoice Raised on a creator.
+    const invoicesRaised = myCreators;
     const invoicesReceived = invoicesRaised.filter((cr) => cr.payoutInvoiceReceived);
     const invoicesPending = invoicesRaised.filter((cr) => !cr.payoutInvoiceReceived);
 
