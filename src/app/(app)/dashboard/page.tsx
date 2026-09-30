@@ -14,6 +14,17 @@ import type { RevenueDataRow } from "@/components/dashboard/RevenueBreakdownChar
 import IrExecutivePersonalDashboard, {
   type IrExecutiveDashboardData,
 } from "@/components/dashboard/IrExecutivePersonalDashboard";
+import { formatCompactINR } from "@/lib/format";
+
+// "2d 4h" — same duration format as the IR Executive dashboard's turnaround
+// table, used here for the plain-text value on each row of a turnaround
+// detail list (e.g. "Onboarding to script approval" expanded).
+function formatDurationForDetail(ms: number): string {
+  const totalHours = Math.round(ms / (60 * 60 * 1000));
+  const days = Math.floor(totalHours / 24);
+  const hours = totalHours % 24;
+  return days === 0 ? `${hours}h` : `${days}d ${hours}h`;
+}
 
 // Default onboard-to-go-live window, mirrors DEFAULT_GO_LIVE_DAYS in
 // CreatorKanban.tsx and DEFAULT_SLA.onboardToGoLiveDays in constants.ts —
@@ -308,14 +319,20 @@ export default async function DashboardPage() {
   // that same creator set, so the whole section is internally consistent.
   let irExecutiveData: IrExecutiveDashboardData | null = null;
   if (user.role === "IR_EXECUTIVE") {
-    const activeCampaigns = await prisma.campaign.count({
+    const activeCampaignRows = await prisma.campaign.findMany({
       where: { ...campaignVisibilityWhere(user), status: "ACTIVE" },
+      select: { id: true, name: true, brand: true, goLiveDeadline: true },
+      orderBy: { updatedAt: "desc" },
     });
 
     const myCreators = (await (prisma as any).creator.findMany({
       where: { sourcedByUserId: user.id, status: "ONBOARDED" },
       select: {
         id: true,
+        name: true,
+        channelHandle: true,
+        campaignId: true,
+        campaign: { select: { name: true } },
         onboardedAt: true,
         goLiveDeadline: true,
         finalQuotedCost: true,
@@ -327,6 +344,7 @@ export default async function DashboardPage() {
         deliverables: {
           select: {
             id: true,
+            platform: true,
             liveLink: true,
             scriptApprovedAt: true,
             contentApprovedAt: true,
@@ -336,6 +354,10 @@ export default async function DashboardPage() {
       },
     })) as {
       id: string;
+      name: string;
+      channelHandle: string;
+      campaignId: string;
+      campaign: { name: string };
       onboardedAt: Date | null;
       goLiveDeadline: Date | null;
       finalQuotedCost: number | null;
@@ -344,7 +366,7 @@ export default async function DashboardPage() {
       payoutPaymentStatus: string;
       payoutInvoiceRaised: boolean;
       payoutInvoiceReceived: boolean;
-      deliverables: { id: string; liveLink: string | null; scriptApprovedAt: Date | null; contentApprovedAt: Date | null; videoSubmittedAt: Date | null }[];
+      deliverables: { id: string; platform: string; liveLink: string | null; scriptApprovedAt: Date | null; contentApprovedAt: Date | null; videoSubmittedAt: Date | null }[];
     }[];
 
     const myDeliverables = myCreators.flatMap((cr) => cr.deliverables.map((d) => ({ ...d, creator: cr })));
@@ -433,8 +455,85 @@ export default async function DashboardPage() {
     const invoicesReceived = invoicesRaised.filter((cr) => cr.payoutInvoiceReceived);
     const invoicesPending = invoicesRaised.filter((cr) => !cr.payoutInvoiceReceived);
 
+    // Detail-list rows for every clickable card/metric (item 5 of the
+    // feedback doc). Built once here, server-side, off the same records
+    // already fetched above — no extra queries. Each row that has an
+    // obvious home page links there (a campaign or that creator's
+    // campaign); rows with no dedicated page (a single deliverable, a
+    // turnaround-duration line) render as plain text.
+    const shortDate = (d: Date | null) => (d ? new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—");
+    const campaignHref = (campaignId: string) => `/campaigns/${campaignId}`;
+    const creatorRow = (cr: (typeof myCreators)[number]): { id: string; primary: string; secondary?: string; value?: string; href?: string } => ({
+      id: cr.id,
+      primary: cr.name,
+      secondary: cr.campaign.name,
+      value: cr.goLiveDeadline ? shortDate(cr.goLiveDeadline) : undefined,
+      href: campaignHref(cr.campaignId),
+    });
+    const deliverableRow = (d: (typeof myDeliverables)[number]) => ({
+      id: d.id,
+      primary: `${d.creator.name} — ${d.platform}`,
+      secondary: d.creator.campaign.name,
+      value: d.liveLink ? "Live" : d.creator.goLiveDeadline ? shortDate(d.creator.goLiveDeadline) : undefined,
+      href: campaignHref(d.creator.campaignId),
+    });
+    const notLive = myDeliverables.filter((d) => !d.liveLink);
+    const durationRow = (label: string, pairs: { start: Date | null; end: Date | null; creator: (typeof myCreators)[number] }[]) =>
+      pairs
+        .filter((p) => p.start && p.end)
+        .map((p) => ({
+          id: `${label}-${p.creator.id}`,
+          primary: p.creator.name,
+          secondary: p.creator.campaign.name,
+          value: formatDurationForDetail(p.end!.getTime() - p.start!.getTime()),
+          href: campaignHref(p.creator.campaignId),
+        }));
+
+    const details: Record<string, { id: string; primary: string; secondary?: string; value?: string; href?: string }[]> = {
+      activeCampaigns: activeCampaignRows.map((c) => ({
+        id: c.id,
+        primary: c.name,
+        secondary: c.brand,
+        value: c.goLiveDeadline ? shortDate(c.goLiveDeadline) : undefined,
+        href: campaignHref(c.id),
+      })),
+      creatorsUnderExecution: myCreators.map(creatorRow),
+      deliverablesTotal: myDeliverables.map(deliverableRow),
+      deliverablesLive: myDeliverables.filter((d) => !!d.liveLink).map(deliverableRow),
+      deliverablesOnTime: notLive
+        .filter((d) => {
+          const deadline = d.creator.goLiveDeadline ? new Date(d.creator.goLiveDeadline).getTime() : null;
+          return deadline !== null && deadline - now > 24 * HOUR_MS;
+        })
+        .map(deliverableRow),
+      deliverablesNearingDeadline: notLive
+        .filter((d) => {
+          const deadline = d.creator.goLiveDeadline ? new Date(d.creator.goLiveDeadline).getTime() : null;
+          return deadline !== null && deadline - now >= 0 && deadline - now <= 24 * HOUR_MS;
+        })
+        .map(deliverableRow),
+      deliverablesDelayed: notLive
+        .filter((d) => {
+          const deadline = d.creator.goLiveDeadline ? new Date(d.creator.goLiveDeadline).getTime() : null;
+          return deadline !== null && deadline - now < 0;
+        })
+        .map(deliverableRow),
+      turnaroundOnboardToScript: durationRow("onboard-script", myDeliverables.map((d) => ({ start: d.creator.onboardedAt, end: d.scriptApprovedAt, creator: d.creator }))),
+      turnaroundScriptToVideo: durationRow("script-video", myDeliverables.map((d) => ({ start: d.scriptApprovedAt, end: d.videoSubmittedAt, creator: d.creator }))),
+      turnaroundEndToEnd: durationRow("end-to-end", myDeliverables.map((d) => ({ start: d.creator.onboardedAt, end: d.contentApprovedAt, creator: d.creator }))),
+      totalCreatorValue: myCreators.map((cr) => ({
+        ...creatorRow(cr),
+        value: formatCompactINR(cr.internalCost ?? 0),
+      })),
+      valueDue: myCreators.filter((cr) => cr.payoutPaymentStatus !== "PAID").map((cr) => ({ ...creatorRow(cr), value: formatCompactINR(cr.internalCost ?? 0) })),
+      valuePaid: myCreators.filter((cr) => cr.payoutPaymentStatus === "PAID").map((cr) => ({ ...creatorRow(cr), value: formatCompactINR(cr.internalCost ?? 0) })),
+      invoiceTotal: invoicesRaised.map((cr) => ({ ...creatorRow(cr), value: formatCompactINR(cr.internalCost ?? 0) })),
+      invoiceReceived: invoicesReceived.map((cr) => ({ ...creatorRow(cr), value: formatCompactINR(cr.internalCost ?? 0) })),
+      invoicePending: invoicesPending.map((cr) => ({ ...creatorRow(cr), value: formatCompactINR(cr.internalCost ?? 0) })),
+    };
+
     irExecutiveData = {
-      activeCampaigns,
+      activeCampaigns: activeCampaignRows.length,
       creatorsUnderExecution: myCreators.length,
       deliverablesTotal,
       deliverablesLive,
@@ -442,9 +541,9 @@ export default async function DashboardPage() {
       deliverablesNearingDeadline,
       deliverablesDelayed,
       turnaround: [
-        { label: "Onboarding to script approval", yourAvgMs: myOnboardToScript.avgMs, yourBestMs: myOnboardToScript.bestMs, yourWorstMs: myOnboardToScript.worstMs, companyAvgMs: companyOnboardToScript.avgMs },
-        { label: "Script approval to video", yourAvgMs: myScriptToVideo.avgMs, yourBestMs: myScriptToVideo.bestMs, yourWorstMs: myScriptToVideo.worstMs, companyAvgMs: companyScriptToVideo.avgMs },
-        { label: "End-to-end (onboarding to content approved)", yourAvgMs: myEndToEnd.avgMs, yourBestMs: myEndToEnd.bestMs, yourWorstMs: myEndToEnd.worstMs, companyAvgMs: companyEndToEnd.avgMs },
+        { label: "Onboarding to script approval", yourAvgMs: myOnboardToScript.avgMs, yourBestMs: myOnboardToScript.bestMs, yourWorstMs: myOnboardToScript.worstMs, companyAvgMs: companyOnboardToScript.avgMs, detailKey: "turnaroundOnboardToScript" },
+        { label: "Script approval to video", yourAvgMs: myScriptToVideo.avgMs, yourBestMs: myScriptToVideo.bestMs, yourWorstMs: myScriptToVideo.worstMs, companyAvgMs: companyScriptToVideo.avgMs, detailKey: "turnaroundScriptToVideo" },
+        { label: "End-to-end (onboarding to content approved)", yourAvgMs: myEndToEnd.avgMs, yourBestMs: myEndToEnd.bestMs, yourWorstMs: myEndToEnd.worstMs, companyAvgMs: companyEndToEnd.avgMs, detailKey: "turnaroundEndToEnd" },
       ],
       totalCreatorValue: valuePaid + valueDue,
       valueDue,
@@ -455,6 +554,7 @@ export default async function DashboardPage() {
       invoiceReceivedValue: invoicesReceived.reduce((s, cr) => s + (cr.internalCost ?? 0), 0),
       invoicePendingCount: invoicesPending.length,
       invoicePendingValue: invoicesPending.reduce((s, cr) => s + (cr.internalCost ?? 0), 0),
+      details,
     };
   }
 
