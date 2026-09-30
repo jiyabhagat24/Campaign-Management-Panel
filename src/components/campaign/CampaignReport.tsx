@@ -1,6 +1,8 @@
 "use client";
 
-import { ExternalLink, TrendingUp, MessageCircle } from "lucide-react";
+import { useState } from "react";
+import { ExternalLink, TrendingUp, MessageCircle, RefreshCw } from "lucide-react";
+import { triggerCampaignStatsRefresh } from "@/lib/actions";
 import { PLATFORM_LABELS } from "@/lib/constants";
 
 // Deliberately narrower than CreatorKanban's full Creator/Deliverable types
@@ -78,12 +80,32 @@ export default function CampaignReport({
   campaignBrand,
   campaignStartDate,
   onboarding,
+  campaignId,
+  canRefreshStats = false,
 }: {
+  campaignId?: string;
+  canRefreshStats?: boolean;
   campaignName: string;
   campaignBrand: string;
   campaignStartDate: string | Date | null;
   onboarding: ReportCreator[];
 }) {
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshMsg, setRefreshMsg] = useState<string | null>(null);
+  const handleRefreshStats = async () => {
+    if (!campaignId) return;
+    setRefreshing(true);
+    setRefreshMsg(null);
+    try {
+      const r = await triggerCampaignStatsRefresh(campaignId);
+      setRefreshMsg(`Refresh started for ${r.count} live deliverable${r.count === 1 ? "" : "s"}. Reload in a moment to see updated numbers.`);
+    } catch (err: any) {
+      setRefreshMsg(err?.message ?? "Couldn't start the refresh.");
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   // ---------- 2. Cost & delivery overview ----------
   const totalQuotedCost = onboarding.reduce((sum, c) => sum + (c.finalQuotedCost ?? 0), 0);
   const creatorsWithLiveContent = onboarding.filter((c) => c.deliverables.some((d) => Boolean(d.liveLink)));
@@ -296,7 +318,23 @@ export default function CampaignReport({
 
       {/* 5. Live deliverables, line item */}
       <div className={`${sectionClass} overflow-hidden !p-0`}>
-        <p className="px-5 pt-5 pb-3 text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">Live Deliverables</p>
+        <div className="flex items-center justify-between gap-3 px-5 pt-5 pb-3">
+          <p className="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">Live Deliverables</p>
+          {canRefreshStats && campaignId && (
+            <div className="flex items-center gap-3">
+              {refreshMsg && <span className="text-[11px] text-slate-500 dark:text-slate-400">{refreshMsg}</span>}
+              <button
+                type="button"
+                onClick={handleRefreshStats}
+                disabled={refreshing}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
+                <span>{refreshing ? "Refreshing…" : "Refresh stats"}</span>
+              </button>
+            </div>
+          )}
+        </div>
         <div className="overflow-x-auto scrollbar-x-hidden">
           <table className="w-full text-left text-sm">
             <thead className="border-t border-b border-slate-100 bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-400">

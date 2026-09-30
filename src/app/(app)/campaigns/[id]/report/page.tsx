@@ -101,6 +101,8 @@ export default async function CampaignReportOnlyPage({ params }: { params: Promi
         campaignBrand={campaign.brand}
         campaignStartDate={campaign.startDate ? campaign.startDate.toISOString() : null}
         onboarding={campaign.creators}
+        campaignId={campaign.id}
+        canRefreshStats={!isClient(user.role)}
       />
     </div>
   );

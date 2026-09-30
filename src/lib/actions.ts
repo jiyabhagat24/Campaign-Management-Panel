@@ -3075,6 +3075,39 @@ export async function refreshDeliverableMetrics(
   revalidatePath(`/campaigns/${deliverable.creator.campaignId}`);
 }
 
+// "Refresh stats" button on the Campaign Report: hands this campaign's live
+// deliverables to the n8n automation (N8N_REFRESH_STATS_WEBHOOK_URL), which
+// fetches fresh views/likes/comments/shares and posts them back to
+// /api/n8n/deliverable-metrics (secured with CRON_SECRET). Internal roles only.
+export async function triggerCampaignStatsRefresh(campaignId: string) {
+  const user = await requireUser();
+  if (isClient(user.role)) throw new Error("Clients cannot refresh stats");
+
+  const webhookUrl = process.env.N8N_REFRESH_STATS_WEBHOOK_URL;
+  if (!webhookUrl) {
+    throw new Error("N8N_REFRESH_STATS_WEBHOOK_URL isn't set on the server yet — add the n8n webhook URL to the environment.");
+  }
+
+  const deliverables = await prisma.deliverable.findMany({
+    where: { liveLink: { not: null }, creator: { campaignId } },
+    select: { id: true, platform: true, liveLink: true },
+  });
+
+  const res = await fetch(webhookUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      campaignId,
+      requestedBy: user.name,
+      callbackUrl: `${process.env.NEXTAUTH_URL ?? ""}/api/n8n/deliverable-metrics`,
+      deliverables,
+    }),
+  });
+  if (!res.ok) throw new Error(`n8n didn't accept the refresh request (HTTP ${res.status}).`);
+
+  return { ok: true as const, count: deliverables.length };
+}
+
 // Daily automated version of refreshDeliverableMetrics above, scoped to
 // YouTube only — the official Data API can look up any public video's
 // views/likes/comments with no per-creator auth, unlike Instagram (see

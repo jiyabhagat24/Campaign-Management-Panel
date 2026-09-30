@@ -798,6 +798,8 @@ export default function CreatorKanban({
                 campaignBrand={campaignBrand}
                 campaignStartDate={campaignStartDate}
                 onboarding={onboarding}
+                campaignId={campaignId}
+                canRefreshStats={!isClientView}
               />
             )}
           </div>
