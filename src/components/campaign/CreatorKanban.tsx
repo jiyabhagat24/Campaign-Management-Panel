@@ -385,6 +385,24 @@ export default function CreatorKanban({
   // BLOCKED (paused-in-execution, Gate G6) stays on the Onboarding tab
   // alongside ONBOARDED — see creatorKanbanColumn in constants.ts.
   const onboarding = creatorList.filter((c) => c.status === "ONBOARDED" || c.status === "BLOCKED");
+  // creatorList above is local state seeded from the server props, so a
+  // router.refresh() (e.g. the Report's "Refresh stats" button) doesn't
+  // reach it. Overlay just the YouTube/tracking numbers from the latest
+  // server props so the report updates instantly, without replacing any
+  // other local edits.
+  const reportOnboarding = onboarding.map((c) => {
+    const fresh = creators.find((x) => x.id === c.id);
+    if (!fresh) return c;
+    return {
+      ...c,
+      deliverables: c.deliverables.map((d) => {
+        const fd = fresh.deliverables.find((x) => x.id === d.id);
+        return fd
+          ? { ...d, views: fd.views, likes: fd.likes, comments: fd.comments, shares: fd.shares, engagementRate: fd.engagementRate, lastTrackedAt: fd.lastTrackedAt }
+          : d;
+      }),
+    };
+  });
 
   // Finance and Invoicing, Section A — same PayoutCreatorRow shape used
   // everywhere else, scoped to this one campaign's onboarded/blocked
@@ -797,7 +815,7 @@ export default function CreatorKanban({
                 campaignName={campaignName}
                 campaignBrand={campaignBrand}
                 campaignStartDate={campaignStartDate}
-                onboarding={onboarding}
+                onboarding={reportOnboarding}
                 campaignId={campaignId}
                 canRefreshStats={!isClientView}
               />
