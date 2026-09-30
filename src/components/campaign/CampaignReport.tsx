@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { ExternalLink, TrendingUp, MessageCircle, RefreshCw } from "lucide-react";
 import { triggerCampaignStatsRefresh } from "@/lib/actions";
 import { PLATFORM_LABELS } from "@/lib/constants";
@@ -90,6 +91,7 @@ export default function CampaignReport({
   campaignStartDate: string | Date | null;
   onboarding: ReportCreator[];
 }) {
+  const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
   const [refreshMsg, setRefreshMsg] = useState<string | null>(null);
   const handleRefreshStats = async () => {
@@ -98,7 +100,12 @@ export default function CampaignReport({
     setRefreshMsg(null);
     try {
       const r = await triggerCampaignStatsRefresh(campaignId);
-      setRefreshMsg(`Refresh started for ${r.count} live deliverable${r.count === 1 ? "" : "s"}. Reload in a moment to see updated numbers.`);
+      setRefreshMsg(
+        r.totalTracked === 0
+          ? "No live YouTube deliverables to refresh."
+          : `Updated ${r.updated} of ${r.totalTracked} YouTube deliverable${r.totalTracked === 1 ? "" : "s"}.`
+      );
+      router.refresh();
     } catch (err: any) {
       setRefreshMsg(err?.message ?? "Couldn't start the refresh.");
     } finally {

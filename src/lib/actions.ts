@@ -3075,28 +3075,17 @@ export async function refreshDeliverableMetrics(
   revalidatePath(`/campaigns/${deliverable.creator.campaignId}`);
 }
 
-// "Refresh stats" button on the Campaign Report: pings the existing n8n
-// workflow "yt fetching campaign values" through its Webhook trigger (GET).
-// That workflow calls /api/cron/refresh-youtube-metrics, which refreshes
-// views/likes/comments/ER% for every live YouTube deliverable. Internal roles
-// only. Override the URL with N8N_REFRESH_STATS_WEBHOOK_URL if it ever moves.
-const DEFAULT_N8N_REFRESH_WEBHOOK =
-  "https://n8n.srv1799142.hstgr.cloud/webhook/3fe03e87-3364-4e6a-8bfd-d3c0de9901e2/3fe03e87-3364-4e6a-8bfd-d3c0de9901e2";
-
+// "Refresh stats" button on the Campaign Report: refreshes this campaign's
+// live YouTube deliverables right now (same routine the n8n schedule runs,
+// scoped to one campaign) and returns once the numbers are saved, so the
+// page can show them immediately. Internal roles only.
 export async function triggerCampaignStatsRefresh(campaignId: string) {
   const user = await requireUser();
   if (isClient(user.role)) throw new Error("Clients cannot refresh stats");
-
-  const webhookUrl = process.env.N8N_REFRESH_STATS_WEBHOOK_URL || DEFAULT_N8N_REFRESH_WEBHOOK;
-
-  const count = await prisma.deliverable.count({
-    where: { liveLink: { not: null }, creator: { campaignId } },
-  });
-
-  const res = await fetch(webhookUrl, { method: "GET" });
-  if (!res.ok) throw new Error(`n8n didn't accept the refresh request (HTTP ${res.status}).`);
-
-  return { ok: true as const, count };
+  const result = await refreshLiveYoutubeDeliverableMetrics(campaignId);
+  revalidatePath(`/campaigns/${campaignId}`);
+  revalidatePath(`/campaigns/${campaignId}/report`);
+  return { ok: true as const, totalTracked: result.totalTracked, updated: result.updated, failed: result.failed };
 }
 
 // Daily automated version of refreshDeliverableMetrics above, scoped to
@@ -3107,9 +3096,13 @@ export async function triggerCampaignStatsRefresh(campaignId: string) {
 // cron-job.org — see /api/cron/refresh-youtube-metrics), so the Campaign
 // Report's views/ER% actually move day to day instead of sitting frozen at
 // whatever was last typed in.
-export async function refreshLiveYoutubeDeliverableMetrics() {
+export async function refreshLiveYoutubeDeliverableMetrics(campaignId?: string) {
   const deliverables = await prisma.deliverable.findMany({
-    where: { liveLink: { not: null }, platform: { in: ["YOUTUBE_LONG", "YOUTUBE_SHORTS"] } },
+    where: {
+      liveLink: { not: null },
+      platform: { in: ["YOUTUBE_LONG", "YOUTUBE_SHORTS"] },
+      ...(campaignId ? { creator: { campaignId } } : {}),
+    },
     include: { creator: { select: { campaignId: true } } },
   });
 
