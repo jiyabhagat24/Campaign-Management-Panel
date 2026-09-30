@@ -626,6 +626,7 @@ export default async function DashboardPage() {
         financeCampaigns={financeRows}
         showFinance={showFinance}
         hideFinanceCards={user.role === "IR_EXECUTIVE"}
+        hideSummary={user.role === "IR_EXECUTIVE"}
         revenueRows={revenueRows}
         isClientView={isClient(user.role)}
       />

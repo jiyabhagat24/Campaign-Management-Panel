@@ -77,6 +77,7 @@ export default function PortfolioDashboardClient({
   financeCampaigns,
   showFinance,
   hideFinanceCards = false,
+  hideSummary = false,
   revenueRows,
   isClientView,
 }: {
@@ -87,6 +88,8 @@ export default function PortfolioDashboardClient({
   showFinance: boolean;
   // IR Executives don't see the four client-invoicing/payable cards.
   hideFinanceCards?: boolean;
+  // IR Executives don't see the filter bar or the summary stat cards.
+  hideSummary?: boolean;
   revenueRows: RevenueDataRow[];
   // Client-role viewer: the campaign list handed in is already scoped to
   // just their own campaigns (campaignVisibilityWhere on the server), same
@@ -196,6 +199,8 @@ export default function PortfolioDashboardClient({
 
   return (
     <div className="space-y-8">
+      {!hideSummary && (
+      <>
       {/* Filter bar — one horizontally-scrolling row of compact chips */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1">
         <Filter className="h-3.5 w-3.5 flex-shrink-0 text-slate-400 dark:text-slate-500" />
@@ -394,6 +399,8 @@ export default function PortfolioDashboardClient({
         )}
       </div>
 
+      </>
+      )}
       {/* Campaign Table */}
       <div className="rounded-2xl border border-slate-200/80 bg-white dark:bg-slate-900 dark:border-slate-800 shadow-card overflow-hidden">
         <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 px-6 py-4 bg-slate-50/50 dark:bg-slate-800/40">
