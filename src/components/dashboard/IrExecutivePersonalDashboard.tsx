@@ -52,6 +52,8 @@ export type IrExecutiveDashboardData = {
   invoiceReceivedValue: number;
   invoicePendingCount: number;
   invoicePendingValue: number;
+  // false for IR Interns — creator financials and invoice status are hidden.
+  showFinancials: boolean;
   details: Record<string, DetailRow[]>;
 };
 
@@ -243,39 +245,43 @@ export default function IrExecutivePersonalDashboard({ data }: { data: IrExecuti
         )}
       </SectionCard>
 
-      {/* 3. Financial overview */}
-      <SectionCard title="Creator Financials" subtitle="Active, onboarded creators">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <MetricTile label="Total Creator Value" value={formatCompactINR(data.totalCreatorValue)} onClick={() => toggle("totalCreatorValue")} active={openKey === "totalCreatorValue"} />
-          <MetricTile label="Value Due" value={formatCompactINR(data.valueDue)} onClick={() => toggle("valueDue")} active={openKey === "valueDue"} />
-          <MetricTile label="Value Paid" value={formatCompactINR(data.valuePaid)} onClick={() => toggle("valuePaid")} active={openKey === "valuePaid"} />
-        </div>
-        {panelFor(["totalCreatorValue", "valueDue", "valuePaid"])}
-      </SectionCard>
-
-      {/* 4. Invoice status */}
-      <SectionCard title="Invoice Status">
-        {!hasInvoices ? (
-          <p className="text-xs text-slate-400 dark:text-slate-500">No data available</p>
-        ) : (
-          <>
-            <InvoiceBar label="Total invoices" count={data.invoiceTotalCount} value={data.invoiceTotalValue} fraction={1} barClassName="bg-indigo-500" onClick={() => toggle("invoiceTotal")} active={openKey === "invoiceTotal"} />
-            <InvoiceBar label="Received" count={data.invoiceReceivedCount} value={data.invoiceReceivedValue} fraction={data.invoiceTotalCount ? data.invoiceReceivedCount / data.invoiceTotalCount : 0} barClassName="bg-emerald-500" onClick={() => toggle("invoiceReceived")} active={openKey === "invoiceReceived"} />
-            <InvoiceBar label="Yet to be received" count={data.invoicePendingCount} value={data.invoicePendingValue} fraction={data.invoiceTotalCount ? data.invoicePendingCount / data.invoiceTotalCount : 0} barClassName="bg-amber-500" onClick={() => toggle("invoicePending")} active={openKey === "invoicePending"} />
-            <div className="-mx-6 -mb-6 mt-2 space-y-2 border-t border-slate-100 bg-slate-50/60 px-6 py-4 text-sm dark:border-slate-800 dark:bg-slate-800/30">
-              <div className="flex items-center justify-between">
-                <span className="text-slate-600 dark:text-slate-300">Count reconciliation</span>
-                <span className="font-bold text-slate-900 dark:text-white">{data.invoiceReceivedCount} + {data.invoicePendingCount} = {data.invoiceTotalCount}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-slate-600 dark:text-slate-300">Value reconciliation</span>
-                <span className="font-bold text-slate-900 dark:text-white">{formatCompactINR(data.invoiceReceivedValue)} + {formatCompactINR(data.invoicePendingValue)} = {formatCompactINR(data.invoiceTotalValue)}</span>
-              </div>
+      {data.showFinancials && (
+        <>
+          {/* 3. Financial overview */}
+          <SectionCard title="Creator Financials" subtitle="Active, onboarded creators">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <MetricTile label="Total Creator Value" value={formatCompactINR(data.totalCreatorValue)} onClick={() => toggle("totalCreatorValue")} active={openKey === "totalCreatorValue"} />
+              <MetricTile label="Value Due" value={formatCompactINR(data.valueDue)} onClick={() => toggle("valueDue")} active={openKey === "valueDue"} />
+              <MetricTile label="Value Paid" value={formatCompactINR(data.valuePaid)} onClick={() => toggle("valuePaid")} active={openKey === "valuePaid"} />
             </div>
-            {panelFor(["invoiceTotal", "invoiceReceived", "invoicePending"])}
-          </>
-        )}
-      </SectionCard>
+            {panelFor(["totalCreatorValue", "valueDue", "valuePaid"])}
+          </SectionCard>
+
+          {/* 4. Invoice status */}
+          <SectionCard title="Invoice Status">
+            {!hasInvoices ? (
+              <p className="text-xs text-slate-400 dark:text-slate-500">No data available</p>
+            ) : (
+              <>
+                <InvoiceBar label="Total invoices" count={data.invoiceTotalCount} value={data.invoiceTotalValue} fraction={1} barClassName="bg-indigo-500" onClick={() => toggle("invoiceTotal")} active={openKey === "invoiceTotal"} />
+                <InvoiceBar label="Received" count={data.invoiceReceivedCount} value={data.invoiceReceivedValue} fraction={data.invoiceTotalCount ? data.invoiceReceivedCount / data.invoiceTotalCount : 0} barClassName="bg-emerald-500" onClick={() => toggle("invoiceReceived")} active={openKey === "invoiceReceived"} />
+                <InvoiceBar label="Yet to be received" count={data.invoicePendingCount} value={data.invoicePendingValue} fraction={data.invoiceTotalCount ? data.invoicePendingCount / data.invoiceTotalCount : 0} barClassName="bg-amber-500" onClick={() => toggle("invoicePending")} active={openKey === "invoicePending"} />
+                <div className="-mx-6 -mb-6 mt-2 space-y-2 border-t border-slate-100 bg-slate-50/60 px-6 py-4 text-sm dark:border-slate-800 dark:bg-slate-800/30">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-600 dark:text-slate-300">Count reconciliation</span>
+                    <span className="font-bold text-slate-900 dark:text-white">{data.invoiceReceivedCount} + {data.invoicePendingCount} = {data.invoiceTotalCount}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-600 dark:text-slate-300">Value reconciliation</span>
+                    <span className="font-bold text-slate-900 dark:text-white">{formatCompactINR(data.invoiceReceivedValue)} + {formatCompactINR(data.invoicePendingValue)} = {formatCompactINR(data.invoiceTotalValue)}</span>
+                  </div>
+                </div>
+                {panelFor(["invoiceTotal", "invoiceReceived", "invoicePending"])}
+              </>
+            )}
+          </SectionCard>
+        </>
+      )}
     </div>
   );
 }

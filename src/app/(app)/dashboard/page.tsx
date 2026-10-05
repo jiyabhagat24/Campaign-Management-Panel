@@ -97,6 +97,12 @@ export default async function DashboardPage() {
   // INTERNAL_COST_ROLES, so this keeps internal cost out of their browser
   // entirely, not just off their screen.
   const showFinance = !isClient(user.role) && canSeeInternalCost(user.role);
+  // IR Executive and IR Intern share the same personal dashboard. Interns
+  // aren't allowed to see internal cost (canSeeInternalCost), so their copy
+  // leaves out the creator-financials and invoice-status sections entirely —
+  // not computed, not sent to the browser.
+  const isIrDashboardRole = user.role === "IR_EXECUTIVE" || user.role === "IR_INTERN";
+  const showIrFinancials = canSeeInternalCost(user.role);
 
   const rows: DashboardCampaignRow[] = campaigns.map((c) => {
     const brandSolutionsPoc = c.teamMembers.find((t) => t.roleOnCampaign === "BRAND_SOLUTIONS")?.user.name ?? null;
@@ -201,15 +207,15 @@ export default async function DashboardPage() {
       // Not yet invoiced at all: quoted value minus whatever's already been
       // invoiced (clamped at 0 so an over-invoiced campaign, e.g. extra
       // charges, doesn't show a negative "yet to invoice").
-      financeYetToBeInvoiced: showFinance && user.role !== "IR_EXECUTIVE" ? Math.max(quotedValue - totalInvoiced, 0) : 0,
+      financeYetToBeInvoiced: showFinance && !isIrDashboardRole ? Math.max(quotedValue - totalInvoiced, 0) : 0,
       // Invoiced but payment hasn't come in yet.
-      financeYetToBeReceived: showFinance && user.role !== "IR_EXECUTIVE" ? Math.max(totalInvoiced - totalReceived, 0) : 0,
+      financeYetToBeReceived: showFinance && !isIrDashboardRole ? Math.max(totalInvoiced - totalReceived, 0) : 0,
       // Actually invoiced AND received from the client — this is the real
       // "cleared due" number, summed straight off the ledger.
-      financeValueOfClearedDue: showFinance && user.role !== "IR_EXECUTIVE" ? totalReceived : 0,
+      financeValueOfClearedDue: showFinance && !isIrDashboardRole ? totalReceived : 0,
       // What TBM still owes onboarded creators — their own Payout Amount
       // (internalCost) wherever payoutPaymentStatus hasn't reached PAID yet.
-      financeCreatorPayablePending: showFinance && user.role !== "IR_EXECUTIVE"
+      financeCreatorPayablePending: showFinance && !isIrDashboardRole
         ? onboardedCreators.filter((cr) => cr.payoutPaymentStatus !== "PAID").reduce((s, cr) => s + (cr.internalCost ?? 0), 0)
         : 0,
       // Same showFinance gating as every other cost figure above — these
@@ -318,7 +324,7 @@ export default async function DashboardPage() {
   // (deliverables, turnaround time, financials, invoices) is derived from
   // that same creator set, so the whole section is internally consistent.
   let irExecutiveData: IrExecutiveDashboardData | null = null;
-  if (user.role === "IR_EXECUTIVE") {
+  if (isIrDashboardRole) {
     const activeCampaignRows = await prisma.campaign.findMany({
       where: { ...campaignVisibilityWhere(user), status: "ACTIVE" },
       select: { id: true, name: true, brand: true, goLiveDeadline: true },
@@ -466,8 +472,8 @@ export default async function DashboardPage() {
     // Value Due, per the feedback doc, all driven off each creator's own
     // Payout Amount (internalCost) and payoutPaymentStatus, same source of
     // truth the campaign page's Finance and Invoicing tab already uses.
-    const valuePaid = myCreators.filter((cr) => cr.payoutPaymentStatus === "PAID").reduce((s, cr) => s + (cr.internalCost ?? 0), 0);
-    const valueDue = myCreators.filter((cr) => cr.payoutPaymentStatus !== "PAID").reduce((s, cr) => s + (cr.internalCost ?? 0), 0);
+    const valuePaid = !showIrFinancials ? 0 : myCreators.filter((cr) => cr.payoutPaymentStatus === "PAID").reduce((s, cr) => s + (cr.internalCost ?? 0), 0);
+    const valueDue = !showIrFinancials ? 0 : myCreators.filter((cr) => cr.payoutPaymentStatus !== "PAID").reduce((s, cr) => s + (cr.internalCost ?? 0), 0);
 
     // Invoice status — one expected invoice per onboarded creator, counted
     // once its invoice has actually been raised (payoutInvoiceRaised), then
@@ -478,7 +484,7 @@ export default async function DashboardPage() {
     // per the doc's "total number of expected creator invoices"), not just
     // ones already raised — otherwise this whole section read "No data
     // available" until someone flipped Invoice Raised on a creator.
-    const invoicesRaised = myCreators;
+    const invoicesRaised = showIrFinancials ? myCreators : [];
     const invoicesReceived = invoicesRaised.filter((cr) => cr.payoutInvoiceReceived);
     const invoicesPending = invoicesRaised.filter((cr) => !cr.payoutInvoiceReceived);
 
@@ -548,12 +554,12 @@ export default async function DashboardPage() {
       turnaroundOnboardToScript: durationRow("onboard-script", myMilestones.map(({ m, creator }) => ({ start: m.onboardedAt, end: m.scriptAt, creator }))),
       turnaroundScriptToVideo: durationRow("script-video", myMilestones.map(({ m, creator }) => ({ start: m.scriptAt, end: m.videoAt, creator }))),
       turnaroundEndToEnd: durationRow("end-to-end", myMilestones.map(({ m, creator }) => ({ start: m.onboardedAt, end: m.contentAt, creator }))),
-      totalCreatorValue: myCreators.map((cr) => ({
+      totalCreatorValue: !showIrFinancials ? [] : myCreators.map((cr) => ({
         ...creatorRow(cr),
         value: formatCompactINR(cr.internalCost ?? 0),
       })),
-      valueDue: myCreators.filter((cr) => cr.payoutPaymentStatus !== "PAID").map((cr) => ({ ...creatorRow(cr), value: formatCompactINR(cr.internalCost ?? 0) })),
-      valuePaid: myCreators.filter((cr) => cr.payoutPaymentStatus === "PAID").map((cr) => ({ ...creatorRow(cr), value: formatCompactINR(cr.internalCost ?? 0) })),
+      valueDue: !showIrFinancials ? [] : myCreators.filter((cr) => cr.payoutPaymentStatus !== "PAID").map((cr) => ({ ...creatorRow(cr), value: formatCompactINR(cr.internalCost ?? 0) })),
+      valuePaid: !showIrFinancials ? [] : myCreators.filter((cr) => cr.payoutPaymentStatus === "PAID").map((cr) => ({ ...creatorRow(cr), value: formatCompactINR(cr.internalCost ?? 0) })),
       invoiceTotal: invoicesRaised.map((cr) => ({ ...creatorRow(cr), value: formatCompactINR(cr.internalCost ?? 0) })),
       invoiceReceived: invoicesReceived.map((cr) => ({ ...creatorRow(cr), value: formatCompactINR(cr.internalCost ?? 0) })),
       invoicePending: invoicesPending.map((cr) => ({ ...creatorRow(cr), value: formatCompactINR(cr.internalCost ?? 0) })),
@@ -581,6 +587,7 @@ export default async function DashboardPage() {
       invoiceReceivedValue: invoicesReceived.reduce((s, cr) => s + (cr.internalCost ?? 0), 0),
       invoicePendingCount: invoicesPending.length,
       invoicePendingValue: invoicesPending.reduce((s, cr) => s + (cr.internalCost ?? 0), 0),
+      showFinancials: showIrFinancials,
       details,
     };
   }
@@ -625,8 +632,8 @@ export default async function DashboardPage() {
         showRecentActivity={!isClient(user.role)}
         financeCampaigns={financeRows}
         showFinance={showFinance}
-        hideFinanceCards={user.role === "IR_EXECUTIVE"}
-        hideSummary={user.role === "IR_EXECUTIVE"}
+        hideFinanceCards={isIrDashboardRole}
+        hideSummary={isIrDashboardRole}
         revenueRows={revenueRows}
         isClientView={isClient(user.role)}
       />
