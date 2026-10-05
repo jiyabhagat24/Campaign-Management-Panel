@@ -151,7 +151,11 @@ function AddTeamMemberForm({ onAdded }: { onAdded: () => void }) {
     setError(null);
     startTransition(async () => {
       try {
-        await createTeamUser({ name, email, role });
+        const res = await createTeamUser({ name, email, role });
+        if (res?.error) {
+          setError(res.error);
+          return;
+        }
         reset();
         onAdded();
       } catch (err) {

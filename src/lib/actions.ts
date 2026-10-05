@@ -3633,38 +3633,42 @@ export async function promoteScoutedCreatorToCampaign(scoutedId: string, campaig
 
 const INTERNAL_EMAIL_DOMAIN = "theboredmonkey.com";
 
-export async function createTeamUser(input: { name: string; email: string; role: string }) {
+// Returns { error } instead of throwing: in production Next hides a thrown
+// server-action message behind a generic "React error #441", so the Team
+// form never showed why adding someone failed.
+export async function createTeamUser(input: { name: string; email: string; role: string }): Promise<{ error?: string }> {
   const actor = await requireUser();
-  if (!canManageTeam(actor.role)) throw new Error("Only a CXO can add team members.");
+  if (!canManageTeam(actor.role)) return { error: "Only a CXO can add team members." };
 
   const name = input.name.trim();
   const email = input.email.trim().toLowerCase();
   const role = input.role as Role;
 
-  if (!name) throw new Error("Name is required.");
-  if (!email) throw new Error("Email is required.");
-  if (!INTERNAL_ROLES.includes(role as Exclude<Role, "CLIENT">)) throw new Error("Invalid role.");
+  if (!name) return { error: "Name is required." };
+  if (!email) return { error: "Email is required." };
+  if (!INTERNAL_ROLES.includes(role as Exclude<Role, "CLIENT">)) return { error: "Invalid role." };
 
   if (!email.endsWith(`@${INTERNAL_EMAIL_DOMAIN}`)) {
     // Matches the domain check in src/lib/auth.ts's Google signIn callback
     // — an internal account with a non-company email could never actually
     // sign in, so refuse to create one rather than create a dead account.
-    throw new Error(`Internal accounts need a @${INTERNAL_EMAIL_DOMAIN} email — that's what Google sign-in checks against.`);
+    return { error: `Internal accounts need a @${INTERNAL_EMAIL_DOMAIN} email — that's what Google sign-in checks against.` };
   }
 
   const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing) throw new Error("A user with that email already exists.");
+  if (existing) return { error: "A user with that email already exists." };
 
   const passwordHash = await bcrypt.hash(crypto.randomUUID(), 10);
 
   try {
     await prisma.user.create({ data: { name, email, role, passwordHash } });
   } catch (err) {
-    if (isUniqueConstraintError(err)) throw new Error("A user with that email already exists.");
-    throw err;
+    if (isUniqueConstraintError(err)) return { error: "A user with that email already exists." };
+    return { error: "Couldn't save the team member. Try again." };
   }
 
   revalidatePath("/team");
+  return {};
 }
 
 export async function updateTeamUserRole(userId: string, role: string) {
