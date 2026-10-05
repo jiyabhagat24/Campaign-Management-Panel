@@ -15,6 +15,7 @@ import IrExecutivePersonalDashboard, {
   type IrExecutiveDashboardData,
 } from "@/components/dashboard/IrExecutivePersonalDashboard";
 import { formatCompactINR } from "@/lib/format";
+import { buildSnapshot, buildActions, buildUpcoming, type IrCreator } from "@/lib/irDashboard";
 
 // "2d 4h" — same duration format as the IR Executive dashboard's turnaround
 // table, used here for the plain-text value on each row of a turnaround
@@ -341,6 +342,7 @@ export default async function DashboardPage() {
         campaign: { select: { name: true } },
         onboardedAt: true,
         goLiveDeadline: true,
+        ballOwner: true,
         finalQuotedCost: true,
         quotedCost: true,
         internalCost: true,
@@ -352,6 +354,12 @@ export default async function DashboardPage() {
             id: true,
             platform: true,
             liveLink: true,
+            productStatus: true,
+            productEta: true,
+            scriptStatus: true,
+            scriptApprovalDeadline: true,
+            contentStatus: true,
+            videoDraftDeadline: true,
             scriptApprovedAt: true,
             contentApprovedAt: true,
             videoSubmittedAt: true,
@@ -366,13 +374,14 @@ export default async function DashboardPage() {
       campaign: { name: string };
       onboardedAt: Date | null;
       goLiveDeadline: Date | null;
+      ballOwner: string;
       finalQuotedCost: number | null;
       quotedCost: number | null;
       internalCost: number | null;
       payoutPaymentStatus: string;
       payoutInvoiceRaised: boolean;
       payoutInvoiceReceived: boolean;
-      deliverables: { id: string; platform: string; liveLink: string | null; scriptApprovedAt: Date | null; contentApprovedAt: Date | null; videoSubmittedAt: Date | null }[];
+      deliverables: (IrCreator["deliverables"][number] & { scriptApprovedAt: Date | null; contentApprovedAt: Date | null; videoSubmittedAt: Date | null })[];
     }[];
 
     const myDeliverables = myCreators.flatMap((cr) => cr.deliverables.map((d) => ({ ...d, creator: cr })));
@@ -475,6 +484,17 @@ export default async function DashboardPage() {
     const valuePaid = !showIrFinancials ? 0 : myCreators.filter((cr) => cr.payoutPaymentStatus === "PAID").reduce((s, cr) => s + (cr.internalCost ?? 0), 0);
     const valueDue = !showIrFinancials ? 0 : myCreators.filter((cr) => cr.payoutPaymentStatus !== "PAID").reduce((s, cr) => s + (cr.internalCost ?? 0), 0);
 
+    // Yet to be paid splits into "currently due" (the creator already has
+    // live content, so payment is payable now) and "upcoming" (nothing live
+    // yet). The schema has no payment milestone dates, so this is the
+    // closest real signal for "payment milestone reached".
+    const hasLive = (cr: (typeof myCreators)[number]) => cr.deliverables.some((d) => !!d.liveLink);
+    const unpaid = showIrFinancials ? myCreators.filter((cr) => cr.payoutPaymentStatus !== "PAID") : [];
+    const currentlyDueCreators = unpaid.filter(hasLive);
+    const upcomingCreators = unpaid.filter((cr) => !hasLive(cr));
+    const currentlyDue = currentlyDueCreators.reduce((s, cr) => s + (cr.internalCost ?? 0), 0);
+    const upcomingDue = upcomingCreators.reduce((s, cr) => s + (cr.internalCost ?? 0), 0);
+
     // Invoice status — one expected invoice per onboarded creator, counted
     // once its invoice has actually been raised (payoutInvoiceRaised), then
     // split by whether it's been received (payoutInvoiceReceived). Value is
@@ -559,6 +579,8 @@ export default async function DashboardPage() {
         value: formatCompactINR(cr.internalCost ?? 0),
       })),
       valueDue: !showIrFinancials ? [] : myCreators.filter((cr) => cr.payoutPaymentStatus !== "PAID").map((cr) => ({ ...creatorRow(cr), value: formatCompactINR(cr.internalCost ?? 0) })),
+      currentlyDue: currentlyDueCreators.map((cr) => ({ ...creatorRow(cr), value: formatCompactINR(cr.internalCost ?? 0) })),
+      upcomingDue: upcomingCreators.map((cr) => ({ ...creatorRow(cr), value: formatCompactINR(cr.internalCost ?? 0) })),
       valuePaid: !showIrFinancials ? [] : myCreators.filter((cr) => cr.payoutPaymentStatus === "PAID").map((cr) => ({ ...creatorRow(cr), value: formatCompactINR(cr.internalCost ?? 0) })),
       invoiceTotal: invoicesRaised.map((cr) => ({ ...creatorRow(cr), value: formatCompactINR(cr.internalCost ?? 0) })),
       invoiceReceived: invoicesReceived.map((cr) => ({ ...creatorRow(cr), value: formatCompactINR(cr.internalCost ?? 0) })),
@@ -574,9 +596,9 @@ export default async function DashboardPage() {
       deliverablesNearingDeadline,
       deliverablesDelayed,
       turnaround: [
-        { label: "Onboarding to script approval", yourAvgMs: myOnboardToScript.avgMs, yourBestMs: myOnboardToScript.bestMs, yourWorstMs: myOnboardToScript.worstMs, companyAvgMs: companyOnboardToScript.avgMs, detailKey: "turnaroundOnboardToScript" },
-        { label: "Script approval to video", yourAvgMs: myScriptToVideo.avgMs, yourBestMs: myScriptToVideo.bestMs, yourWorstMs: myScriptToVideo.worstMs, companyAvgMs: companyScriptToVideo.avgMs, detailKey: "turnaroundScriptToVideo" },
-        { label: "End-to-end (onboarding to content approved)", yourAvgMs: myEndToEnd.avgMs, yourBestMs: myEndToEnd.bestMs, yourWorstMs: myEndToEnd.worstMs, companyAvgMs: companyEndToEnd.avgMs, detailKey: "turnaroundEndToEnd" },
+        { label: "Onboarding → script approval", yourAvgMs: myOnboardToScript.avgMs, yourBestMs: myOnboardToScript.bestMs, yourWorstMs: myOnboardToScript.worstMs, companyAvgMs: companyOnboardToScript.avgMs, detailKey: "turnaroundOnboardToScript" },
+        { label: "Script approval → first video", yourAvgMs: myScriptToVideo.avgMs, yourBestMs: myScriptToVideo.bestMs, yourWorstMs: myScriptToVideo.worstMs, companyAvgMs: companyScriptToVideo.avgMs, detailKey: "turnaroundScriptToVideo" },
+        { label: "Onboarding → final approval", yourAvgMs: myEndToEnd.avgMs, yourBestMs: myEndToEnd.bestMs, yourWorstMs: myEndToEnd.worstMs, companyAvgMs: companyEndToEnd.avgMs, detailKey: "turnaroundEndToEnd" },
       ],
       totalCreatorValue: valuePaid + valueDue,
       valueDue,
@@ -588,6 +610,12 @@ export default async function DashboardPage() {
       invoicePendingCount: invoicesPending.length,
       invoicePendingValue: invoicesPending.reduce((s, cr) => s + (cr.internalCost ?? 0), 0),
       showFinancials: showIrFinancials,
+      currentlyDue,
+      upcomingDue,
+      lastUpdated: new Date().toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "numeric", minute: "2-digit" }),
+      snapshot: buildSnapshot(myCreators as IrCreator[]),
+      actions: buildActions(myCreators as IrCreator[], now, showIrFinancials),
+      upcoming: buildUpcoming(myCreators as IrCreator[], now),
       details,
     };
   }
