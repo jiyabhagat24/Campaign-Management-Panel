@@ -122,13 +122,17 @@ function PayoutRow({ row, onChange }: { row: PayoutCreatorRow; onChange: (patch:
         </select>
       </td>
       <td className="border-b border-slate-100 px-4 py-3 text-left dark:border-slate-800">
-        <input
-          value={advance}
-          onChange={(e) => setAdvance(e.target.value)}
-          onBlur={() => save({ payoutAdvance: advance || null })}
-          placeholder="Add note..."
-          className="w-full min-w-[130px] rounded-lg border border-slate-200 bg-slate-50/60 px-2 py-1 text-slate-700 outline-none hover:border-slate-300 focus:border-indigo-400 focus:bg-white dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200 dark:hover:border-slate-600 dark:focus:bg-slate-800"
-        />
+        {row.payoutPaymentStatus === "ADVANCE_PAID" ? (
+          <input
+            value={advance}
+            onChange={(e) => setAdvance(e.target.value)}
+            onBlur={() => save({ payoutAdvance: advance || null })}
+            placeholder="Add note..."
+            className="w-full min-w-[130px] rounded-lg border border-slate-200 bg-slate-50/60 px-2 py-1 text-slate-700 outline-none hover:border-slate-300 focus:border-indigo-400 focus:bg-white dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200 dark:hover:border-slate-600 dark:focus:bg-slate-800"
+          />
+        ) : (
+          <span className="text-slate-300 dark:text-slate-600">—</span>
+        )}
       </td>
       <td className="border-b border-slate-100 px-4 py-3 text-left dark:border-slate-800">
         <input
