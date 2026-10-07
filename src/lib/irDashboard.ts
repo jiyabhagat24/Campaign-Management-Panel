@@ -30,6 +30,7 @@ export type IrCreator = {
   goLiveDeadline: Date | null;
   ballOwner: string;
   payoutInvoiceRaised: boolean;
+  payoutPaymentStatus: string;
   deliverables: IrDeliverable[];
 };
 
@@ -114,6 +115,8 @@ export function buildSnapshot(creators: IrCreator[]): Snapshot {
       { label: "Ordered", count: count((d) => d.productStatus === "ORDERED"), tone: "blue" },
       { label: "In transit", count: count((d) => d.productStatus === "IN_TRANSIT"), tone: "amber" },
       { label: "Delivered", count: count((d) => d.productStatus === "DELIVERED"), tone: "green" },
+      { label: "Installation pending", count: count((d) => d.productStatus === "INSTALLATION_PENDING"), tone: "purple" },
+      { label: "Installed", count: count((d) => d.productStatus === "INSTALLED"), tone: "green" },
     ].filter((b) => b.count > 0) as SnapshotBucket[],
   };
 
@@ -187,7 +190,7 @@ export function buildActions(creators: IrCreator[], now: number, includeFinance:
       rows.push({ id: `follow-${cr.id}`, priority: "Medium", title: "Client approval follow-up", sub, pendingWith: "Client", status: "Awaiting reply", href, sort: Number.MAX_SAFE_INTEGER - 1 });
     }
 
-    if (includeFinance && cr.deliverables.some((d) => d.liveLink) && !cr.payoutInvoiceRaised) {
+    if (includeFinance && cr.deliverables.some((d) => d.liveLink) && !cr.payoutInvoiceRaised && cr.payoutPaymentStatus !== "PAID") {
       financeBlockers += 1;
       rows.push({ id: `fin-${cr.id}`, priority: "High", title: "Invoice required for payment", sub, pendingWith: "Creator", status: "Invoice not raised", href, sort: Number.MAX_SAFE_INTEGER });
     }
