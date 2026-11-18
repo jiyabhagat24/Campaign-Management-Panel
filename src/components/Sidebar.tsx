@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { Role } from "@/lib/constants";
-import { canManageTeam, canManageClients, canViewTimeAnalytics, canViewTeamTurnaround, canViewMoneyExposure, canViewFinanceLedger, canViewLeadershipHome, canViewIrManagerHome, canViewRoleHome, canViewCreatorBoard, canViewBriefs, canViewCampaignGates, canViewClientInvoices, isClient, isSuperAdmin } from "@/lib/rbac";
+import { canManageTeam, canManageClients, canViewTimeAnalytics, canViewTeamTurnaround, canViewMoneyExposure, canViewFinanceLedger, canViewLeadershipHome, canViewIrManagerHome, canViewRoleHome, canViewCreatorBoard, canViewBriefs, canViewCampaignGates, isClient, isSuperAdmin } from "@/lib/rbac";
 import ThemeToggle from "@/components/ThemeToggle";
 import NotificationBell, { type NotificationItem } from "@/components/NotificationBell";
 import {
@@ -27,7 +27,6 @@ import {
   BarChart3,
   ListChecks,
   Bell,
-  FileText,
 } from "lucide-react";
 
 // Sidebar sections, in display order. Each NAV item names its section;
@@ -50,7 +49,6 @@ const NAV = [
   { group: "Campaigns & creators", href: "/reporting", label: "Reporting", icon: BarChart3 },
   { group: "Follow-ups", href: "/my-actions", label: "My Actions", icon: ListChecks },
   { group: "Follow-ups", href: "/activity", label: "Activity", icon: Bell },
-  { group: "Money", href: "/my-invoices", label: "Invoices", icon: FileText, clientInvoicesOnly: true },
   // Same audience plus CXO — Step 7's Time Analytics (stage-duration
   // reporting), see canViewTimeAnalytics in rbac.ts.
   { group: "Team & performance", href: "/time-analytics", label: "Time Analytics", icon: Clock, timeAnalyticsOnly: true },
@@ -116,7 +114,6 @@ export default function Sidebar({ role, name, notifications, userId }: { role: R
     if ("creatorBoardOnly" in item && item.creatorBoardOnly && !canViewCreatorBoard(role)) return false;
     if ("briefsOnly" in item && item.briefsOnly && !canViewBriefs(role)) return false;
     if ("gatesOnly" in item && item.gatesOnly && !canViewCampaignGates(role)) return false;
-    if ("clientInvoicesOnly" in item && item.clientInvoicesOnly && !canViewClientInvoices(role)) return false;
     return true;
   });
 
