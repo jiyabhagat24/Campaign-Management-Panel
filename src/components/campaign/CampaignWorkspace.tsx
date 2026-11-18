@@ -152,16 +152,16 @@ function ShortlistTab({
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+          <thead className="bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
             <tr>
-              <th className="px-4 py-3 font-medium">Creator</th>
-              <th className="px-4 py-3 font-medium">Platform</th>
-              <th className="px-4 py-3 font-medium">Followers</th>
-              <th className="px-4 py-3 font-medium">Avg views</th>
-              {canSeeCost && <th className="px-4 py-3 font-medium">Internal cost</th>}
-              <th className="px-4 py-3 font-medium">Quoted cost</th>
-              <th className="px-4 py-3 font-medium">Status</th>
-              <th className="px-4 py-3 font-medium"></th>
+              <th className="px-5 py-2.5">Creator</th>
+              <th className="px-5 py-2.5">Platform</th>
+              <th className="px-5 py-2.5">Followers</th>
+              <th className="px-5 py-2.5">Avg views</th>
+              {canSeeCost && <th className="px-5 py-2.5">Internal cost</th>}
+              <th className="px-5 py-2.5">Quoted cost</th>
+              <th className="px-5 py-2.5">Status</th>
+              <th className="px-5 py-2.5"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">

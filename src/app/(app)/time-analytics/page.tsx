@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { PageHeadline, pageClass } from "@/components/finance/SandboxUi";
 import Link from "next/link";
 import { currentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -106,16 +107,8 @@ export default async function TimeAnalyticsPage() {
   const slowestLive = [...liveDurations].sort((a, b) => b.days - a.days).slice(0, 10);
 
   return (
-    <div className="mx-auto max-w-5xl space-y-10 p-8">
-      <div>
-        <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-          <Clock className="h-6 w-6 text-indigo-500" />
-          Time Analytics
-        </h1>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          Where things are actually sitting slow — pricing wait, time to onboard, time to go live — across every campaign you can see.
-        </p>
-      </div>
+    <div className={pageClass}>
+      <PageHeadline title="Time analytics." subtitle={<>Where things are actually sitting slow — pricing wait, time to onboard, time to go live — across every campaign you can see.</>} />
 
       {/* ---- Pricing Queue wait time ---- */}
       <section className="space-y-3">
@@ -170,10 +163,10 @@ export default async function TimeAnalyticsPage() {
         ) : (
           <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-card dark:bg-slate-900 dark:border-slate-800">
             <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-left text-xs font-semibold uppercase text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+              <thead className="bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
                 <tr>
-                  <th className="px-4 py-2.5">Creator</th>
-                  <th className="px-4 py-2.5">Campaign</th>
+                  <th className="px-5 py-2.5">Creator</th>
+                  <th className="px-5 py-2.5">Campaign</th>
                   <th className="px-4 py-2.5 text-right">Time to onboard</th>
                 </tr>
               </thead>
@@ -212,10 +205,10 @@ export default async function TimeAnalyticsPage() {
         ) : (
           <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-card dark:bg-slate-900 dark:border-slate-800">
             <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-left text-xs font-semibold uppercase text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+              <thead className="bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
                 <tr>
-                  <th className="px-4 py-2.5">Creator</th>
-                  <th className="px-4 py-2.5">Campaign</th>
+                  <th className="px-5 py-2.5">Creator</th>
+                  <th className="px-5 py-2.5">Campaign</th>
                   <th className="px-4 py-2.5 text-right">Onboard → Live</th>
                 </tr>
               </thead>

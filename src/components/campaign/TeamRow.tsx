@@ -14,6 +14,8 @@ const ROLE_LABEL: Record<string, string> = {
   IR_MANAGER: "IR Manager",
   IR_EXECUTIVE: "IR Executive",
   IR_INTERN: "IR Intern",
+  FINANCE: "Finance",
+  BUSINESS_DEVELOPMENT: "Business Development",
 };
 
 export default function TeamRow({

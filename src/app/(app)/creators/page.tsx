@@ -35,9 +35,9 @@ export default async function CreatorsPage() {
   });
 
   return (
-    <div className="p-8">
-      <h1 className="text-lg font-semibold text-ink">Creator Intelligence</h1>
-      <p className="mt-1 max-w-2xl text-sm text-slate-500">
+    <div className="mx-auto max-w-7xl p-6 lg:p-8">
+      <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">Creator intelligence.</h1>
+      <p className="mt-1 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
         Discovery and qualification queue. Creators here are scored against fit criteria before being promoted into a
         campaign shortlist. Sourced via approved data providers, official APIs, or manual import — never scraped or
         automated against a platform's terms (see README "Creator Intelligence Engine").

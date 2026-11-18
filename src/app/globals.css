@@ -6,6 +6,17 @@ body {
   @apply bg-slate-50/70 text-slate-900 font-sans antialiased dark:bg-slate-950 dark:text-slate-100 transition-colors duration-200;
 }
 
+/* Plus Jakarta Sans has a very narrow space glyph, so bold headings at small
+   sizes (card titles like "Monthly Financial Performance", "Campaign Level
+   Breakdown") read as if the words run together. A small word-spacing bump
+   on headings only restores normal gaps without touching body text. */
+h1,
+h2,
+h3,
+h4 {
+  word-spacing: 0.12em;
+}
+
 /* shadcn/ui chart primitive tokens (src/components/ui/chart.tsx) — kept as
    raw "R G B" triplets (not hex/oklch) so Tailwind's rgb(var(...) /
    <alpha-value>) pattern in tailwind.config.ts can apply opacity modifiers

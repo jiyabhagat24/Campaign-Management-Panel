@@ -3,69 +3,104 @@
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 
-// Fixes the "I have to refresh the page every time" complaint app-wide.
-// Server Actions already call revalidatePath() on write, but that only
-// busts the cache for the NEXT request — it does nothing for a tab someone
-// already has open (e.g. a Campaign Manager watching a campaign while a
-// Client onboards a creator elsewhere).
+// Keeps every open tab in sync with changes other people make, without a
+// manual reload.
 //
-// This used to call router.refresh() directly on every tick, which reruns
-// every Server Component query on the open page for every tab, every 8s —
-// at 50 concurrent users that's a large, constant load even when nothing
-// changed. It now polls a cheap /api/heartbeat (one indexed row lookup)
-// instead, and only pays for the real router.refresh() when the heartbeat
-// timestamp actually advances — i.e. only when something genuinely changed
-// somewhere in the app since the last check.
+// Server Actions call revalidatePath() on write, but that only affects the
+// NEXT request, not a page someone already has open. So each tab polls a
+// cheap /api/heartbeat (a write fingerprint, see that route for details) and
+// only pays for a real router.refresh() when the fingerprint changes, i.e.
+// only when something was actually written somewhere.
 //
-// Same two guards as before:
-//  - Paused while the tab isn't visible (no point checking a background tab).
-//  - Skipped on any tick where the user currently has a text/number input,
-//    textarea, or select focused — refresh mid-keystroke would blow away
-//    whatever they haven't blurred/saved yet (most editable cells here are
-//    uncontrolled inputs keyed off server-provided defaultValue).
-const POLL_INTERVAL_MS = 8000;
+// router.refresh() re-renders the current page on the server with the
+// viewer's own session, so what comes back is filtered by their role exactly
+// like a normal page load. Nothing about the change itself is sent to the
+// browser by this component.
+//
+// Guards:
+//  - Paused while the tab is hidden. Coming back to the tab (or focusing
+//    the window) checks immediately instead of waiting for the next tick.
+//  - Never refreshes while the user has a text/number input, textarea,
+//    select, or contenteditable focused, since most editable cells here are
+//    uncontrolled inputs keyed off server-provided defaultValue and a
+//    refresh mid-keystroke would lose what they typed. A change detected
+//    while they're typing is remembered and applied as soon as they leave
+//    the field, instead of being dropped.
+//  - One heartbeat request in flight at a time.
+const POLL_INTERVAL_MS = 5000;
+
+function isEditing() {
+  const active = document.activeElement;
+  const tag = active?.tagName;
+  return (
+    tag === "INPUT" ||
+    tag === "TEXTAREA" ||
+    tag === "SELECT" ||
+    (active instanceof HTMLElement && active.isContentEditable)
+  );
+}
 
 export default function AutoRefresh() {
   const router = useRouter();
   const routerRef = useRef(router);
   routerRef.current = router;
-  // null until the first successful heartbeat — that first response is just
-  // the baseline, never triggers a refresh (nothing "changed" relative to
-  // a baseline we haven't recorded yet).
-  const lastSeen = useRef<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+    let inFlight = false;
+    // null until the first successful heartbeat. That first response is the
+    // baseline and never triggers a refresh by itself.
+    let lastSeen: string | null = null;
+    // A change arrived while the user was typing; refresh once they stop.
+    let pending = false;
+
+    const applyIfPending = () => {
+      if (pending && !document.hidden && !isEditing()) {
+        pending = false;
+        routerRef.current.refresh();
+      }
+    };
 
     const tick = async () => {
-      if (document.hidden) return;
-      const active = document.activeElement;
-      const tag = active?.tagName;
-      const isEditing =
-        tag === "INPUT" ||
-        tag === "TEXTAREA" ||
-        tag === "SELECT" ||
-        (active instanceof HTMLElement && active.isContentEditable);
-      if (isEditing) return;
-
+      if (cancelled || inFlight || document.hidden) return;
+      inFlight = true;
       try {
         const res = await fetch("/api/heartbeat", { cache: "no-store" });
         if (!res.ok || cancelled) return;
         const { latest } = (await res.json()) as { latest: string | null };
-        if (latest && latest !== lastSeen.current) {
-          const isFirstCheck = lastSeen.current === null;
-          lastSeen.current = latest;
-          if (!isFirstCheck) routerRef.current.refresh();
+        if (latest && latest !== lastSeen) {
+          const isFirstCheck = lastSeen === null;
+          lastSeen = latest;
+          if (!isFirstCheck) pending = true;
         }
+        applyIfPending();
       } catch {
-        // Network hiccup — just try again next tick, no need to surface this.
+        // Network hiccup: try again next tick, nothing to surface.
+      } finally {
+        inFlight = false;
       }
     };
 
+    const onVisible = () => {
+      if (!document.hidden) void tick();
+    };
+    // focusout fires before focus lands on the next element, so check on the
+    // next frame once document.activeElement has settled.
+    const onFocusOut = () => {
+      if (pending) requestAnimationFrame(applyIfPending);
+    };
+
+    void tick();
     const id = setInterval(tick, POLL_INTERVAL_MS);
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    document.addEventListener("focusout", onFocusOut);
     return () => {
       cancelled = true;
       clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+      document.removeEventListener("focusout", onFocusOut);
     };
   }, []);
 

@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { PageHeadline, pageClass } from "@/components/finance/SandboxUi";
 import Link from "next/link";
 import { currentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -53,21 +54,13 @@ export default async function PricingQueuePage() {
   ]);
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 p-8">
-      <div>
-        <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-          <DollarSign className="h-6 w-6 text-emerald-500" />
-          Pricing Queue
-        </h1>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          Rows IR has submitted with an internal cost but no Quoted Cost yet — vet and price each one from its
-          campaign's Shortlist tab (Gate G1: nothing here reaches the client until it's priced).
-        </p>
-      </div>
+    <div className={pageClass}>
+      <PageHeadline title="Pricing queue." subtitle={<>Rows IR has submitted with an internal cost but no Quoted Cost yet — vet and price each one from its
+          campaign's Shortlist tab (Gate G1: nothing here reaches the client until it's priced).</>} />
 
       {canApproveReopenRequests && (
         <div className="space-y-2">
-          <h2 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+          <h2 className="flex items-center gap-1.5 text-sm font-bold text-slate-900 dark:text-white">
             <RefreshCcw className="h-3.5 w-3.5" />
             Pending Reopen Requests ({reopenRequests.length})
           </h2>
@@ -99,7 +92,7 @@ export default async function PricingQueuePage() {
       )}
 
       <div className="space-y-2">
-        <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+        <h2 className="text-sm font-bold text-slate-900 dark:text-white">
           Needs Pricing ({rows.length})
         </h2>
         {rows.length === 0 && (

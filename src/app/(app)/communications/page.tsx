@@ -39,9 +39,9 @@ export default async function CommunicationsPage() {
       });
 
   return (
-    <div className="p-8">
+    <div className="mx-auto max-w-7xl p-6 lg:p-8">
       <BackLink label="Back" fallbackHref="/dashboard" />
-      <h1 className="mt-1 text-lg font-semibold text-ink dark:text-white">Communications</h1>
+      <h1 className="mt-1 text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">Communications.</h1>
       <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Pick a campaign to see its full remark thread — no WhatsApp needed.</p>
 
       <div className="mt-6 divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white dark:divide-slate-800 dark:border-slate-800 dark:bg-slate-900">

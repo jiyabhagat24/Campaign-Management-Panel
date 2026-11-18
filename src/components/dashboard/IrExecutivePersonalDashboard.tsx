@@ -69,7 +69,7 @@ function formatDuration(ms: number | null): string {
 }
 
 const STAT_BAR = "absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500";
-const STAT_LABEL = "text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider";
+const STAT_LABEL = "text-xs font-medium text-slate-500 dark:text-slate-400";
 
 function MetricTile({
   label,
@@ -109,7 +109,7 @@ function SectionCard({
 }) {
   return (
     <div className="rounded-2xl border border-slate-200/80 bg-white dark:bg-slate-900 dark:border-slate-800 shadow-card overflow-hidden">
-      <div className="flex items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 px-6 py-4 bg-slate-50/50 dark:bg-slate-800/40">
+      <div className="flex items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 px-6 py-4 bg-slate-50 dark:bg-slate-800">
         <div className="flex min-w-0 items-center gap-2">
           <div className="h-2 w-2 shrink-0 rounded-full bg-indigo-600" />
           <h2 className="text-sm font-bold text-slate-900 dark:text-white">{title}</h2>
@@ -469,7 +469,7 @@ export default function IrExecutivePersonalDashboard({ data }: { data: IrExecuti
           <>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                <thead className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                   <tr>
                     <th className="py-2 text-left">Execution stage</th>
                     <th className="py-2 text-right">Your average</th>

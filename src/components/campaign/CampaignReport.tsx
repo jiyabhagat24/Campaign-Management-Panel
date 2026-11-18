@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ExternalLink, TrendingUp, MessageCircle, RefreshCw } from "lucide-react";
+import { ExternalLink, RefreshCw } from "lucide-react";
+import ViewershipGrowthChart from "@/components/campaign/ViewershipGrowthChart";
 import { triggerCampaignStatsRefresh } from "@/lib/actions";
 import { PLATFORM_LABELS } from "@/lib/constants";
 
@@ -206,7 +207,7 @@ export default function CampaignReport({
   }).filter((b) => b.creators > 0);
 
   const sectionClass = "rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card dark:border-slate-800 dark:bg-slate-900";
-  const labelClass = "text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500";
+  const labelClass = "text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400";
   const valueClass = "mt-1 text-lg font-bold text-slate-900 dark:text-white";
 
   return (
@@ -251,7 +252,7 @@ export default function CampaignReport({
 
       {/* 2. Cost and delivery overview */}
       <div className={sectionClass}>
-        <p className="mb-3 text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">Cost &amp; Delivery Overview</p>
+        <p className="mb-3 text-sm font-bold text-slate-900 dark:text-white">Cost &amp; Delivery Overview</p>
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 lg:grid-cols-7">
           {[
             ["Total Quoted Cost", inr(totalQuotedCost)],
@@ -272,7 +273,7 @@ export default function CampaignReport({
 
       {/* 3. Performance overview */}
       <div className={sectionClass}>
-        <p className="mb-3 text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">Performance Overview — All Live Content</p>
+        <p className="mb-3 text-sm font-bold text-slate-900 dark:text-white">Performance Overview — All Live Content</p>
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
           {[
             ["Total Views", num(totalViews)],
@@ -292,10 +293,10 @@ export default function CampaignReport({
 
       {/* 4. Split by platform and deliverable */}
       <div className={`${sectionClass} overflow-hidden !p-0`}>
-        <p className="px-5 pt-5 pb-3 text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">Split by Platform &amp; Deliverable</p>
+        <p className="px-5 pt-5 pb-3 text-sm font-bold text-slate-900 dark:text-white">Split by Platform &amp; Deliverable</p>
         <div className="overflow-x-auto scrollbar-x-hidden">
           <table className="w-full text-left text-sm">
-            <thead className="border-t border-b border-slate-100 bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-400">
+            <thead className="border-t border-b border-slate-100 bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-400">
               <tr>
                 {["Format", "Deliverables", "Live", "Views", "Likes", "Comments", "Shares", "ER%", "CPV"].map((h) => (
                   <th key={h} className="whitespace-nowrap px-5 py-2.5">{h}</th>
@@ -341,10 +342,10 @@ export default function CampaignReport({
 
       {/* 5. Live deliverables, line item */}
       <div className={`${sectionClass} overflow-hidden !p-0`}>
-        <p className="px-5 pt-5 pb-3 text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">Live Deliverables</p>
+        <p className="px-5 pt-5 pb-3 text-sm font-bold text-slate-900 dark:text-white">Live Deliverables</p>
         <div className="overflow-x-auto scrollbar-x-hidden">
           <table className="w-full text-left text-sm">
-            <thead className="border-t border-b border-slate-100 bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-400">
+            <thead className="border-t border-b border-slate-100 bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-400">
               <tr>
                 {["Creator", "Socials", "Deliverable", "Live Date", "Cost Paid", "Views", "Likes", "Comments", "Shares", "ER%", "CPV"].map((h) => (
                   <th key={h} className="whitespace-nowrap px-5 py-2.5">{h}</th>
@@ -401,33 +402,16 @@ export default function CampaignReport({
         </div>
       </div>
 
-      {/* 6 & 7 — not built yet: need new infra (view-history table for the
-          graph, a comment-sentiment API integration). Honest placeholder
-          instead of fake numbers. */}
-      <div className="grid gap-5 sm:grid-cols-2">
-        <div className={`${sectionClass} flex flex-col items-center justify-center text-center py-8`}>
-          <TrendingUp className="h-6 w-6 text-slate-300 dark:text-slate-600 mb-2" />
-          <p className="text-xs font-bold text-slate-500 dark:text-slate-400">Viewership Growth Graph</p>
-          <p className="mt-1 max-w-xs text-[11px] text-slate-400 dark:text-slate-500">
-            Not available yet — needs a view-history table that snapshots each deliverable's numbers over time. Currently only the latest count is stored.
-          </p>
-        </div>
-        <div className={`${sectionClass} flex flex-col items-center justify-center text-center py-8`}>
-          <MessageCircle className="h-6 w-6 text-slate-300 dark:text-slate-600 mb-2" />
-          <p className="text-xs font-bold text-slate-500 dark:text-slate-400">Comment Sentiment</p>
-          <p className="mt-1 max-w-xs text-[11px] text-slate-400 dark:text-slate-500">
-            Not available yet — needs a third-party comment-scraping / sentiment API connected.
-          </p>
-        </div>
-      </div>
+      {/* 6. Viewership growth, from the view-history table */}
+      <ViewershipGrowthChart campaignId={campaignId} className={sectionClass} />
 
       {/* 8. Spend band */}
       {spendBands.length > 0 && (
         <div className={`${sectionClass} overflow-hidden !p-0`}>
-          <p className="px-5 pt-5 pb-3 text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">Spend Band</p>
+          <p className="px-5 pt-5 pb-3 text-sm font-bold text-slate-900 dark:text-white">Spend Band</p>
           <div className="overflow-x-auto scrollbar-x-hidden">
             <table className="w-full text-left text-sm">
-              <thead className="border-t border-b border-slate-100 bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-400">
+              <thead className="border-t border-b border-slate-100 bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-400">
                 <tr>
                   {["Follower Band", "Creators", "Spend", "Views", "CPV"].map((h) => (
                     <th key={h} className="whitespace-nowrap px-5 py-2.5">{h}</th>

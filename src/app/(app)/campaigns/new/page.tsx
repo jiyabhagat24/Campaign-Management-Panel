@@ -33,9 +33,9 @@ export default async function NewCampaignPage() {
   const minDateTime = `${minDate}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
 
   return (
-    <div className="p-8">
+    <div className="mx-auto max-w-7xl p-6 lg:p-8">
       <BackLink label="Back" fallbackHref="/campaigns" />
-      <h1 className="mt-2 text-lg font-semibold text-ink dark:text-white">New campaign</h1>
+      <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">New campaign.</h1>
       <EnterMovesFocusForm action={create} className="mt-6 max-w-xl space-y-4 rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
         <div className="grid grid-cols-2 gap-4">
           <div>

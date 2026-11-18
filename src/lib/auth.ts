@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { type NextAuthOptions, getServerSession } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
@@ -106,14 +107,19 @@ export const authOptions: NextAuthOptions = {
   },
 };
 
+// The layout, the page and any nested server component each ask for the
+// session on the same request. cache() makes that one session decode per
+// request instead of one per caller (outside a render it simply runs).
+const getSession = cache(() => getServerSession(authOptions));
+
 // Convenience wrapper for use in Server Components / Server Actions.
 export async function requireUser() {
-  const session = await getServerSession(authOptions);
+  const session = await getSession();
   if (!session?.user) throw new Error("UNAUTHENTICATED");
   return session.user as { id: string; name: string; email: string; role: Role };
 }
 
 export async function currentUser() {
-  const session = await getServerSession(authOptions);
+  const session = await getSession();
   return (session?.user as { id: string; name: string; email: string; role: Role } | undefined) ?? null;
 }

@@ -12,6 +12,8 @@ const ROLE_LABEL: Record<Role, string> = {
   IR_MANAGER: "IR Manager",
   IR_EXECUTIVE: "IR Executive",
   IR_INTERN: "IR Intern",
+  FINANCE: "Finance",
+  BUSINESS_DEVELOPMENT: "Business Development",
   CLIENT: "Client",
 };
 
@@ -22,6 +24,8 @@ const ROLE_BADGE: Record<Role, string> = {
   IR_MANAGER: "bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300",
   IR_EXECUTIVE: "bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300",
   IR_INTERN: "bg-sky-50 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300",
+  FINANCE: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300",
+  BUSINESS_DEVELOPMENT: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
   CLIENT: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300",
 };
 
@@ -308,7 +312,7 @@ export default function TeamManagementClient({
       {/* ---------- Internal team (User table) ---------- */}
       <section className="space-y-5">
         <div>
-          <h2 className="text-sm font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+          <h2 className="text-sm font-bold text-slate-900 dark:text-white">
             Internal team
           </h2>
           <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">TheBoredMonkey staff sign in with Google by default — optionally give someone a password too (e.g. for testing a role, or if they can't use Google).</p>
@@ -318,14 +322,14 @@ export default function TeamManagementClient({
 
         <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white dark:border-slate-800 dark:bg-slate-900">
           <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+            <thead className="bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
               <tr>
-                <th className="px-4 py-2.5">Name</th>
-                <th className="px-4 py-2.5">Email</th>
-                <th className="px-4 py-2.5">Role</th>
-                <th className="px-4 py-2.5">Password</th>
-                <th className="px-4 py-2.5">Added</th>
-                <th className="px-4 py-2.5" />
+                <th className="px-5 py-2.5">Name</th>
+                <th className="px-5 py-2.5">Email</th>
+                <th className="px-5 py-2.5">Role</th>
+                <th className="px-5 py-2.5">Password</th>
+                <th className="px-5 py-2.5">Added</th>
+                <th className="px-5 py-2.5" />
               </tr>
             </thead>
             <tbody>

@@ -13,9 +13,9 @@ export default async function FilesPage() {
     : await prisma.fileAsset.findMany({ include: { campaign: true }, orderBy: { createdAt: "desc" } });
 
   return (
-    <div className="p-8">
-      <h1 className="text-lg font-semibold text-ink">Files</h1>
-      <p className="mt-1 max-w-2xl text-sm text-slate-500">
+    <div className="mx-auto max-w-7xl p-6 lg:p-8">
+      <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">Files.</h1>
+      <p className="mt-1 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
         Briefs, script docs, approved snapshots, and creative assets. In this scaffold, files are referenced by URL
         (script/content approval already store a snapshot URL per deliverable). Wire real upload storage — S3 / GCS —
         per README "File storage" when you're ready.

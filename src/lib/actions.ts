@@ -1,5 +1,7 @@
 "use server";
 
+import { recordViewSnapshot } from "@/lib/viewHistory";
+import { recordDeliverableVersion } from "@/lib/versionHistory";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
@@ -2588,6 +2590,7 @@ export async function updateScriptStatus(deliverableId: string, scriptStatus: st
     },
     include: { creator: true },
   });
+  await recordDeliverableVersion({ deliverableId, kind: "SCRIPT", url: deliverable.scriptDocUrl, statusAtTime: scriptStatus, actorUserId: user.id, actorName: user.name });
   const scriptBallOwner = ballOwnerForScriptStatus(scriptStatus);
   if (scriptBallOwner) {
     await prisma.creator.update({ where: { id: deliverable.creatorId }, data: { ballOwner: scriptBallOwner } });
@@ -2883,6 +2886,7 @@ export async function addLiveLink(deliverableId: string, liveLink: string) {
     data: { liveLink, liveDate, status: "LIVE", ...(((await prisma.deliverable.findUnique({ where: { id: deliverableId }, select: { id: true, ...( { videoSubmittedAt: true } as any) } })) as any)?.videoSubmittedAt ? {} : { videoSubmittedAt: new Date() }) } as any,
     include: { creator: true },
   });
+  await recordDeliverableVersion({ deliverableId, kind: "LIVE", url: liveLink, statusAtTime: "LIVE", actorUserId: user.id, actorName: user.name });
 
   // Adding a live link is the trigger for automated tracking (brief slide 14).
   // Wire the real fetch in src/lib/tracking.ts (see README) and call it here
@@ -3035,6 +3039,7 @@ export async function updateReviewLink(deliverableId: string, reviewLink: string
       ...(isFirstSubmission ? { videoSubmittedAt: new Date() } : {}),
     } as any,
   });
+  await recordDeliverableVersion({ deliverableId, kind: "VIDEO", url: reviewLink || null, actorUserId: user.id, actorName: user.name });
   revalidatePath(`/campaigns/${existing.creator.campaignId}`);
 }
 
@@ -3072,6 +3077,7 @@ export async function refreshDeliverableMetrics(
     data: { ...metrics, engagementRate: engagementRate ?? undefined, lastTrackedAt: new Date(), status: "TRACKING" },
     include: { creator: true },
   });
+  await recordViewSnapshot(deliverableId, metrics, "MANUAL");
   revalidatePath(`/campaigns/${deliverable.creator.campaignId}`);
 }
 
@@ -3131,6 +3137,7 @@ export async function refreshLiveYoutubeDeliverableMetrics(campaignId?: string) 
           where: { id: deliverable.id },
           data: { views: stats.views, likes: stats.likes, comments: stats.comments, engagementRate: engagementRate ?? undefined, lastTrackedAt: new Date(), status: "TRACKING" },
         });
+        await recordViewSnapshot(deliverable.id, stats, "YOUTUBE_API");
         updated += 1;
         campaignIdsToRevalidate.add(deliverable.creator.campaignId);
       }

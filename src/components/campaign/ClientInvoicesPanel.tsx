@@ -128,21 +128,21 @@ export default function ClientInvoicesPanel({
           not internal cost/margin. */}
       <div className="grid grid-cols-2 gap-4 rounded-xl border border-slate-200/80 bg-white p-4 shadow-card dark:bg-slate-900 dark:border-slate-800 sm:grid-cols-4">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Final Closed Cost</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Final Closed Cost</p>
           <p className="mt-1 text-lg font-bold text-slate-900 dark:text-white">{finalClosedCost != null ? money(finalClosedCost) : "—"}</p>
         </div>
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">{FEE_TYPE_LABELS[feeType]}</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{FEE_TYPE_LABELS[feeType]}</p>
           <p className="mt-1 text-lg font-bold text-slate-900 dark:text-white">
             {feeType === "RETAINER" ? (financeRetainerFee != null ? money(financeRetainerFee) : "—") : financeAgencyFeePercent != null ? `${financeAgencyFeePercent}%` : "—"}
           </p>
         </div>
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Total Received</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Total Received</p>
           <p className="mt-1 text-lg font-bold text-emerald-600 dark:text-emerald-400">{money(totalReceived)}</p>
         </div>
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Total Due</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Total Due</p>
           <p className="mt-1 text-lg font-bold text-amber-600 dark:text-amber-400">{money(totalDue)}</p>
         </div>
       </div>
@@ -150,7 +150,7 @@ export default function ClientInvoicesPanel({
       {/* Invoices */}
       <div className={`overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-card dark:bg-slate-900 dark:border-slate-800`}>
         <div className="flex items-center justify-between px-5 pt-5 pb-3">
-          <p className="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">Invoices</p>
+          <p className="text-sm font-bold text-slate-900 dark:text-white">Invoices</p>
           {canEdit && !adding && (
             <button
               onClick={openAdd}
@@ -166,7 +166,7 @@ export default function ClientInvoicesPanel({
           <div className="mx-5 mb-4 space-y-3 rounded-lg border border-slate-200 bg-slate-50/60 p-3 dark:border-slate-800 dark:bg-slate-800/40">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               <label className="flex flex-col gap-1">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Invoice #</span>
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Invoice #</span>
                 <input
                   value={draft.invoiceNumber ?? ""}
                   onChange={(e) => setDraft((d) => ({ ...d, invoiceNumber: e.target.value }))}
@@ -174,7 +174,7 @@ export default function ClientInvoicesPanel({
                 />
               </label>
               <label className="flex flex-col gap-1">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Raised on</span>
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Raised on</span>
                 <input
                   type="date"
                   value={draft.invoiceRaisedAt ?? ""}
@@ -183,7 +183,7 @@ export default function ClientInvoicesPanel({
                 />
               </label>
               <label className="flex flex-col gap-1">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Invoice Amount</span>
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Invoice Amount</span>
                 <input
                   type="number"
                   min={0}
@@ -193,7 +193,7 @@ export default function ClientInvoicesPanel({
                 />
               </label>
               <label className="flex flex-col gap-1">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Amount Received</span>
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Amount Received</span>
                 <input
                   type="number"
                   min={0}
@@ -203,7 +203,7 @@ export default function ClientInvoicesPanel({
                 />
               </label>
               <label className="flex flex-col gap-1">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Received on</span>
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Received on</span>
                 <input
                   type="date"
                   value={draft.receivedAt ?? ""}
@@ -212,7 +212,7 @@ export default function ClientInvoicesPanel({
                 />
               </label>
               <label className="flex flex-col gap-1">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Payment Terms</span>
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Payment Terms</span>
                 <input
                   value={draft.paymentTerms ?? ""}
                   onChange={(e) => setDraft((d) => ({ ...d, paymentTerms: e.target.value }))}
@@ -222,7 +222,7 @@ export default function ClientInvoicesPanel({
               </label>
             </div>
             <label className="flex flex-col gap-1">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Remark</span>
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Remark</span>
               <input
                 value={draft.remark ?? ""}
                 onChange={(e) => setDraft((d) => ({ ...d, remark: e.target.value }))}
@@ -249,7 +249,7 @@ export default function ClientInvoicesPanel({
 
         <div className="overflow-x-auto scrollbar-x-hidden">
           <table className="w-full text-left text-sm">
-            <thead className="border-t border-b border-slate-100 bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-400">
+            <thead className="border-t border-b border-slate-100 bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-400">
               <tr>
                 {["Invoice #", "Raised", "Amount", "Received", "Received On", "Terms", "Remark", ""].map((h) => (
                   <th key={h} className="whitespace-nowrap px-5 py-2.5">{h}</th>

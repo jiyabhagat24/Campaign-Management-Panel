@@ -112,93 +112,70 @@ export default function FinanceTableClient({ campaigns }: { campaigns: FinanceCa
         )}
       </div>
 
-      <div className="rounded-2xl border border-slate-200/80 bg-white dark:bg-slate-900 dark:border-slate-800 shadow-card overflow-hidden">
-        <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 px-6 py-4 bg-slate-50/50 dark:bg-slate-800/40">
-          <div className="flex items-center gap-2">
-            <Receipt className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
-            <h2 className="text-sm font-bold text-slate-900 dark:text-white">Campaign Level Breakdown</h2>
-          </div>
-          <span className="rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-500 dark:text-slate-400">
-            {rows.length} shown
-          </span>
+      <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-card dark:border-slate-800 dark:bg-slate-900">
+        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 dark:border-slate-800">
+          <h2 className="text-sm font-bold text-slate-900 dark:text-white">Campaign level breakdown</h2>
+          <span className="text-xs text-slate-500 dark:text-slate-400">{rows.length} records</span>
         </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full table-fixed border-separate border-spacing-0 text-left text-sm">
-            <thead className="bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-              <tr>
-                <th className="sticky left-0 top-0 z-40 w-[200px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left dark:border-slate-700 dark:bg-slate-800">Client</th>
-                <th className="sticky left-[200px] top-0 z-40 w-[220px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left dark:border-slate-700 dark:bg-slate-800">Campaign</th>
-                <th className="sticky top-0 z-30 w-[190px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left dark:border-slate-700 dark:bg-slate-800">Brand Solutions POC</th>
-                <th className="sticky top-0 z-30 w-[160px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left dark:border-slate-700 dark:bg-slate-800">Creators Onboarded</th>
-                <th className="sticky top-0 z-30 w-[150px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left dark:border-slate-700 dark:bg-slate-800">Deliverables Total</th>
-                <th className="sticky top-0 z-30 w-[160px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left dark:border-slate-700 dark:bg-slate-800">Client Invoice status</th>
-                <th className="sticky top-0 z-30 w-[140px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left dark:border-slate-700 dark:bg-slate-800">Quoted Value</th>
-                <th className="sticky top-0 z-30 w-[140px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left dark:border-slate-700 dark:bg-slate-800">Internal Value</th>
-                <th className="sticky top-0 z-30 w-[110px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left dark:border-slate-700 dark:bg-slate-800">Margin %</th>
-                <th className="sticky top-0 z-30 w-[130px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left dark:border-slate-700 dark:bg-slate-800">Fee Type</th>
-                <th className="sticky top-0 z-30 w-[140px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left dark:border-slate-700 dark:bg-slate-800">Fee Value</th>
-              </tr>
-            </thead>
-            <tbody className="font-medium">
-              {rows.map((c) => {
-                const quotedValue = c.quotedValue;
-                const margin = quotedValue > 0 ? ((quotedValue - c.internalValue) / quotedValue) * 100 : null;
-
-                return (
-                  <tr key={c.id} className="group hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
-                    <td className="sticky left-0 z-10 w-[200px] min-w-[200px] max-w-[200px] overflow-hidden border-b border-slate-100 bg-white px-4 py-3 group-hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:group-hover:bg-slate-800">
-                      <div className="flex items-center gap-2.5">
-                        <BrandAvatar brand={c.brand} logoUrl={c.brandLogoUrl} size={26} />
-                        <span className="truncate font-semibold text-slate-900 dark:text-white">{c.brand}</span>
-                      </div>
-                    </td>
-                    <td className="sticky left-[200px] z-10 w-[220px] min-w-[220px] max-w-[220px] overflow-hidden border-b border-slate-100 bg-white px-4 py-3 group-hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:group-hover:bg-slate-800">
-                      <Link href={`/campaigns/${c.id}`} className="block truncate font-medium text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 hover:underline">
-                        {c.name}
-                      </Link>
-                    </td>
-                    <td className="border-b border-slate-100 px-4 py-3 text-left text-slate-600 dark:border-slate-800 dark:text-slate-300">{c.brandSolutionsPoc ?? "—"}</td>
-                    <td className="border-b border-slate-100 px-4 py-3 text-left text-slate-700 dark:border-slate-800 dark:text-slate-200">{c.creatorsOnboarded}</td>
-                    <td className="border-b border-slate-100 px-4 py-3 text-left text-slate-700 dark:border-slate-800 dark:text-slate-200">{c.deliverablesTotal}</td>
-                    <td className="border-b border-slate-100 px-4 py-3 text-left dark:border-slate-800">
-                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${invoiceTone[c.financeClientInvoiceStatus ?? ""] ?? "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"}`}>
-                        {invoiceLabel(c.financeClientInvoiceStatus)}
-                      </span>
-                    </td>
-                    <td className="border-b border-slate-100 px-4 py-3 text-left text-slate-700 dark:border-slate-800 dark:text-slate-200">{money(quotedValue)}</td>
-                    <td className="border-b border-slate-100 px-4 py-3 text-left text-slate-700 dark:border-slate-800 dark:text-slate-200">{money(c.internalValue)}</td>
-                    <td className="border-b border-slate-100 px-4 py-3 text-left font-semibold text-slate-900 dark:border-slate-800 dark:text-white">
-                      {margin !== null ? `${margin.toFixed(1)}%` : "—"}
-                    </td>
-                    <td className="border-b border-slate-100 px-4 py-3 text-left text-slate-700 dark:border-slate-800 dark:text-slate-200">
-                      {c.financeFeeType === "RETAINER" || c.financeFeeType === "PERCENTAGE"
-                        ? ASSOCIATION_TYPE_LABELS[c.financeFeeType as FeeType]
-                        : "—"}
-                    </td>
-                    <td className="border-b border-slate-100 px-4 py-3 text-left text-slate-700 dark:border-slate-800 dark:text-slate-200">
-                      {c.financeFeeType === "RETAINER"
-                        ? money(c.financeRetainerFee)
-                        : c.financeAgencyFeePercent !== null
-                        ? `${c.financeAgencyFeePercent}%`
-                        : "—"}
-                    </td>
-                  </tr>
-                );
-              })}
-              {rows.length === 0 && (
-                <tr>
-                  <td colSpan={11} className="px-6 py-12 text-center text-slate-400 dark:text-slate-500">
-                    <Receipt className="mx-auto h-8 w-8 text-slate-300 dark:text-slate-600 mb-2" />
-                    <p className="text-sm font-medium">
-                      {hasRange ? "No creators were onboarded (closed) in this date range." : "No campaigns yet."}
-                    </p>
+        <table className="w-full text-left text-sm">
+          <thead className="bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+            <tr>
+              <th className="px-5 py-2.5">Campaign / client</th>
+              <th className="px-5 py-2.5">Brand Solutions POC</th>
+              <th className="px-5 py-2.5">Delivery</th>
+              <th className="px-5 py-2.5">Client invoice</th>
+              <th className="px-5 py-2.5">Quoted / internal</th>
+              <th className="px-5 py-2.5">Margin / fee</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+            {rows.map((c) => {
+              const quotedValue = c.quotedValue;
+              const margin = quotedValue > 0 ? ((quotedValue - c.internalValue) / quotedValue) * 100 : null;
+              const feeType =
+                c.financeFeeType === "RETAINER" || c.financeFeeType === "PERCENTAGE"
+                  ? ASSOCIATION_TYPE_LABELS[c.financeFeeType as FeeType]
+                  : "—";
+              const feeValue =
+                c.financeFeeType === "RETAINER"
+                  ? money(c.financeRetainerFee)
+                  : c.financeAgencyFeePercent !== null
+                  ? `${c.financeAgencyFeePercent}%`
+                  : "—";
+              return (
+                <tr key={c.id} className="align-top transition-colors hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
+                  <td className="px-5 py-3">
+                    <Link href={`/campaigns/${c.id}`} className="font-semibold text-slate-900 hover:text-indigo-700 hover:underline dark:text-white dark:hover:text-indigo-300">
+                      {c.name}
+                    </Link>
+                    <div className="text-xs text-slate-500 dark:text-slate-400">{c.brand}</div>
+                  </td>
+                  <td className="px-5 py-3 text-slate-700 dark:text-slate-200">{c.brandSolutionsPoc ?? "—"}</td>
+                  <td className="px-5 py-3">
+                    <div className="text-slate-900 dark:text-white">{c.creatorsOnboarded} creators onboarded</div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400">{c.deliverablesTotal} deliverables</div>
+                  </td>
+                  <td className="px-5 py-3 text-slate-700 dark:text-slate-200">{invoiceLabel(c.financeClientInvoiceStatus)}</td>
+                  <td className="px-5 py-3">
+                    <div className="font-semibold text-slate-900 dark:text-white">{money(quotedValue)}</div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400">Internal {money(c.internalValue)}</div>
+                  </td>
+                  <td className="px-5 py-3">
+                    <div className="font-semibold text-slate-900 dark:text-white">{margin !== null ? `${margin.toFixed(1)}%` : "—"}</div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400">{feeType} · {feeValue}</div>
                   </td>
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+              );
+            })}
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={6} className="px-5 py-12 text-center text-sm text-slate-500 dark:text-slate-400">
+                  {hasRange ? "No creators were onboarded (closed) in this date range." : "No campaigns yet."}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   );

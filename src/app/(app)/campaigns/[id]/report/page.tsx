@@ -72,7 +72,7 @@ export default async function CampaignReportOnlyPage({ params }: { params: Promi
   }
 
   return (
-    <div className="p-8 space-y-6 max-w-7xl mx-auto">
+    <div className="mx-auto max-w-7xl space-y-6 p-6 lg:p-8">
       <div>
         <Link
           href="/pipeline"
@@ -85,10 +85,9 @@ export default async function CampaignReportOnlyPage({ params }: { params: Promi
 
       <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-card dark:bg-slate-900 dark:border-slate-800">
         <div className="flex items-center gap-3">
-          <BrandAvatar brand={campaign.brand} logoUrl={campaign.brandLogoUrl} size={40} />
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">{campaign.brand}</p>
-            <h1 className="text-lg font-bold text-slate-900 dark:text-white">{campaign.name}</h1>
+            <p className="text-xs text-slate-500 dark:text-slate-400">{campaign.brand}</p>
+            <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">{campaign.name}</h1>
           </div>
         </div>
         <p className="mt-3 text-xs text-slate-400 dark:text-slate-500">

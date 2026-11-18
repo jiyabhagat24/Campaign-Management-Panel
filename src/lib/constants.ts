@@ -15,6 +15,12 @@ export const ROLES = [
   "IR_MANAGER",
   "IR_EXECUTIVE",
   "IR_INTERN",
+  // Added from the TBM Campaign OS sandbox audit: Finance owns receivables,
+  // payables and payout validation (org-wide, like CXO for money); Business
+  // Development posts briefs and tracks their outcome. BD has no internal
+  // cost visibility (see INTERNAL_COST_ROLES below).
+  "FINANCE",
+  "BUSINESS_DEVELOPMENT",
   "CLIENT",
 ] as const;
 export type Role = (typeof ROLES)[number];
@@ -33,7 +39,7 @@ export const INTERNAL_ROLES = ROLES.filter((r) => r !== "CLIENT") as Exclude<Rol
 // campaigns they're assigned to, CXO org-wide with no assignment scoping.
 // Campaign *visibility* itself (which campaigns a non-CXO role can even
 // open) is a separate scope, see campaignVisibilityWhere in rbac.ts.
-export const INTERNAL_COST_ROLES: Role[] = ROLES.filter((r) => r !== "CLIENT" && r !== "IR_INTERN");
+export const INTERNAL_COST_ROLES: Role[] = ROLES.filter((r) => r !== "CLIENT" && r !== "IR_INTERN" && r !== "BUSINESS_DEVELOPMENT");
 // Who approves a Campaign Manager's request to reopen a locked quoted/final
 // cost (Step 13's real two-person check — see requestCommercialEdit/
 // requestFinalCostEdit + approveCommercialEditRequest/
@@ -337,4 +343,18 @@ export const DEFAULT_SLA = {
   scriptFromCreatorDays: 5,
   contentFromCreatorDays: 7,
   onboardToGoLiveDays: 15,
+};
+
+// Human-readable role names for screens added after the sandbox audit
+// (Team & turnaround). Existing screens keep their own local label maps.
+export const ROLE_DISPLAY_NAMES: Record<Role, string> = {
+  CXO: "CXO",
+  BRAND_SOLUTIONS: "Brand Solutions",
+  CAMPAIGN_MANAGER: "Campaign Manager",
+  IR_MANAGER: "IR Manager",
+  IR_EXECUTIVE: "IR Executive",
+  IR_INTERN: "IR Intern",
+  FINANCE: "Finance",
+  BUSINESS_DEVELOPMENT: "Business Development",
+  CLIENT: "Client",
 };

@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { PageHeadline, pageClass } from "@/components/finance/SandboxUi";
 import { currentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { isClient, campaignVisibilityWhere } from "@/lib/rbac";
@@ -37,17 +38,9 @@ export default async function EscalationsPage() {
   const closed = escalations.filter((e) => e.status === "CLOSED");
 
   return (
-    <div className="mx-auto max-w-5xl space-y-8 p-8">
-      <div>
-        <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-          <AlertTriangle className="h-6 w-6 text-amber-500" />
-          Escalations
-        </h1>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          Open it, claim it, close it with a resolution — every escalation logs who raised it, who owns it, and why
-          it closed (Gate G14).
-        </p>
-      </div>
+    <div className={pageClass}>
+      <PageHeadline title="Escalations." subtitle={<>Open it, claim it, close it with a resolution — every escalation logs who raised it, who owns it, and why
+          it closed (Gate G14).</>} />
 
       <ActionForm
         action={async (formData: FormData) => {
@@ -129,7 +122,7 @@ export default async function EscalationsPage() {
         { label: "Closed", rows: closed },
       ].map((section) => (
         <div key={section.label}>
-          <h2 className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+          <h2 className="mb-2 text-sm font-bold text-slate-900 dark:text-white">
             {section.label} ({section.rows.length})
           </h2>
           <div className="space-y-2">

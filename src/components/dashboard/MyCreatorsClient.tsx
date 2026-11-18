@@ -107,7 +107,7 @@ export default function MyCreatorsClient({ records, showCost, initialStatus }: {
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Creator records</h1>
+          <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">Creator records.</h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">All creators assigned to you across campaigns</p>
         </div>
         <button type="button" onClick={exportCsv} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
@@ -148,17 +148,17 @@ export default function MyCreatorsClient({ records, showCost, initialStatus }: {
 
       <div className="overflow-x-auto rounded-2xl border border-slate-200/80 bg-white shadow-card dark:border-slate-800 dark:bg-slate-900">
         <table className="w-full text-sm">
-          <thead className="border-b border-slate-100 bg-slate-50/50 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:border-slate-800 dark:bg-slate-800/40 dark:text-slate-400">
+          <thead className="border-b border-slate-100 bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-400">
             <tr>
-              <th className="px-4 py-3 text-left">Creator</th>
-              <th className="px-4 py-3 text-left">Campaign</th>
-              <th className="px-4 py-3 text-left">Deliverables</th>
-              <th className="px-4 py-3 text-left">Product</th>
-              <th className="px-4 py-3 text-left">Script status &amp; links</th>
-              <th className="px-4 py-3 text-left">Video status &amp; links</th>
+              <th className="px-5 py-2.5 text-left">Creator</th>
+              <th className="px-5 py-2.5 text-left">Campaign</th>
+              <th className="px-5 py-2.5 text-left">Deliverables</th>
+              <th className="px-5 py-2.5 text-left">Product</th>
+              <th className="px-5 py-2.5 text-left">Script status &amp; links</th>
+              <th className="px-5 py-2.5 text-left">Video status &amp; links</th>
               {showCost && <th className="px-4 py-3 text-right">Final internal</th>}
               {showCost && <th className="px-4 py-3 text-right">Final quoted</th>}
-              <th className="px-4 py-3 text-left">Pending / deadline</th>
+              <th className="px-5 py-2.5 text-left">Pending / deadline</th>
               <th className="px-4 py-3" />
             </tr>
           </thead>

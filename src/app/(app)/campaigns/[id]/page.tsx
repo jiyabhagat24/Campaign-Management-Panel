@@ -53,6 +53,15 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
   ]);
   if (!campaign) notFound();
 
+  // Clients need clientAccess; CXO sees every campaign; every other
+  // internal role needs to be a team member on this specific campaign.
+  // Bounced back to their own campaigns list rather than a 404 — the point
+  // is that an unassigned campaign just doesn't exist on their pages, not
+  // that hitting the URL directly should look like a broken link/error.
+  // Checked before the activity-log query below so a blocked visitor costs
+  // no further database work.
+  if (!canViewCampaign(user, campaign)) redirect("/campaigns");
+
   // Onboarding tab derives "Last Action" / status-history / overdue-dormant
   // flags entirely from the audit trail — client view doesn't need any of
   // this internal operational detail. Scoped to onboarded/blocked creators
@@ -82,12 +91,6 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
           take: 300,
         });
 
-  // Clients need clientAccess; CXO sees every campaign; every other
-  // internal role needs to be a team member on this specific campaign.
-  // Bounced back to their own campaigns list rather than a 404 — the point
-  // is that an unassigned campaign just doesn't exist on their pages, not
-  // that hitting the URL directly should look like a broken link/error.
-  if (!canViewCampaign(user, campaign)) redirect("/campaigns");
 
   const canSeeCost = canSeeInternalCost(user.role);
 
@@ -154,7 +157,7 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
 
         {/* Team Members Row */}
         <div className="mt-6 border-t border-slate-100 dark:border-slate-800 pt-4">
-          <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">TBM Members</p>
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">TBM Members</p>
           <TeamRow
             campaignId={campaign.id}
             teamMembers={campaign.teamMembers}
@@ -164,7 +167,7 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
         </div>
 
         <div className="mt-4 border-t border-slate-100 dark:border-slate-800 pt-4">
-          <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Client</p>
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Client</p>
           <ClientRow
             campaignId={campaign.id}
             clientAccess={campaign.clientAccess}
@@ -181,7 +184,7 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
             this whole row silently never rendered for them. */}
         {(canSeeCost || isClientView) && (
           <div className="mt-4 border-t border-slate-100 dark:border-slate-800 pt-4">
-            <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Finance</p>
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Finance</p>
             <FinanceRow
               campaignId={campaign.id}
               canEdit={canSetCommercials(user.role) || isSuperAdmin(user.id)}

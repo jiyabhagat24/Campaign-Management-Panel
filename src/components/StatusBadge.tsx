@@ -17,9 +17,11 @@ export default function StatusBadge({ status }: { status: string }) {
   const config = COLORS[status] ?? { bg: "bg-slate-100 border-slate-200 text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300", dot: "bg-slate-400 dark:bg-slate-500" };
   const label = status.replace(/_/g, " ").toLowerCase();
 
+  // Plain text with a small status dot, matching the Creator records style
+  // (no pill background); colours still come from COLORS above.
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${config.bg}`}>
-      <span className={`h-1.5 w-1.5 rounded-full ${config.dot}`} />
+    <span className="inline-flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300">
+      <span className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${config.dot}`} />
       <span className="capitalize">{label}</span>
     </span>
   );

@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { PageHeadline, primaryActionClass } from "@/components/finance/SandboxUi";
 import { currentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { canSeeInternalCost, campaignVisibilityWhere, isClient, canCreateCampaign, isSuperAdmin } from "@/lib/rbac";
@@ -51,35 +52,59 @@ export default async function DashboardPage() {
   // /campaigns instead, which the matrix does grant them.
   if (isClient(user.role) && !isSuperAdmin(user.id)) redirect("/campaigns");
 
-  // activity here is only for computing "Open Flags" below (breached
-  // deadline or 48h+ no action, per onboarded creator) — not the same
-  // fetch as recentActivity further down, which is a separate global feed.
+  // Only the creator fields this page actually reads. A creator row has ~100
+  // columns, and pulling all of them for every visible campaign was most of
+  // this page's payload.
   const campaignInclude = {
-    creators: { include: { deliverables: { select: { id: true, liveLink: true } } } },
+    creators: {
+      select: {
+        id: true,
+        status: true,
+        onboardedAt: true,
+        goLiveDeadline: true,
+        internalCost: true,
+        quotedCost: true,
+        finalQuotedCost: true,
+        payoutPaymentStatus: true,
+        deliverables: { select: { id: true, liveLink: true } },
+      },
+    },
     teamMembers: { include: { user: { select: { name: true } } } },
-    activity: { select: { entityId: true, createdAt: true } },
   } as const;
 
   // Campaign visibility: clients see their own, CXO sees every campaign,
   // and every other internal role only sees campaigns they're assigned to.
-  const campaigns = await prisma.campaign.findMany({
-    where: campaignVisibilityWhere(user),
-    include: campaignInclude,
-    orderBy: { updatedAt: "desc" },
-  });
-
-  // Section B's actual per-invoice ledger (the campaign's own Finance and
-  // Invoicing tab / Client Cash) — the real system of record for what's
-  // been invoiced and received from the client. Fetched as its own query
-  // rather than an include on campaign.findMany above, same as
-  // campaigns/[id]/page.tsx already does, since the ClientInvoice relation
-  // isn't in the locally generated Prisma client yet (no network to
-  // Prisma's binary host in this sandbox — see the `as any` cast below;
-  // Vercel's postinstall regenerates the real client at deploy time).
-  const clientInvoiceRows = await (prisma as any).clientInvoice.findMany({
-    where: { campaignId: { in: campaigns.map((c) => c.id) } },
-    select: { campaignId: true, invoiceAmount: true, amountReceived: true },
-  }) as { campaignId: string; invoiceAmount: number; amountReceived: number | null }[];
+  // The invoice ledger and the "last action" lookup filter by the same
+  // visibility rule through their campaign relation, so all three queries
+  // run at once instead of one after another.
+  const visibleCampaign = campaignVisibilityWhere(user);
+  const [campaigns, clientInvoiceRows, lastActionRows] = await Promise.all([
+    prisma.campaign.findMany({
+      where: visibleCampaign,
+      include: campaignInclude,
+      orderBy: { updatedAt: "desc" },
+    }),
+    // Section B's per-invoice ledger (the campaign's own Finance and
+    // Invoicing tab / Client Cash), the system of record for what's been
+    // invoiced and received from the client.
+    (prisma as any).clientInvoice.findMany({
+      where: { campaign: visibleCampaign },
+      select: { campaignId: true, invoiceAmount: true, amountReceived: true },
+    }) as Promise<{ campaignId: string; invoiceAmount: number; amountReceived: number | null }[]>,
+    // "Open Flags" below only needs the latest logged action per creator/
+    // deliverable. This used to load every ActivityLog row for every visible
+    // campaign (the whole table for org-wide roles) and reduce it in JS; the
+    // database now returns one row per entity instead.
+    prisma.activityLog.groupBy({
+      by: ["campaignId", "entityId"],
+      where: { campaign: visibleCampaign },
+      _max: { createdAt: true },
+    }),
+  ]);
+  const lastActionByEntity = new Map<string, number>();
+  for (const row of lastActionRows) {
+    if (row._max.createdAt) lastActionByEntity.set(`${row.campaignId}:${row.entityId}`, row._max.createdAt.getTime());
+  }
   const invoicesByCampaign = new Map<string, { invoiceAmount: number; amountReceived: number | null }[]>();
   for (const inv of clientInvoiceRows) {
     const list = invoicesByCampaign.get(inv.campaignId) ?? [];
@@ -128,13 +153,10 @@ export default async function DashboardPage() {
         : null;
       const deadlineBreached = effectiveDeadline ? now > effectiveDeadline.getTime() : false;
 
-      const relevantIds = new Set([cr.id, ...cr.deliverables.map((d) => d.id)]);
-      const lastActionAt = c.activity
-        .filter((a) => relevantIds.has(a.entityId))
-        .reduce<number | null>((latest, a) => {
-          const t = new Date(a.createdAt).getTime();
-          return latest === null || t > latest ? t : latest;
-        }, null);
+      const lastActionAt = [cr.id, ...cr.deliverables.map((d) => d.id)].reduce<number | null>((latest, entityId) => {
+        const t = lastActionByEntity.get(`${c.id}:${entityId}`);
+        return t !== undefined && (latest === null || t > latest) ? t : latest;
+      }, null);
       const hoursSinceLastAction = lastActionAt !== null ? (now - lastActionAt) / (60 * 60 * 1000) : null;
       const dormant = hoursSinceLastAction !== null && hoursSinceLastAction >= DORMANT_HOURS;
 
@@ -628,29 +650,19 @@ export default async function DashboardPage() {
   });
 
   return (
-    <div className="p-8 space-y-8 max-w-7xl mx-auto">
-      {/* Header Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-200/60 dark:border-slate-800 pb-6">
-        <div>
-          <span className="text-xs text-slate-400 dark:text-slate-500 font-medium">{todayStr}</span>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-            Welcome back, {user.name} 👋
-          </h1>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            All campaigns, every client, one screen.
-          </p>
-        </div>
-
-        {(canCreateCampaign(user.role) || isSuperAdmin(user.id)) && (
-          <Link
-            href="/campaigns/new"
-            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/20 transition-all hover:from-indigo-700 hover:to-indigo-800 hover:shadow-indigo-600/30 hover:-translate-y-0.5 active:translate-y-0"
-          >
-            <Plus className="h-4 w-4" />
-            <span>New Campaign</span>
-          </Link>
-        )}
-      </div>
+    <div className="mx-auto max-w-7xl space-y-8 p-6 lg:p-8">
+      <PageHeadline
+        title={<>Welcome back, {user.name}.</>}
+        subtitle={`${todayStr} · All campaigns, every client, one screen.`}
+        aside={
+          (canCreateCampaign(user.role) || isSuperAdmin(user.id)) && (
+            <Link href="/campaigns/new" className={primaryActionClass}>
+              <Plus className="h-4 w-4" />
+              <span>New campaign</span>
+            </Link>
+          )
+        }
+      />
 
       {irExecutiveData && <IrExecutivePersonalDashboard data={irExecutiveData} />}
 

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PageHeadline } from "@/components/finance/SandboxUi";
 import { redirect } from "next/navigation";
 import { currentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -42,7 +43,10 @@ export default async function PipelinePage() {
   const campaigns = await prisma.campaign.findMany({
     where: { status: "ACTIVE" },
     include: {
-      creators: { include: { deliverables: { select: { liveLink: true } } } },
+      // Only the two fields the stage rollup and counts read — a creator row
+      // has ~100 columns, and fetching them all for every campaign was the
+      // bulk of this page's load time.
+      creators: { select: { status: true, deliverables: { select: { liveLink: true } } } },
       teamMembers: { select: { userId: true } },
     },
     orderBy: { updatedAt: "desc" },
@@ -55,21 +59,8 @@ export default async function PipelinePage() {
 
   return (
     <div className="flex h-dvh flex-col p-8 overflow-hidden">
-      {/* Header */}
-      <div className="border-b border-slate-200/60 dark:border-slate-800 pb-5 flex-shrink-0">
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-full px-2.5 py-0.5 dark:bg-indigo-950/80 dark:border-indigo-800/80 dark:text-indigo-300">
-            Stage Rollup
-          </span>
-          <span className="text-xs text-slate-400 dark:text-slate-500 font-medium">{campaigns.length} Active Campaigns</span>
-        </div>
-        <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
-          <GitMerge className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
-          Campaign Pipeline
-        </h1>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          Every active campaign rolled up to the furthest stage reached by its creators.
-        </p>
+      <div className="flex-shrink-0">
+        <PageHeadline title="Campaign pipeline." subtitle={`${campaigns.length} active campaigns · each rolled up to the furthest stage its creators have reached.`} />
       </div>
 
       {/* Kanban Board Columns */}
@@ -109,7 +100,6 @@ export default async function PipelinePage() {
 
                   const cardBody = (
                     <div className="flex items-start gap-3">
-                      <BrandAvatar brand={c.brand} logoUrl={c.brandLogoUrl} size={36} />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between">
                           <p

@@ -22,9 +22,9 @@ export default async function ReportsPage() {
   });
 
   return (
-    <div className="p-8">
-      <h1 className="text-lg font-semibold text-ink">Reports</h1>
-      <p className="mt-1 text-sm text-slate-500">Per-campaign report is inside each campaign's Reports tab. Cross-campaign summary below.</p>
+    <div className="mx-auto max-w-7xl p-6 lg:p-8">
+      <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">Reports.</h1>
+      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Per-campaign report is inside each campaign's Reports tab. Cross-campaign summary below.</p>
 
       <div className="mt-6 grid gap-4 md:grid-cols-2">
         {campaigns.map((c) => {

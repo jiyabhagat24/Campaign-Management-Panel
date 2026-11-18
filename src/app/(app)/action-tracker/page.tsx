@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { PageHeadline, pageClass } from "@/components/finance/SandboxUi";
 import { currentUser } from "@/lib/auth";
 import { isClient, isSuperAdmin } from "@/lib/rbac";
 import { getStaleChaseCandidates, logChase } from "@/lib/actions";
@@ -21,17 +22,9 @@ export default async function ActionTrackerPage() {
   const stale = await getStaleChaseCandidates();
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 p-8">
-      <div>
-        <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-          <PhoneCall className="h-6 w-6 text-amber-500" />
-          Action Tracker
-        </h1>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          Rows with no logged client-chase in 7+ days — log a touchpoint to clear a row off this list, or raise an
-          escalation if it needs a manager.
-        </p>
-      </div>
+    <div className={pageClass}>
+      <PageHeadline title="Action tracker." subtitle={<>Rows with no logged client-chase in 7+ days — log a touchpoint to clear a row off this list, or raise an
+          escalation if it needs a manager.</>} />
 
       <div className="space-y-2">
         {stale.length === 0 && (

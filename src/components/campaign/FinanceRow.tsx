@@ -80,7 +80,7 @@ export default function FinanceRow({ campaignId, canEdit, initial }: Props) {
       className="flex flex-wrap items-end gap-3"
     >
       <label className="flex flex-col gap-1">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Fee type</span>
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Fee type</span>
         <select
           value={feeType}
           onChange={(e) => setValues((v) => ({ ...v, financeFeeType: e.target.value }))}
@@ -96,7 +96,7 @@ export default function FinanceRow({ campaignId, canEdit, initial }: Props) {
 
       {feeType === "RETAINER" ? (
         <label className="flex flex-col gap-1">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Retainer Fee</span>
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Retainer Fee</span>
           <input
             type="number"
             step="0.01"
@@ -110,7 +110,7 @@ export default function FinanceRow({ campaignId, canEdit, initial }: Props) {
         </label>
       ) : (
         <label className="flex flex-col gap-1">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Agency Fee %</span>
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Agency Fee %</span>
           <input
             type="number"
             step="0.01"
@@ -125,7 +125,7 @@ export default function FinanceRow({ campaignId, canEdit, initial }: Props) {
       )}
 
       <label className="flex flex-col gap-1">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Client Invoice status</span>
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Client Invoice status</span>
         <select
           value={values.financeClientInvoiceStatus ?? ""}
           onChange={(e) => setValues((v) => ({ ...v, financeClientInvoiceStatus: e.target.value || null }))}

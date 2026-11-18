@@ -31,6 +31,14 @@ model User {
   role         String // see constants.ts ROLES
   createdAt    DateTime @default(now())
 
+  // Reporting line (sandbox audit, Phase 1). Who this person formally
+  // reports to — deliberately separate from CampaignTeamMember: a CM
+  // coordinating an IRE on a campaign is not necessarily that IRE's manager.
+  // SetNull so removing a manager leaves their reports unassigned, not deleted.
+  managerId    String?
+  manager      User?    @relation("ReportingLine", fields: [managerId], references: [id], onDelete: SetNull)
+  reports      User[]   @relation("ReportingLine")
+
   // onDelete for every relation below is set explicitly rather than left to
   // Prisma's implicit default, per-table, based on what actually deleting a
   // User should do to that table:
@@ -60,6 +68,8 @@ model User {
   monthsLocked              Month[]
   chaseLogs                 ChaseLog[]
   clientInvoicesLogged      ClientInvoice[]
+
+  @@index([managerId])
 }
 
 // External accounts — the brand-side contacts who log in to review shortlists,
@@ -275,6 +285,8 @@ model Campaign {
   escalations          Escalation[]
   chaseLogs            ChaseLog[]
   clientInvoices       ClientInvoice[]
+  briefs               Brief[]
+  closure              CampaignClosure?
 
   // status/brand/createdAt all get filtered on directly (dashboard filter
   // bar, campaign directory) without going through a relation, so unlike
@@ -482,6 +494,11 @@ model Creator {
   @@index([campaignId])
   @@index([pauseConfirmedByUserId])
   @@index([pauseRequestedByUserId])
+  // Sandbox audit, Phase 1 — creator payment chain (relation fields only, no new columns here).
+  paymentTerms      CreatorPaymentTerms?
+  paymentMilestones PaymentMilestone[]
+  creatorInvoices   CreatorInvoice[]
+
   @@index([pocUserId])
 }
 
@@ -693,11 +710,34 @@ model Deliverable {
   engagementRate Float?
   lastTrackedAt  DateTime?
 
+  // One row per metrics refresh, for the Viewership Growth Graph.
+  viewSnapshots DeliverableViewSnapshot[]
+  releases      DeliverableRelease[]
+  versions      DeliverableVersion[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([status])
   @@index([creatorId])
+}
+
+// View history: every time a deliverable's numbers are refreshed (YouTube
+// sweep, n8n/Instagram push, or a manual entry) a snapshot is saved here, so
+// the Campaign Report can chart viewership growth over time. Deliverable keeps
+// only the latest count; this table keeps the trail.
+model DeliverableViewSnapshot {
+  id            String      @id @default(cuid())
+  deliverableId String
+  deliverable   Deliverable @relation(fields: [deliverableId], references: [id], onDelete: Cascade)
+  views         Int
+  likes         Int         @default(0)
+  comments      Int         @default(0)
+  shares        Int?
+  source        String      // YOUTUBE_API | N8N | MANUAL
+  capturedAt    DateTime    @default(now())
+
+  @@index([deliverableId, capturedAt])
 }
 
 // ---------- Communication (in-panel only — brief slide 03) ----------
@@ -779,6 +819,10 @@ model ActivityLog {
   @@index([campaignId])
   @@index([actorId])
   @@index([actorClientId])
+  // "Latest action per creator/deliverable" lookups (dashboard Open Flags,
+  // campaign page onboarding tab) filter by campaign + entity and read the
+  // newest createdAt, which this index answers without touching the table.
+  @@index([campaignId, entityId, createdAt])
 }
 
 // ---------- Notifications (instant vs digest — brief slide 16) ----------
@@ -796,11 +840,22 @@ model Notification {
   read      Boolean  @default(false)
   createdAt DateTime @default(now())
 
+  // Sandbox audit, Phase 1 — actionable notifications. All optional so every
+  // existing notification keeps working unchanged. entityType/entityId point
+  // at the record, actionRequired says what the recipient must do, and
+  // acknowledgedAt is separate from read (seen vs. accepted responsibility).
+  entityType     String?
+  entityId       String?
+  actionRequired String?
+  acknowledgedAt DateTime?
+
   // The one query this table exists for: "this user's unread notifications" —
   // a composite index matches that access pattern directly instead of
   // relying on the userId index alone plus a filter scan over read.
   @@index([userId, read])
   @@index([clientId, read])
+  // The sidebar bell loads a user's 20 newest notifications on every page.
+  @@index([userId, createdAt])
 }
 
 // ---------- Instagram profile cache (from browser extension capture) ----------
@@ -919,4 +974,223 @@ model ScoutedCreator {
   updatedAt      DateTime @updatedAt
 
   @@index([status])
+}
+
+// ---------- Creator payment chain (sandbox audit, Phase 1) ----------
+// Replaces nothing: the existing payout flags/free-text on Creator stay as
+// they are. These tables add what the sandbox has and the panel lacked —
+// a payment schedule, vendor verification, creator invoices with a
+// validate -> approve chain, and payouts tied to milestones. The rule that
+// matters: an approval is only valid for the terms version it was given on.
+// Editing the schedule or vendor bumps termsVersion, so an older approval
+// can no longer release money.
+
+model CreatorPaymentTerms {
+  id        String  @id @default(cuid())
+  creatorId String  @unique
+  creator   Creator @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  vendorName         String?
+  vendorReference    String? // PAN/GST or vendor code; never bank details
+  vendorVerified     Boolean   @default(false)
+  vendorVerifiedAt   DateTime?
+  vendorVerifiedById String?
+
+  termsVersion         Int       @default(1)
+  scheduleConfirmedAt  DateTime?
+  scheduleConfirmedById String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PaymentMilestone {
+  id        String   @id @default(cuid())
+  creatorId String
+  creator   Creator  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  label     String // e.g. "Advance", "Final settlement"
+  amount    Float
+  dueDate   DateTime?
+  sortOrder Int      @default(0)
+  payouts   CreatorPayout[]
+  createdAt DateTime @default(now())
+
+  @@index([creatorId])
+}
+
+model CreatorInvoice {
+  id            String   @id @default(cuid())
+  creatorId     String
+  creator       Creator  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  campaignId    String
+  invoiceNumber String?
+  amount        Float
+  dueDate       DateTime?
+  fileUrl       String?
+  status        String   @default("RECEIVED") // RECEIVED | VALIDATED | REJECTED
+  rejectReason  String?
+
+  validatedAt   DateTime?
+  validatedById String?
+  cmApprovedAt  DateTime?
+  cmApprovedById String?
+  approvedTermsVersion Int? // termsVersion at the moment of CM approval
+
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  payouts     CreatorPayout[]
+
+  @@index([creatorId])
+  @@index([campaignId])
+  @@index([status])
+}
+
+model CreatorPayout {
+  id           String            @id @default(cuid())
+  invoiceId    String
+  invoice      CreatorInvoice    @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  milestoneId  String?
+  milestone    PaymentMilestone? @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  amount       Float
+  paidAt       DateTime
+  reference    String? // UTR / transaction reference
+  proofUrl     String?
+  recordedById String?
+  createdAt    DateTime @default(now())
+
+  @@index([invoiceId])
+  @@index([milestoneId])
+}
+
+// Workflow events (sandbox audit, Phase 1). One row per handoff, recording
+// who owned the work at that moment and who it is now waiting on — the
+// evidence every TAT figure and scorecard will be built from. Written by the
+// new payment actions first; existing actions are not changed.
+model WorkflowEvent {
+  id            String   @id @default(cuid())
+  campaignId    String
+  creatorId     String?
+  entityType    String // "CreatorInvoice" | "CreatorPaymentTerms" | ...
+  entityId      String
+  fromStage     String?
+  toStage       String
+  actorUserId   String?
+  ownerUserId   String? // who is accountable for the next step
+  waitingOn     String? // INTERNAL | CREATOR | CLIENT
+  note          String?
+  createdAt     DateTime @default(now())
+
+  @@index([campaignId])
+  @@index([entityType, entityId])
+  @@index([ownerUserId])
+  @@index([createdAt])
+}
+
+// ---------- Briefs & strategy (sandbox audit, gap build) ----------
+// A brief is posted by Business Development (or Brand Solutions) before any
+// campaign exists. Brand Solutions picks it up, can ask clarifying questions
+// in a thread, and links the campaign they create from it. Status changes are
+// written to BriefMessage with kind STATUS, so who/when/old/new is kept (G14).
+model Brief {
+  id             String    @id @default(cuid())
+  title          String
+  brand          String
+  objective      String?
+  category       String?
+  productUrl     String?
+  budget         Float?
+  creatorQty     Int?
+  deliverableQty Int?
+  platformPlan   String?
+  languages      String?
+  regions        String?
+  expectedCpv    Float?
+  timelineStart  DateTime?
+  timelineEnd    DateTime?
+  notes          String?
+  status         String    @default("NEW") // NEW | IN_PROGRESS | CLARIFICATION | FULFILLED | ON_HOLD | LOST
+  createdById    String
+  createdByName  String
+  ownerId        String?   // the Brand Solutions user working it
+  ownerName      String?
+  campaignId     String?
+  campaign       Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  receivedAt     DateTime  @default(now()) // system set, never editable
+  startedAt      DateTime?
+  fulfilledAt    DateTime?
+  outcomeNote    String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  messages       BriefMessage[]
+
+  @@index([status])
+  @@index([createdById])
+  @@index([ownerId])
+  @@index([campaignId])
+}
+
+model BriefMessage {
+  id         String   @id @default(cuid())
+  briefId    String
+  brief      Brief    @relation(fields: [briefId], references: [id], onDelete: Cascade)
+  authorId   String
+  authorName String
+  kind       String   // QUESTION | ANSWER | NOTE | STATUS
+  body       String
+  createdAt  DateTime @default(now())
+
+  @@index([briefId, createdAt])
+}
+
+// ---------- Campaign gates (sandbox audit, gap build) ----------
+// Campaign Manager releases a deliverable for shoot (after script approval)
+// and for publishing (after video approval). One row per gate.
+model DeliverableRelease {
+  id             String      @id @default(cuid())
+  deliverableId  String
+  deliverable    Deliverable @relation(fields: [deliverableId], references: [id], onDelete: Cascade)
+  kind           String      // SHOOT | PUBLISH
+  releasedById   String
+  releasedByName String
+  note           String?
+  createdAt      DateTime    @default(now())
+
+  @@unique([deliverableId, kind])
+}
+
+// Every script link, review/video link and live link saved on a deliverable,
+// numbered per kind (r1, r2 / v1, v2), so the attempt history is kept.
+model DeliverableVersion {
+  id            String      @id @default(cuid())
+  deliverableId String
+  deliverable   Deliverable @relation(fields: [deliverableId], references: [id], onDelete: Cascade)
+  kind          String      // SCRIPT | VIDEO | LIVE
+  versionNo     Int
+  url           String
+  statusAtTime  String?
+  actorUserId   String?
+  actorName     String?
+  createdAt     DateTime    @default(now())
+
+  @@index([deliverableId, kind])
+}
+
+// Closure sign-offs. The campaign closes (status CLOSED) only when the
+// Campaign Manager has closed execution and Finance has signed off, and the
+// closure checks pass at that moment (all deliverables live, every live
+// deliverable tracked once, report published).
+model CampaignClosure {
+  id                     String    @id @default(cuid())
+  campaignId             String    @unique
+  campaign               Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  executionClosedAt      DateTime?
+  executionClosedById    String?
+  executionClosedByName  String?
+  financeSignedOffAt     DateTime?
+  financeSignedOffById   String?
+  financeSignedOffByName String?
+  closedAt               DateTime?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
 }

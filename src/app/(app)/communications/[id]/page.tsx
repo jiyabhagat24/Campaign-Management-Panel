@@ -41,9 +41,9 @@ export default async function CampaignCommunicationsPage({ params }: { params: P
     .filter((u, i, arr) => u.id !== user.id && arr.findIndex((x) => x.id === u.id) === i);
 
   return (
-    <div className="p-8">
+    <div className="mx-auto max-w-7xl p-6 lg:p-8">
       <BackLink label="Back" fallbackHref={`/campaigns/${campaign.id}`} />
-      <h1 className="mt-1 text-lg font-semibold text-ink dark:text-white">{campaign.name}</h1>
+      <h1 className="mt-1 text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">{campaign.name}</h1>
       <p className="text-sm text-slate-500 dark:text-slate-400">{campaign.brand}</p>
 
       <div className="mt-6">

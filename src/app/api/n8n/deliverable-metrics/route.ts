@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { recordViewSnapshot } from "@/lib/viewHistory";
 
 // Called by the n8n "refresh stats" workflow with fresh numbers for live
 // deliverables. Body: { deliverables: [{ id, views, likes, comments, shares? }] }
@@ -35,6 +36,7 @@ export async function POST(req: NextRequest) {
         data: { views, likes, comments, ...(shares !== undefined ? { shares } : {}), engagementRate, lastTrackedAt: new Date(), status: "TRACKING" },
         include: { creator: { select: { campaignId: true } } },
       });
+      await recordViewSnapshot(d.id, { views, likes, comments, shares }, "N8N");
       campaignIds.add(d.creator.campaignId);
       updated += 1;
     } catch {

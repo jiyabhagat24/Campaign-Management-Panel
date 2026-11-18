@@ -294,21 +294,21 @@ export default function PortfolioDashboardClient({
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <div className="stat-card group dark:bg-slate-900 dark:border-slate-800">
           <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
-          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Active Campaigns</p>
+          <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Active Campaigns</p>
           <p className="mt-3 text-3xl font-extrabold text-slate-900 dark:text-white">{activeOnly.length}</p>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 font-medium">Of {filtered.length} shown</p>
         </div>
 
         <div className="stat-card group dark:bg-slate-900 dark:border-slate-800">
           <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
-          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Creators Onboarded</p>
+          <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Creators Onboarded</p>
           <p className="mt-3 text-3xl font-extrabold text-slate-900 dark:text-white">{creatorsOnboarded}</p>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 font-medium">Across shown campaigns</p>
         </div>
 
         <div className="stat-card group dark:bg-slate-900 dark:border-slate-800">
           <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
-          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Deliverables Live/Total</p>
+          <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Deliverables Live/Total</p>
           <p className="mt-3 text-3xl font-extrabold text-slate-900 dark:text-white">
             {deliverablesLive}/{deliverablesTotal}
           </p>
@@ -318,7 +318,7 @@ export default function PortfolioDashboardClient({
         <div className="stat-card group dark:bg-slate-900 dark:border-slate-800">
           <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
           <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">On Time</p>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">On Time</p>
           </div>
           <p className="mt-3 text-3xl font-extrabold text-slate-900 dark:text-white">{onTimeCount}</p>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 font-medium">Active, deadline not breached</p>
@@ -327,7 +327,7 @@ export default function PortfolioDashboardClient({
         <div className="stat-card group dark:bg-slate-900 dark:border-slate-800">
           <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
           <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Delayed</p>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Delayed</p>
           </div>
           <p className={`mt-3 text-3xl font-extrabold ${delayedCount > 0 ? "text-rose-600 dark:text-rose-400" : "text-slate-900 dark:text-white"}`}>{delayedCount}</p>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 font-medium">Active, deadline breached</p>
@@ -335,7 +335,7 @@ export default function PortfolioDashboardClient({
 
         <div className="stat-card group dark:bg-slate-900 dark:border-slate-800">
           <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
-          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Active Value</p>
+          <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Total Active Value</p>
           <p className="mt-3 text-3xl font-extrabold text-slate-900 dark:text-white">{money(totalActiveCampaignValue)}</p>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 font-medium">Quoted, active campaigns</p>
         </div>
@@ -343,7 +343,7 @@ export default function PortfolioDashboardClient({
         {!isClientView && (
           <div className="stat-card group dark:bg-slate-900 dark:border-slate-800">
             <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
-            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Internal Value</p>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Total Internal Value</p>
             <p className="mt-3 text-3xl font-extrabold text-slate-900 dark:text-white">{money(totalInternalCampaignValue)}</p>
             <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 font-medium">Creator cost, active campaigns</p>
           </div>
@@ -352,7 +352,7 @@ export default function PortfolioDashboardClient({
         {!isClientView && (
           <div className="stat-card group dark:bg-slate-900 dark:border-slate-800">
             <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
-            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Margin %</p>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Margin %</p>
             <p className="mt-3 text-3xl font-extrabold text-slate-900 dark:text-white">{marginPercent.toFixed(1)}%</p>
             <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 font-medium">Active campaign blended margin</p>
           </div>
@@ -365,7 +365,7 @@ export default function PortfolioDashboardClient({
         {!isClientView && !hideFinanceCards && (
           <div className="stat-card group dark:bg-slate-900 dark:border-slate-800">
             <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
-            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Yet to be Invoiced</p>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Yet to be Invoiced</p>
             <p className="mt-3 text-3xl font-extrabold text-slate-900 dark:text-white">{money(yetToBeInvoiced)}</p>
             <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 font-medium">Quoted value not yet invoiced to the client</p>
           </div>
@@ -374,7 +374,7 @@ export default function PortfolioDashboardClient({
         {!isClientView && !hideFinanceCards && (
           <div className="stat-card group dark:bg-slate-900 dark:border-slate-800">
             <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
-            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Yet to be Received</p>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Yet to be Received</p>
             <p className="mt-3 text-3xl font-extrabold text-slate-900 dark:text-white">{money(yetToBeReceived)}</p>
             <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 font-medium">Invoiced to the client, payment not yet received</p>
           </div>
@@ -383,7 +383,7 @@ export default function PortfolioDashboardClient({
         {!isClientView && !hideFinanceCards && (
           <div className="stat-card group dark:bg-slate-900 dark:border-slate-800">
             <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
-            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Value of Cleared Due</p>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Value of Cleared Due</p>
             <p className="mt-3 text-3xl font-extrabold text-slate-900 dark:text-white">{money(valueOfClearedDue)}</p>
             <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 font-medium">Invoiced and payment received from the client</p>
           </div>
@@ -392,7 +392,7 @@ export default function PortfolioDashboardClient({
         {!isClientView && !hideFinanceCards && (
           <div className="stat-card group dark:bg-slate-900 dark:border-slate-800">
             <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
-            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Creator Payable Pending</p>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Creator Payable Pending</p>
             <p className="mt-3 text-3xl font-extrabold text-slate-900 dark:text-white">{money(creatorPayablePending)}</p>
             <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 font-medium">Owed to onboarded creators, payout not yet completed</p>
           </div>
@@ -401,187 +401,97 @@ export default function PortfolioDashboardClient({
 
       </>
       )}
-      {/* Campaign Table */}
-      <div className="rounded-2xl border border-slate-200/80 bg-white dark:bg-slate-900 dark:border-slate-800 shadow-card overflow-hidden">
-        <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 px-6 py-4 bg-slate-50/50 dark:bg-slate-800/40">
-          <div className="flex items-center gap-2">
-            <div className="h-2 w-2 rounded-full bg-indigo-600" />
-            <h2 className="text-sm font-bold text-slate-900 dark:text-white">Campaign Table</h2>
-            <span className="rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-500 dark:text-slate-400">
-              {filtered.length} shown
-            </span>
+      {/* Campaign Table — Creator records layout: five stacked columns, no
+          horizontal scroll. Same fields as before, grouped per cell. */}
+      <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-card dark:border-slate-800 dark:bg-slate-900">
+        <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-4 dark:border-slate-800">
+          <h2 className="text-sm font-bold text-slate-900 dark:text-white">Campaign table</h2>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-slate-500 dark:text-slate-400">{filtered.length} records</span>
+            <Link href="/campaigns" className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:underline dark:text-indigo-400">
+              <span>View all</span>
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
           </div>
-          <Link
-            href="/campaigns"
-            className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 transition-colors"
-          >
-            <span>View all</span>
-            <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
         </div>
-
-        <div className="overflow-x-auto">
-          {/* table-fixed + border-separate + explicit pixel widths on every
-              column, matching the exact pattern the Shortlisting/Onboarding
-              boards use (CreatorKanban.tsx) for their frozen Name/Socials/
-              Deliverables columns — sticky positioning only lines up
-              correctly when every column's width is fixed and known, not
-              left to the browser to auto-size against content. */}
-          <table className="w-full table-fixed border-separate border-spacing-0 text-left text-sm">
-            <thead className="bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-              <tr>
-                <th className="sticky left-0 top-0 z-40 w-[200px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left dark:border-slate-700 dark:bg-slate-800">
-                  Client
-                </th>
-                <th className="sticky left-[200px] top-0 z-40 w-[220px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left dark:border-slate-700 dark:bg-slate-800">
-                  Campaign
-                </th>
-                {!isClientView && (
-                  <th className="sticky top-0 z-30 w-[190px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left dark:border-slate-700 dark:bg-slate-800">Brand Solutions POC</th>
-                )}
-                {!isClientView && (
-                  <th className="sticky top-0 z-30 w-[190px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left dark:border-slate-700 dark:bg-slate-800">Campaign Manager POC</th>
-                )}
-                <th className="sticky top-0 z-30 w-[140px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left dark:border-slate-700 dark:bg-slate-800">Status</th>
-                <th className="sticky top-0 z-30 w-[160px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left dark:border-slate-700 dark:bg-slate-800">Creators Onboarded</th>
-                <th className="sticky top-0 z-30 w-[190px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left dark:border-slate-700 dark:bg-slate-800">Deliverables Live/Total</th>
-                <th className="sticky top-0 z-30 w-[140px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left dark:border-slate-700 dark:bg-slate-800">Deadline</th>
-                <th className="sticky top-0 z-30 w-[120px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left dark:border-slate-700 dark:bg-slate-800">Open Flags</th>
-                <th className="sticky top-0 z-30 w-[140px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left dark:border-slate-700 dark:bg-slate-800">Quoted Value</th>
-                {!isClientView && (
-                  <th className="sticky top-0 z-30 w-[140px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left dark:border-slate-700 dark:bg-slate-800">Internal Value</th>
-                )}
-                {!isClientView && (
-                  <th className="sticky top-0 z-30 w-[110px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left dark:border-slate-700 dark:bg-slate-800">Margin %</th>
-                )}
-                {!isClientView && (
-                  <th className="sticky top-0 z-30 w-[140px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left dark:border-slate-700 dark:bg-slate-800">Agency Fee</th>
-                )}
-                {!isClientView && (
-                  <th className="sticky top-0 z-30 w-[190px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left dark:border-slate-700 dark:bg-slate-800">Creator Payable Pending</th>
-                )}
-              </tr>
-            </thead>
-            <tbody className="font-medium">
-              {filtered.map((c) => {
-                const quotedValue = c.quotedValue;
-                const margin = quotedValue > 0 ? ((quotedValue - c.internalValue) / quotedValue) * 100 : null;
-                const deadline = c.goLiveDeadline ? new Date(c.goLiveDeadline) : null;
-                const breached = isGoLiveBreached(deadline);
-                const atRiskStatus = isGoLiveAtRisk(deadline);
-
-                return (
-                  <tr key={c.id} className="group hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
-                    <td className="sticky left-0 z-10 w-[200px] min-w-[200px] max-w-[200px] overflow-hidden border-b border-slate-100 bg-white px-4 py-3 group-hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:group-hover:bg-slate-800">
-                      <div className="flex items-center gap-2.5">
-                        <BrandAvatar brand={c.brand} logoUrl={c.brandLogoUrl} size={26} />
-                        <span className="truncate font-semibold text-slate-900 dark:text-white">{c.brand}</span>
-                      </div>
+        <table className="w-full table-fixed text-left text-sm">
+          <thead className="bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+            <tr>
+              <th className="w-[26%] px-5 py-2.5">Campaign / client</th>
+              {!isClientView && <th className="w-[18%] px-5 py-2.5">Owners</th>}
+              <th className="w-[18%] px-5 py-2.5">Status / deadline</th>
+              <th className="w-[14%] px-5 py-2.5">Delivery</th>
+              <th className={`${isClientView ? "w-[42%]" : "w-[24%]"} px-5 py-2.5`}>{isClientView ? "Quoted value" : "Commercials / payable"}</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+            {filtered.map((c) => {
+              const quotedValue = c.quotedValue;
+              const margin = quotedValue > 0 ? ((quotedValue - c.internalValue) / quotedValue) * 100 : null;
+              const deadline = c.goLiveDeadline ? new Date(c.goLiveDeadline) : null;
+              const breached = isGoLiveBreached(deadline);
+              const atRiskStatus = isGoLiveAtRisk(deadline);
+              const fee =
+                c.financeFeeType === "RETAINER"
+                  ? c.financeRetainerFee
+                    ? `₹${c.financeRetainerFee.toLocaleString("en-IN")} retainer`
+                    : null
+                  : c.financeAgencyFeePercent !== null
+                  ? `${c.financeAgencyFeePercent}% fee`
+                  : c.financeAgencyFee
+                  ? `₹${c.financeAgencyFee.toLocaleString("en-IN")} fee`
+                  : null;
+              return (
+                <tr key={c.id} className="align-top hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                  <td className="px-5 py-3">
+                    <Link href={`/campaigns/${c.id}`} className="block truncate font-semibold text-slate-900 hover:text-indigo-600 dark:text-white dark:hover:text-indigo-400">
+                      {c.name}
+                    </Link>
+                    <p className="truncate text-xs text-slate-500 dark:text-slate-400">{c.brand}</p>
+                  </td>
+                  {!isClientView && (
+                    <td className="px-5 py-3">
+                      <p className="truncate text-slate-700 dark:text-slate-300">CM {c.campaignManager ?? "—"}</p>
+                      <p className="truncate text-xs text-slate-500 dark:text-slate-400">BS {c.brandSolutionsPoc ?? "—"}</p>
                     </td>
-                    <td className="sticky left-[200px] z-10 w-[220px] min-w-[220px] max-w-[220px] overflow-hidden border-b border-slate-100 bg-white px-4 py-3 group-hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:group-hover:bg-slate-800">
-                      <Link
-                        href={`/campaigns/${c.id}`}
-                        className="block truncate font-medium text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 hover:underline"
-                      >
-                        {c.name}
-                      </Link>
-                    </td>
+                  )}
+                  <td className="px-5 py-3">
+                    <p className="text-slate-700 dark:text-slate-300">{CAMPAIGN_STATUS_LABELS[c.status as CampaignStatus] ?? c.status}</p>
+                    <p
+                      className={`text-xs ${
+                        breached ? "font-semibold text-rose-600 dark:text-rose-400" : atRiskStatus ? "font-semibold text-amber-600 dark:text-amber-400" : "text-slate-500 dark:text-slate-400"
+                      }`}
+                    >
+                      {deadline ? deadline.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "No deadline"}
+                      {c.openFlags > 0 && <span className="font-semibold text-rose-600 dark:text-rose-400"> · {c.openFlags} flag{c.openFlags === 1 ? "" : "s"}</span>}
+                    </p>
+                  </td>
+                  <td className="px-5 py-3">
+                    <p className="text-slate-700 dark:text-slate-300">{c.deliverablesLive}/{c.deliverablesTotal} live</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{c.onboardedCount} onboarded</p>
+                  </td>
+                  <td className="px-5 py-3">
+                    <p className="text-slate-700 dark:text-slate-300">{quotedValue ? `₹${quotedValue.toLocaleString("en-IN")}` : "—"} quoted</p>
                     {!isClientView && (
-                      <td className="border-b border-slate-100 px-4 py-3 text-slate-600 dark:border-slate-800 dark:text-slate-300">{c.brandSolutionsPoc ?? "—"}</td>
+                      <p className="truncate text-xs text-slate-500 dark:text-slate-400">
+                        {c.internalValue ? `₹${c.internalValue.toLocaleString("en-IN")}` : "—"} internal · {margin !== null ? `${margin.toFixed(1)}%` : "—"} margin
+                        {fee ? ` · ${fee}` : ""}
+                        {c.financeCreatorPayablePending ? ` · ₹${c.financeCreatorPayablePending.toLocaleString("en-IN")} payable` : ""}
+                      </p>
                     )}
-                    {!isClientView && (
-                      <td className="border-b border-slate-100 px-4 py-3 text-slate-600 dark:border-slate-800 dark:text-slate-300">{c.campaignManager ?? "—"}</td>
-                    )}
-                    <td className="border-b border-slate-100 px-4 py-3 dark:border-slate-800">
-                      {/* Static on the dashboard — this table is a rolled-up
-                          overview, not where you manage a campaign. Editing
-                          status happens on the Campaigns Directory or the
-                          campaign's own page. */}
-                      <span
-                        className={`rounded-lg border px-2 py-1 text-[11px] font-bold uppercase tracking-wide ${STATUS_BADGE_COLORS[c.status] ?? STATUS_BADGE_COLORS.ACTIVE}`}
-                      >
-                        {CAMPAIGN_STATUS_LABELS[c.status as CampaignStatus] ?? c.status}
-                      </span>
-                    </td>
-                    <td className="border-b border-slate-100 px-4 py-3 text-left text-slate-700 dark:border-slate-800 dark:text-slate-200">{c.onboardedCount}</td>
-                    <td className="border-b border-slate-100 px-4 py-3 text-left text-slate-700 dark:border-slate-800 dark:text-slate-200">
-                      {c.deliverablesLive}/{c.deliverablesTotal}
-                    </td>
-                    <td className="border-b border-slate-100 px-4 py-3 text-left dark:border-slate-800">
-                      {deadline ? (
-                        <span
-                          className={
-                            breached
-                              ? "font-semibold text-rose-600 dark:text-rose-400"
-                              : atRiskStatus
-                              ? "font-semibold text-amber-600 dark:text-amber-400"
-                              : "text-slate-600 dark:text-slate-300"
-                          }
-                        >
-                          {deadline.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
-                        </span>
-                      ) : (
-                        <span className="text-slate-400 dark:text-slate-500">—</span>
-                      )}
-                    </td>
-                    <td className="border-b border-slate-100 px-4 py-3 text-left dark:border-slate-800">
-                      {c.openFlags > 0 ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 border border-rose-200 px-2 py-0.5 text-xs font-bold text-rose-600 dark:bg-rose-950/60 dark:border-rose-800 dark:text-rose-300">
-                          {c.openFlags}
-                        </span>
-                      ) : (
-                        <span className="text-slate-400 dark:text-slate-500">0</span>
-                      )}
-                    </td>
-                    <td className="border-b border-slate-100 px-4 py-3 text-left text-slate-700 dark:border-slate-800 dark:text-slate-200">
-                      {quotedValue ? `₹${quotedValue.toLocaleString("en-IN")}` : "—"}
-                    </td>
-                    {!isClientView && (
-                      <td className="border-b border-slate-100 px-4 py-3 text-left text-slate-700 dark:border-slate-800 dark:text-slate-200">
-                        {c.internalValue ? `₹${c.internalValue.toLocaleString("en-IN")}` : "—"}
-                      </td>
-                    )}
-                    {!isClientView && (
-                      <td className="border-b border-slate-100 px-4 py-3 text-left font-semibold text-slate-900 dark:border-slate-800 dark:text-white">
-                        {margin !== null ? `${margin.toFixed(1)}%` : "—"}
-                      </td>
-                    )}
-                    {!isClientView && (
-                      <td className="border-b border-slate-100 px-4 py-3 text-left text-slate-700 dark:border-slate-800 dark:text-slate-200">
-                        {/* Retainer-basis campaigns never had financeAgencyFee
-                            set (only financeRetainerFee is) — show that
-                            instead of a blank "—", same association-type
-                            logic FinanceRow.tsx uses on the campaign page. */}
-                        {c.financeFeeType === "RETAINER"
-                          ? c.financeRetainerFee
-                            ? `₹${c.financeRetainerFee.toLocaleString("en-IN")} (Retainer)`
-                            : "—"
-                          : c.financeAgencyFeePercent !== null
-                          ? `${c.financeAgencyFeePercent}%`
-                          : c.financeAgencyFee
-                          ? `₹${c.financeAgencyFee.toLocaleString("en-IN")}`
-                          : "—"}
-                      </td>
-                    )}
-                    {!isClientView && (
-                      <td className="border-b border-slate-100 px-4 py-3 text-left text-slate-700 dark:border-slate-800 dark:text-slate-200">
-                        {c.financeCreatorPayablePending ? `₹${c.financeCreatorPayablePending.toLocaleString("en-IN")}` : "—"}
-                      </td>
-                    )}
-                  </tr>
-                );
-              })}
-              {filtered.length === 0 && (
-                <tr>
-                  <td colSpan={isClientView ? 8 : 14} className="px-6 py-12 text-center text-slate-400 dark:text-slate-500">
-                    <Megaphone className="mx-auto h-8 w-8 text-slate-300 dark:text-slate-600 mb-2" />
-                    <p className="text-sm font-medium">No campaigns match these filters.</p>
                   </td>
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+              );
+            })}
+            {filtered.length === 0 && (
+              <tr>
+                <td colSpan={isClientView ? 4 : 5} className="px-5 py-8 text-center text-slate-500 dark:text-slate-400">
+                  No campaigns match these filters.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
 
       {/* Finance Table — the sheet's separate "Finance Table" section,
@@ -594,7 +504,7 @@ export default function PortfolioDashboardClient({
       {showFinance && (
         <div>
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-bold text-slate-900 dark:text-white">Finance Table</h2>
+            <h2 className="text-sm font-bold text-slate-900 dark:text-white">Finance table</h2>
           </div>
           <FinanceTableClient campaigns={financeCampaigns} />
         </div>

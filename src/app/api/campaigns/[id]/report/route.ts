@@ -6,9 +6,8 @@ import { PLATFORM_LABELS } from "@/lib/constants";
 
 // Mirrors the on-screen Campaign Report tab (CampaignReport.tsx) section for
 // section — same numbers, same formulas — so the download always matches
-// what's on screen. Sections 6 (growth graph) and 7 (sentiment) aren't
-// buildable yet (no view-history table, no sentiment API), so they're
-// omitted here too rather than faked.
+// what's on screen. The viewership growth graph is a chart only (see
+// ViewershipGrowthChart.tsx), so it isn't part of this CSV.
 function isInstagram(platform: string) {
   return platform.startsWith("INSTAGRAM");
 }
@@ -167,8 +166,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     }
     lines.push("");
   }
-
-  lines.push("Note: sections 6 (viewership growth graph) and 7 (comment sentiment) aren't available yet - both need infrastructure this panel doesn't have (a view-history table, a sentiment API).");
 
   const csv = lines.join("\n");
   const filename = `${campaign.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-report.csv`;

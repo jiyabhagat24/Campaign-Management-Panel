@@ -183,17 +183,17 @@ export default function CreatorPayoutsTable({ rows: initialRows }: { rows: Payou
     <div className="rounded-2xl border border-slate-200/80 bg-white dark:bg-slate-900 dark:border-slate-800 shadow-card overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full text-left text-sm">
-          <thead className="bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+          <thead className="bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
             <tr>
-              <th className="whitespace-nowrap border-b border-slate-200 px-4 py-2.5 text-left dark:border-slate-700">Creator</th>
-              <th className="whitespace-nowrap border-b border-slate-200 px-4 py-2.5 text-left dark:border-slate-700">Deliverables</th>
-              <th className="whitespace-nowrap border-b border-slate-200 px-4 py-2.5 text-left dark:border-slate-700">Content Status</th>
-              <th className="whitespace-nowrap border-b border-slate-200 px-4 py-2.5 text-left dark:border-slate-700">Payout Amount</th>
-              <th className="whitespace-nowrap border-b border-slate-200 px-4 py-2.5 text-left dark:border-slate-700">Invoice Raised</th>
-              <th className="whitespace-nowrap border-b border-slate-200 px-4 py-2.5 text-left dark:border-slate-700">Invoice Received</th>
-              <th className="whitespace-nowrap border-b border-slate-200 px-4 py-2.5 text-left dark:border-slate-700">Payment Status</th>
-              <th className="whitespace-nowrap border-b border-slate-200 px-4 py-2.5 text-left dark:border-slate-700">Advance</th>
-              <th className="whitespace-nowrap border-b border-slate-200 px-4 py-2.5 text-left dark:border-slate-700">Remark</th>
+              <th className="whitespace-nowrap border-b border-slate-200 px-5 py-2.5 text-left dark:border-slate-700">Creator</th>
+              <th className="whitespace-nowrap border-b border-slate-200 px-5 py-2.5 text-left dark:border-slate-700">Deliverables</th>
+              <th className="whitespace-nowrap border-b border-slate-200 px-5 py-2.5 text-left dark:border-slate-700">Content Status</th>
+              <th className="whitespace-nowrap border-b border-slate-200 px-5 py-2.5 text-left dark:border-slate-700">Payout Amount</th>
+              <th className="whitespace-nowrap border-b border-slate-200 px-5 py-2.5 text-left dark:border-slate-700">Invoice Raised</th>
+              <th className="whitespace-nowrap border-b border-slate-200 px-5 py-2.5 text-left dark:border-slate-700">Invoice Received</th>
+              <th className="whitespace-nowrap border-b border-slate-200 px-5 py-2.5 text-left dark:border-slate-700">Payment Status</th>
+              <th className="whitespace-nowrap border-b border-slate-200 px-5 py-2.5 text-left dark:border-slate-700">Advance</th>
+              <th className="whitespace-nowrap border-b border-slate-200 px-5 py-2.5 text-left dark:border-slate-700">Remark</th>
             </tr>
           </thead>
           <tbody className="font-medium">

@@ -477,7 +477,7 @@ export default function PlatformBriefsEditor({
           key={brief.platform}
           className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4 dark:border-slate-800 dark:bg-slate-800/40"
         >
-          <p className="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">{brief.platform} brief</p>
+          <p className="text-sm font-bold text-slate-900 dark:text-white">{brief.platform} brief</p>
 
           <CategoryField value={brief.category} onChange={(v) => updateBrief(brief.platform, { category: v })} />
           <DeliverablesField

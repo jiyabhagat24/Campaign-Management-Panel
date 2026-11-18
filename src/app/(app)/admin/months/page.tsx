@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { PageHeadline, pageClass } from "@/components/finance/SandboxUi";
 import { currentUser } from "@/lib/auth";
 import { canManageTeam } from "@/lib/rbac";
 import { listMonths, lockMonth, getOrCreateMonth } from "@/lib/actions";
@@ -25,17 +26,9 @@ export default async function MonthsAdminPage() {
   const rows = hasCurrent ? months : await listMonths();
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 p-8">
-      <div>
-        <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-          <CalendarCheck className="h-6 w-6 text-indigo-500" />
-          Month Lock
-        </h1>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          Finance figures across the panel stay provisional until you lock the month here. Lock once the accounts
-          audit for that month is complete.
-        </p>
-      </div>
+    <div className={pageClass}>
+      <PageHeadline title="Month lock." subtitle={<>Finance figures across the panel stay provisional until you lock the month here. Lock once the accounts
+          audit for that month is complete.</>} />
 
       <div className="space-y-2">
         {rows.map((m) => (

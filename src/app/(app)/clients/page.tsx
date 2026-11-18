@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { PageHeadline, pageClass } from "@/components/finance/SandboxUi";
 import { currentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { canManageClients, campaignVisibilityWhere } from "@/lib/rbac";
@@ -70,14 +71,9 @@ export default async function ClientsAccessPage() {
   }));
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 p-8">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Clients</h1>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          Grant or revoke which campaigns each client login can see. Clients create their own login at the sign-up
-          page — signing up only creates a login, a client sees nothing until you check a campaign for them below.
-        </p>
-      </div>
+    <div className={pageClass}>
+      <PageHeadline title="Clients." subtitle={<>Grant or revoke which campaigns each client login can see. Clients create their own login at the sign-up
+          page — signing up only creates a login, a client sees nothing until you check a campaign for them below.</>} />
 
       <ClientAccessManager clients={clientRows} campaigns={campaignOptions} />
     </div>

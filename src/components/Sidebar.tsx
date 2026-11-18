@@ -3,57 +3,81 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { Role } from "@/lib/constants";
-import { canManageTeam, canManageClients, canViewPricingQueue, canViewTimeAnalytics, isClient, isSuperAdmin } from "@/lib/rbac";
+import { canManageTeam, canManageClients, canViewTimeAnalytics, canViewTeamTurnaround, canViewMoneyExposure, canViewFinanceLedger, canViewLeadershipHome, canViewIrManagerHome, canViewRoleHome, canViewCreatorBoard, canViewBriefs, canViewCampaignGates, canViewClientInvoices, isClient, isSuperAdmin } from "@/lib/rbac";
 import ThemeToggle from "@/components/ThemeToggle";
 import NotificationBell, { type NotificationItem } from "@/components/NotificationBell";
 import {
   LayoutDashboard,
   FolderKanban,
   GitMerge,
-  Users,
   UserCheck,
   LogOut,
   AlertTriangle,
   PhoneCall,
   CalendarCheck,
-  DollarSign,
   Clock,
   Wallet,
+  Network,
+  Scale,
+  Receipt,
+  Gauge,
+  Rows3,
+  Inbox,
+  ShieldCheck,
+  BarChart3,
+  ListChecks,
+  Bell,
+  FileText,
 } from "lucide-react";
 
+// Sidebar sections, in display order. Each NAV item names its section;
+// visibility rules per item are unchanged — empty sections are skipped.
+const NAV_GROUPS = ["Home", "Campaigns & creators", "Follow-ups", "Money", "Team & performance", "Admin"] as const;
+
 const NAV = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/campaigns", label: "Campaigns", icon: FolderKanban },
-  { href: "/pipeline", label: "Pipeline", icon: GitMerge },
-  // Campaign Manager + IR Manager — Pricing Queue (task #15), see
-  // canViewPricingQueue in rbac.ts.
-  { href: "/pricing-queue", label: "Pricing Queue", icon: DollarSign, pricingOnly: true },
+  { group: "Home", href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  // Sandbox audit, Phase 2 — role homes beside the existing dashboard.
+  { group: "Home", href: "/leadership", label: "Leadership Home", icon: Gauge, leadershipOnly: true },
+  { group: "Home", href: "/ir-manager", label: "IR Manager Home", icon: Gauge, irManagerHomeOnly: true },
+  // Sandbox audit, Phase 3 — role homes, client overview, compact creator board.
+  { group: "Home", href: "/home", label: "My Home", icon: Gauge, roleHomeOnly: true },
+  { group: "Campaigns & creators", href: "/creator-board", label: "Creator Board", icon: Rows3, creatorBoardOnly: true },
+  { group: "Campaigns & creators", href: "/campaigns", label: "Campaigns", icon: FolderKanban },
+  { group: "Campaigns & creators", href: "/pipeline", label: "Pipeline", icon: GitMerge },
+  // Gap build: briefs inbox, campaign gates, cross-campaign reporting.
+  { group: "Campaigns & creators", href: "/briefs", label: "Briefs & Strategy", icon: Inbox, briefsOnly: true },
+  { group: "Campaigns & creators", href: "/campaign-gates", label: "Campaign Gates", icon: ShieldCheck, gatesOnly: true },
+  { group: "Campaigns & creators", href: "/reporting", label: "Reporting", icon: BarChart3 },
+  { group: "Follow-ups", href: "/my-actions", label: "My Actions", icon: ListChecks },
+  { group: "Follow-ups", href: "/activity", label: "Activity", icon: Bell },
+  { group: "Money", href: "/my-invoices", label: "Invoices", icon: FileText, clientInvoicesOnly: true },
   // Same audience plus CXO — Step 7's Time Analytics (stage-duration
   // reporting), see canViewTimeAnalytics in rbac.ts.
-  { href: "/time-analytics", label: "Time Analytics", icon: Clock, timeAnalyticsOnly: true },
+  { group: "Team & performance", href: "/time-analytics", label: "Time Analytics", icon: Clock, timeAnalyticsOnly: true },
   // Escalations (task #14) and Action Tracker (task #16) — internal-only,
   // not gated to a single role since any internal role can raise/own an
   // escalation and any internal role logs a client chase.
   // Escalations: available to clients too (raise-only, scoped to their own
   // campaigns — see the page and raiseEscalation's assertClientCampaignAccess
   // check), so no internalOnly flag here.
-  { href: "/escalations", label: "Escalations", icon: AlertTriangle },
+  { group: "Follow-ups", href: "/escalations", label: "Escalations", icon: AlertTriangle },
   // Action Tracker: internal-only AND not CXO (Page Permissions matrix marks
   // it Not available for CXO — see actionTrackerBlocked below).
-  { href: "/action-tracker", label: "Action Tracker", icon: PhoneCall, internalOnly: true, actionTrackerBlocked: true },
-  // CXO — full Team admin page (add/re-role/remove logins). IR Manager also
-  // gets in, but read-only and IR-team-scoped (see team/page.tsx) — separate
-  // flag so this doesn't widen canManageTeam itself, which still gates the
-  // actual create/update/delete server actions.
-  { href: "/team", label: "Team", icon: Users, teamOrIrManagerOnly: true },
+  { group: "Follow-ups", href: "/action-tracker", label: "Action Tracker", icon: PhoneCall, internalOnly: true, actionTrackerBlocked: true },
+  // Sandbox audit, Phase 1 — reporting lines + current load. CXO and IR Manager.
+  { group: "Team & performance", href: "/team-turnaround", label: "Team & Turnaround", icon: Network, teamTurnaroundOnly: true },
+  // Sandbox audit, Phase 1 — margin next to pending creator cost.
+  { group: "Money", href: "/money-exposure", label: "Money & Exposure", icon: Scale, moneyExposureOnly: true },
+  // Sandbox audit, Phase 1 — creator invoices, approvals and milestone payouts.
+  { group: "Money", href: "/finance-ledger", label: "Finance Ledger", icon: Receipt, financeLedgerOnly: true },
   // CXO + Brand Solutions — client login management (reset password/
   // remove) plus grant/revoke which campaigns each client can see.
   // Separate flag from teamOnly (Team page / Month Lock stay CXO-only).
-  { href: "/clients", label: "Clients", icon: UserCheck, clientsOnly: true },
+  { group: "Admin", href: "/clients", label: "Clients", icon: UserCheck, clientsOnly: true },
   // Same gate as Clients — Step 28's Client Cash invoicing worklist.
-  { href: "/client-cash", label: "Client Cash", icon: Wallet, clientsOnly: true },
+  { group: "Money", href: "/client-cash", label: "Client Cash", icon: Wallet, clientsOnly: true },
   // CXO-only — month lock (task #17 / spec Gate G12).
-  { href: "/admin/months", label: "Month Lock", icon: CalendarCheck, teamOnly: true },
+  { group: "Admin", href: "/admin/months", label: "Month Lock", icon: CalendarCheck, teamOnly: true },
 ];
 
 export default function Sidebar({ role, name, notifications, userId }: { role: Role; name: string; notifications: NotificationItem[]; userId?: string }) {
@@ -79,12 +103,20 @@ export default function Sidebar({ role, name, notifications, userId }: { role: R
     if (superAdmin) return true;
     if (role === "CLIENT" && (item.href === "/pipeline" || item.href === "/dashboard")) return false;
     if ("teamOnly" in item && item.teamOnly && !canManageTeam(role)) return false;
-    if ("teamOrIrManagerOnly" in item && item.teamOrIrManagerOnly && !canManageTeam(role) && role !== "IR_MANAGER") return false;
     if ("clientsOnly" in item && item.clientsOnly && !canManageClients(role)) return false;
     if ("internalOnly" in item && item.internalOnly && isClient(role)) return false;
     if ("actionTrackerBlocked" in item && item.actionTrackerBlocked && role === "CXO") return false;
-    if ("pricingOnly" in item && item.pricingOnly && !canViewPricingQueue(role)) return false;
     if ("timeAnalyticsOnly" in item && item.timeAnalyticsOnly && !canViewTimeAnalytics(role)) return false;
+    if ("teamTurnaroundOnly" in item && item.teamTurnaroundOnly && !canViewTeamTurnaround(role)) return false;
+    if ("moneyExposureOnly" in item && item.moneyExposureOnly && !canViewMoneyExposure(role)) return false;
+    if ("financeLedgerOnly" in item && item.financeLedgerOnly && !canViewFinanceLedger(role)) return false;
+    if ("leadershipOnly" in item && item.leadershipOnly && !canViewLeadershipHome(role)) return false;
+    if ("irManagerHomeOnly" in item && item.irManagerHomeOnly && !canViewIrManagerHome(role)) return false;
+    if ("roleHomeOnly" in item && item.roleHomeOnly && !canViewRoleHome(role)) return false;
+    if ("creatorBoardOnly" in item && item.creatorBoardOnly && !canViewCreatorBoard(role)) return false;
+    if ("briefsOnly" in item && item.briefsOnly && !canViewBriefs(role)) return false;
+    if ("gatesOnly" in item && item.gatesOnly && !canViewCampaignGates(role)) return false;
+    if ("clientInvoicesOnly" in item && item.clientInvoicesOnly && !canViewClientInvoices(role)) return false;
     return true;
   });
 
@@ -114,14 +146,18 @@ export default function Sidebar({ role, name, notifications, userId }: { role: R
           get added over time. Header/footer stay fixed; only this list
           scrolls. */}
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
-        <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-          Main Navigation
-        </p>
-        <nav className="space-y-1">
-          {filteredNav.map((item) => {
+        <nav className="space-y-4">
+          {NAV_GROUPS.map((group) => {
+            const items = filteredNav.filter((item) => item.group === group);
+            if (items.length === 0) return null;
+            return (
+              <div key={group}>
+                <p className="mb-1.5 px-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">{group}</p>
+                <div className="space-y-1">
+          {items.map((item) => {
             const Icon = item.icon;
             const isActive =
-              pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href));
+              pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href + "/"));
 
             return (
               <Link
@@ -143,6 +179,10 @@ export default function Sidebar({ role, name, notifications, userId }: { role: R
                 />
                 <span className="flex-1">{item.label}</span>
               </Link>
+            );
+          })}
+                </div>
+              </div>
             );
           })}
         </nav>

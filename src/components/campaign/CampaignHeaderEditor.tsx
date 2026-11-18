@@ -126,10 +126,9 @@ export default function CampaignHeaderEditor({
     return (
       <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
         <div className="flex items-start gap-4 min-w-0">
-          <BrandAvatar brand={campaign.brand} logoUrl={campaign.brandLogoUrl} size={52} />
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-full px-2.5 py-0.5 dark:bg-indigo-950/80 dark:border-indigo-800/80 dark:text-indigo-300">
+              <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
                 {campaign.brand}
               </span>
               {breached && (
@@ -159,7 +158,7 @@ export default function CampaignHeaderEditor({
               )}
             </div>
 
-            <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">{campaign.name}</h1>
+            <h1 className="mt-1 text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">{campaign.name}</h1>
 
             {campaign.brief && (
               <p className="mt-2 max-w-2xl whitespace-pre-wrap text-sm leading-relaxed text-slate-600 dark:text-slate-400">
@@ -259,7 +258,7 @@ export default function CampaignHeaderEditor({
               campaign.campaignObjective ||
               campaign.targetAudience) && (
               <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-800/40">
-                <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Campaign Details</p>
+                <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Campaign Details</p>
                 <div className="flex flex-wrap items-center gap-1.5">
                   {campaign.businessType && (
                     <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">

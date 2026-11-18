@@ -94,16 +94,16 @@ export default function ScoutingBoard({ scouted, campaigns }: { scouted: Scouted
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+          <thead className="bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
             <tr>
               <th className="w-10 px-4 py-3 font-medium">#</th>
-              <th className="px-4 py-3 font-medium">Creator</th>
-              <th className="px-4 py-3 font-medium">Platform</th>
-              <th className="px-4 py-3 font-medium">Followers</th>
-              <th className="px-4 py-3 font-medium">Engagement</th>
-              <th className="px-4 py-3 font-medium">Fit score</th>
-              <th className="px-4 py-3 font-medium">Status</th>
-              <th className="px-4 py-3 font-medium">Actions</th>
+              <th className="px-5 py-2.5">Creator</th>
+              <th className="px-5 py-2.5">Platform</th>
+              <th className="px-5 py-2.5">Followers</th>
+              <th className="px-5 py-2.5">Engagement</th>
+              <th className="px-5 py-2.5">Fit score</th>
+              <th className="px-5 py-2.5">Status</th>
+              <th className="px-5 py-2.5">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">

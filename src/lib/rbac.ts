@@ -103,7 +103,8 @@ export function isIntern(role: Role) {
 // they're personally on. Matches a client only seeing campaigns they have
 // clientAccess to.
 export function isOrgWide(role: Role) {
-  return role === "CXO" || role === "IR_MANAGER";
+  // FINANCE added (sandbox audit): receivables/payables span every campaign.
+  return role === "CXO" || role === "IR_MANAGER" || role === "FINANCE";
 }
 
 // Prisma `where` fragment for "which campaigns can this user see": clients
@@ -226,4 +227,99 @@ export function serializeCreatorsForClient<T extends { internalCost: number | nu
   creators: T[]
 ): Omit<T, "internalCost">[] {
   return creators.filter((c) => c.quotedCostPublished && c.status !== "REJECTED").map(serializeCreatorForClient);
+}
+
+// ---------- Reporting lines (sandbox audit, Phase 1) ----------
+// Who can open the Team & turnaround page: leadership and the IR Manager,
+// who oversees their Campaign Managers and IR Executives.
+export function canViewTeamTurnaround(role: Role) {
+  return role === "CXO" || role === "IR_MANAGER";
+}
+// Who can change who reports to whom. The workflow spec makes the IR Manager
+// the writer of team assignment and reassignment; the CXO login writes only
+// the month lock (super admin can still do it).
+export function canManageReportingLines(role: Role) {
+  return role === "IR_MANAGER";
+}
+
+// Money & exposure page (sandbox audit, Phase 1): every role that already
+// sees internal cost, except IR Executives (they get their own dashboard).
+export function canViewMoneyExposure(role: Role) {
+  return canSeeInternalCost(role) && role !== "IR_EXECUTIVE";
+}
+
+// Finance ledger (sandbox audit, Phase 1): anyone who already sees internal
+// cost. Each action on the page is still gated by role server-side
+// (see creatorPaymentActions.ts).
+export function canViewFinanceLedger(role: Role) {
+  return canSeeInternalCost(role);
+}
+
+// Management homes (sandbox audit, Phase 2). New pages beside the existing
+// dashboard, which is unchanged.
+export function canViewLeadershipHome(role: Role) {
+  return role === "CXO";
+}
+export function canViewIrManagerHome(role: Role) {
+  return role === "IR_MANAGER" || role === "CXO";
+}
+
+// Role homes (sandbox audit, Phase 3). New pages beside the existing dashboard.
+export function canViewRoleHome(role: Role) {
+  // IR_EXECUTIVE added (gap build): a home with escalations and the payment
+  // pipeline for their own book, beside their existing dashboard.
+  return role === "CAMPAIGN_MANAGER" || role === "BRAND_SOLUTIONS" || role === "FINANCE" || role === "BUSINESS_DEVELOPMENT" || role === "IR_EXECUTIVE";
+}
+export function canViewClientOverview(role: Role) {
+  return role === "CLIENT";
+}
+// Compact creator board: every internal role; cost columns follow canSeeInternalCost.
+export function canViewCreatorBoard(role: Role) {
+  return role !== "CLIENT" && role !== "BUSINESS_DEVELOPMENT";
+}
+
+// ---------- Gap build (role-by-role audit) ----------
+// Briefs & strategy. The spec makes Brand Solutions the brief writer; the
+// kept Business Development login posts briefs too. CXO reads only.
+export function canViewBriefs(role: Role) {
+  return role === "BUSINESS_DEVELOPMENT" || role === "BRAND_SOLUTIONS" || role === "CXO";
+}
+export function canPostBrief(role: Role) {
+  return role === "BUSINESS_DEVELOPMENT" || role === "BRAND_SOLUTIONS";
+}
+export function canWorkBrief(role: Role) {
+  return role === "BRAND_SOLUTIONS";
+}
+// Campaign gates page: internal roles on the campaign (row scope follows
+// campaignVisibilityWhere, G13). Clients never see it (G9: no activity trail).
+// Business Development is not on the execution side, so it is left out.
+export function canViewCampaignGates(role: Role) {
+  return role !== "CLIENT" && role !== "BUSINESS_DEVELOPMENT";
+}
+// Release for shoot / publishing and closing execution: Campaign Manager only
+// (and only on campaigns they are assigned to as CM, checked in the action).
+export function canReleaseDeliverables(role: Role) {
+  return role === "CAMPAIGN_MANAGER";
+}
+// Financial sign-off before closure: the kept Finance login.
+export function canFinanceSignOff(role: Role) {
+  return role === "FINANCE";
+}
+// Cross-campaign Reporting: every login, row scope by campaignVisibilityWhere.
+// Clients see published reports only; IR Interns see delivery and performance
+// only, never CPV (it is built from quoted cost, G3).
+export function canViewReporting(_role: Role) {
+  return true;
+}
+export function reportingShowsCpv(role: Role) {
+  return role !== "IR_INTERN";
+}
+// Activity & notifications page: everyone gets their notifications; the team
+// activity trail is never shown to a client (G9).
+export function canSeeActivityTrail(role: Role) {
+  return role !== "CLIENT";
+}
+// Client finance view (spec step 29, Client Cash "View, own account").
+export function canViewClientInvoices(role: Role) {
+  return role === "CLIENT";
 }

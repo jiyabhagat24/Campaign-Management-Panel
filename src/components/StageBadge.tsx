@@ -8,6 +8,7 @@ const OWNER_COLOR: Record<string, string> = {
 
 export default function StageBadge({ stage }: { stage: Stage }) {
   return (
-    <span className={`badge ${OWNER_COLOR[STAGE_OWNER[stage]]}`}>{STAGE_LABELS[stage]}</span>
+    // Plain text, Creator records style; OWNER_COLOR kept for reference.
+    <span className="text-sm text-slate-700 dark:text-slate-300" data-owner={STAGE_OWNER[stage]}>{STAGE_LABELS[stage]}</span>
   );
 }

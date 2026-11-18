@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { PageHeadline, pageClass } from "@/components/finance/SandboxUi";
 import { currentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { canManageClients, campaignVisibilityWhere, isSuperAdmin } from "@/lib/rbac";
@@ -52,16 +53,8 @@ export default async function ClientCashPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-8 p-8">
-      <div>
-        <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-          <Wallet className="h-6 w-6 text-emerald-500" />
-          Client Cash
-        </h1>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          Log and track client invoices per campaign — this is what feeds each client's own read-only Finance tab.
-        </p>
-      </div>
+    <div className={pageClass}>
+      <PageHeadline title="Client cash." subtitle={<>Log and track client invoices per campaign — this is what feeds each client's own read-only Finance tab.</>} />
 
       {campaigns.length === 0 && (
         <p className="rounded-xl border border-slate-200/80 bg-white p-4 text-sm text-slate-500 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-400">
@@ -73,9 +66,8 @@ export default async function ClientCashPage() {
         {campaigns.map((c) => (
           <div key={c.id} className="space-y-3">
             <div className="flex items-center gap-3">
-              <BrandAvatar brand={c.brand} logoUrl={c.brandLogoUrl} size={32} />
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">{c.brand}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">{c.brand}</p>
                 <h2 className="text-base font-bold text-slate-900 dark:text-white">{c.name}</h2>
               </div>
             </div>
