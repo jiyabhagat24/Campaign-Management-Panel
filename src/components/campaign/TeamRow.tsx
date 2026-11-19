@@ -9,6 +9,7 @@ type InternalUser = { id: string; name: string; role: string };
 
 const ROLE_LABEL: Record<string, string> = {
   CXO: "CXO",
+  AI: "AI",
   BRAND_SOLUTIONS: "Brand Solutions",
   CAMPAIGN_MANAGER: "Campaign Manager",
   IR_MANAGER: "IR Manager",

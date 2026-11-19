@@ -86,12 +86,12 @@ export const authOptions: NextAuthOptions = {
         const dbUser = await prisma.user.findUnique({ where: { email: user.email.toLowerCase() } });
         if (dbUser) {
           token.id = dbUser.id;
-          token.role = dbUser.role;
+          token.role = dbUser.role === "AI" ? "CXO" : dbUser.role; // AI team gets the CXO view
           token.name = dbUser.name;
         }
       } else if (user && account?.provider === "credentials") {
         token.id = (user as any).id;
-        token.role = (user as any).role;
+        token.role = (user as any).role === "AI" ? "CXO" : (user as any).role; // AI team gets the CXO view
         token.name = user.name;
       }
       return token;

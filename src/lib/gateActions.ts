@@ -95,7 +95,7 @@ async function maybeClose(campaignId: string, actor: { id: string; name: string 
   await prisma.campaign.update({ where: { id: campaignId }, data: { status: "CLOSED" } });
   await db.campaignClosure.update({ where: { campaignId }, data: { closedAt: new Date() } });
   await logActivity({ campaignId, actorId: actor.id, actorName: actor.name, action: "CAMPAIGN_CLOSED", entityType: "Campaign", entityId: campaignId, meta: { from, to: "CLOSED", via: "closure gates" } });
-  const cxo = await prisma.user.findMany({ where: { role: "CXO" }, select: { id: true } });
+  const cxo = await prisma.user.findMany({ where: { role: { in: ["CXO", "AI"] } }, select: { id: true } });
   await notifyUsers([...c.teamMembers.map((t: any) => t.userId), ...cxo.map((u) => u.id)], `Campaign closed · ${c.brand}`, `${c.name} passed every closure check and is now closed.`, "Campaign", campaignId, null);
   for (const a of c.clientAccess) {
     await db.notification.create({ data: { clientId: a.clientId, channel: "INSTANT", title: `Campaign closed · ${c.name}`, body: "All deliverables are live and the final report is published.", entityType: "Campaign", entityId: campaignId } });

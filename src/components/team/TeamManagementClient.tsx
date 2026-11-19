@@ -7,6 +7,7 @@ import { UserPlus, Trash2, KeyRound } from "lucide-react";
 
 const ROLE_LABEL: Record<Role, string> = {
   CXO: "CXO",
+  AI: "AI",
   BRAND_SOLUTIONS: "Brand Solutions",
   CAMPAIGN_MANAGER: "Campaign Manager",
   IR_MANAGER: "IR Manager",
@@ -19,6 +20,7 @@ const ROLE_LABEL: Record<Role, string> = {
 
 const ROLE_BADGE: Record<Role, string> = {
   CXO: "bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300",
+  AI: "bg-fuchsia-50 text-fuchsia-700 dark:bg-fuchsia-950/50 dark:text-fuchsia-300",
   BRAND_SOLUTIONS: "bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300",
   CAMPAIGN_MANAGER: "bg-violet-50 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300",
   IR_MANAGER: "bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300",

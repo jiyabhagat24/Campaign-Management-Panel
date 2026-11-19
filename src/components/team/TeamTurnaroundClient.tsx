@@ -239,6 +239,7 @@ export default function TeamTurnaroundClient({
                         <option value="">No manager set</option>
                         {managerOptions
                           .filter((m) => m.id !== r.id)
+                          .sort((a, b) => a.name.localeCompare(b.name))
                           .map((m) => (
                             <option key={m.id} value={m.id}>
                               {m.name} · {m.roleLabel}

@@ -10,6 +10,10 @@
 // just for a different reason (need-to-know, not confidentiality-from-client).
 export const ROLES = [
   "CXO",
+  // AI team: same access as CXO everywhere (the session maps AI -> CXO in
+  // auth.ts), but stored separately so they show as "AI" and can have a
+  // reporting manager set on Team & turnaround (CXO rows can't).
+  "AI",
   "BRAND_SOLUTIONS",
   "CAMPAIGN_MANAGER",
   "IR_MANAGER",
@@ -349,6 +353,7 @@ export const DEFAULT_SLA = {
 // (Team & turnaround). Existing screens keep their own local label maps.
 export const ROLE_DISPLAY_NAMES: Record<Role, string> = {
   CXO: "CXO",
+  AI: "AI",
   BRAND_SOLUTIONS: "Brand Solutions",
   CAMPAIGN_MANAGER: "Campaign Manager",
   IR_MANAGER: "IR Manager",
