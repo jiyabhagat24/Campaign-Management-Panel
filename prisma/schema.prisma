@@ -1194,3 +1194,23 @@ model CampaignClosure {
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
 }
+
+// Team feedback board. Any internal team member can post; everyone internal
+// sees every post. Author name and role are stored with the post (like the
+// closure sign-offs above) so no existing model needs a new relation.
+model TeamFeedback {
+  id             String    @id @default(cuid())
+  body           String
+  category       String    @default("GENERAL") // GENERAL | IDEA | ISSUE
+  status         String    @default("OPEN") // OPEN | DONE
+  authorId       String
+  authorName     String
+  authorRole     String
+  resolvedAt     DateTime?
+  resolvedByName String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([createdAt])
+  @@index([status])
+}

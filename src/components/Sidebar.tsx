@@ -27,6 +27,7 @@ import {
   BarChart3,
   ListChecks,
   Bell,
+  MessageSquare,
 } from "lucide-react";
 
 // Sidebar sections, in display order. Each NAV item names its section;
@@ -64,6 +65,8 @@ const NAV = [
   { group: "Follow-ups", href: "/action-tracker", label: "Action Tracker", icon: PhoneCall, internalOnly: true, actionTrackerBlocked: true },
   // Sandbox audit, Phase 1 — reporting lines + current load. CXO and IR Manager.
   { group: "Team & performance", href: "/team-turnaround", label: "Team & Turnaround", icon: Network, teamTurnaroundOnly: true },
+  // Team feedback board: every internal login can post and read; not for clients.
+  { group: "Team & performance", href: "/feedback", label: "Team Feedback", icon: MessageSquare, internalOnly: true },
   // Sandbox audit, Phase 1 — margin next to pending creator cost.
   { group: "Money", href: "/money-exposure", label: "Money & Exposure", icon: Scale, moneyExposureOnly: true },
   // Sandbox audit, Phase 1 — creator invoices, approvals and milestone payouts.
