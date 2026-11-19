@@ -81,7 +81,7 @@ const NAV = [
   { group: "Admin", href: "/admin/months", label: "Month Lock", icon: CalendarCheck, teamOnly: true },
 ];
 
-export default function Sidebar({ role, name, notifications, userId }: { role: Role; name: string; notifications: NotificationItem[]; userId?: string }) {
+export default function Sidebar({ role, roleLabel, name, notifications, userId }: { role: Role; roleLabel?: string; name: string; notifications: NotificationItem[]; userId?: string }) {
   const pathname = usePathname();
   const superAdmin = isSuperAdmin(userId);
 
@@ -202,7 +202,7 @@ export default function Sidebar({ role, name, notifications, userId }: { role: R
                   role
                 )}`}
               >
-                {role.replace(/_/g, " ")}
+                {(roleLabel ?? role).replace(/_/g, " ")}
               </span>
             </div>
           </div>

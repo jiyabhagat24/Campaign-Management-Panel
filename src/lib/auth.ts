@@ -87,11 +87,13 @@ export const authOptions: NextAuthOptions = {
         if (dbUser) {
           token.id = dbUser.id;
           token.role = dbUser.role === "AI" ? "CXO" : dbUser.role; // AI team gets the CXO view
+          token.realRole = dbUser.role; // shown as-is in the sidebar
           token.name = dbUser.name;
         }
       } else if (user && account?.provider === "credentials") {
         token.id = (user as any).id;
         token.role = (user as any).role === "AI" ? "CXO" : (user as any).role; // AI team gets the CXO view
+        token.realRole = (user as any).role;
         token.name = user.name;
       }
       return token;
@@ -100,6 +102,7 @@ export const authOptions: NextAuthOptions = {
       if (session.user) {
         (session.user as any).id = token.id;
         (session.user as any).role = token.role as Role;
+        (session.user as any).realRole = token.realRole ?? token.role;
         if (token.name) session.user.name = token.name as string;
       }
       return session;

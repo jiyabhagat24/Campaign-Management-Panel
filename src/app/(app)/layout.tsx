@@ -31,7 +31,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     // the real visible viewport instead.
     <div className="flex h-dvh overflow-hidden">
       <AutoRefresh />
-      <Sidebar role={user.role} name={user.name} notifications={notifications} userId={user.id} />
+      <Sidebar role={user.role} roleLabel={(user as any).realRole ?? user.role} name={user.name} notifications={notifications} userId={user.id} />
       <main className="h-dvh flex-1 overflow-y-auto bg-panel dark:bg-slate-950">{children}</main>
     </div>
   );
