@@ -427,6 +427,12 @@ model Creator {
   poc            User?     @relation("CreatorPOC", fields: [pocUserId], references: [id], onDelete: SetNull)
   goLiveDeadline DateTime?
 
+  // Creator contact details, entered on the Shortlist by the internal team.
+  // Never shown to or sent to a client login: listed in CLIENT_HIDDEN_FIELDS
+  // (rbac.ts) so serializeCreatorForClient strips them server-side.
+  contactPhone String?
+  contactEmail String?
+
   // ---------- Shortlist-stage pitch/negotiation (brief: shortlist sheet) ----------
   // One shared set of numbers per creator (not per deliverable) — which
   // deliverable types they're being pitched for lives separately in

@@ -197,6 +197,9 @@ export const CREATOR_STATUSES = [
   "ONBOARDED",
   "BLOCKED",
   "REJECTED",
+  // Dropped mid-campaign (after onboarding) by a Campaign Manager — see
+  // dropCreator in actions.ts.
+  "DROPPED",
 ] as const;
 export type CreatorStatus = (typeof CREATOR_STATUSES)[number];
 
@@ -217,7 +220,7 @@ export function creatorKanbanColumn(status: string): KanbanColumn {
   // BLOCKED is a paused-in-execution state (spec Gate G6 two-person pause) —
   // it belongs with Onboarding/execution rows, not back in pre-onboarding
   // Shortlist.
-  return status === "ONBOARDED" || status === "BLOCKED" ? "ONBOARDING" : "SHORTLIST";
+  return status === "ONBOARDED" || status === "BLOCKED" || status === "DROPPED" ? "ONBOARDING" : "SHORTLIST";
 }
 
 export const DELIVERABLE_STATUSES = [

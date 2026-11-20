@@ -17,22 +17,31 @@ import { STATUS_TEXT, STATUS_TONE } from "@/components/gaps/briefStatus";
 
 type BriefRow = {
   id: string; title: string; brand: string; status: string; budget: number | null; expectedCpv: number | null; creatorQty: number | null;
-  deliverableQty: number | null; createdByName: string; ownerName: string | null; receivedAt: Date; fulfilledAt: Date | null; campaignId: string | null;
+  deliverableQty: number | null; createdById: string; ownerId: string | null; createdByName: string; ownerName: string | null; receivedAt: Date; fulfilledAt: Date | null; campaignId: string | null;
   timelineStart: Date | null; timelineEnd: Date | null; platformPlan: string | null;
 };
 
-export default async function BriefsPage({ searchParams }: { searchParams: Promise<{ error?: string; view?: string }> }) {
+export default async function BriefsPage({ searchParams }: { searchParams: Promise<{ error?: string; view?: string; scope?: string }> }) {
   const user = await currentUser();
   if (!user) redirect("/login");
   if (!canViewBriefs(user.role) && !isSuperAdmin(user.id)) redirect("/dashboard");
-  const { error, view } = await searchParams;
+  const { error, view, scope: scopeParam } = await searchParams;
+  // "My briefs" (posted by me or given to me) and "Team briefs" (every brief
+  // the BD and Brand Solutions team has) for the two brief teams.
+  const teamTabs = user.role === "BUSINESS_DEVELOPMENT" || user.role === "BRAND_SOLUTIONS";
+  const scope = teamTabs && scopeParam === "team" ? "team" : "mine";
 
   const where =
-    user.role === "CXO" || isSuperAdmin(user.id)
+    user.role === "CXO" || isSuperAdmin(user.id) || (teamTabs && scope === "team")
       ? {}
       : user.role === "BRAND_SOLUTIONS"
       ? { OR: [{ ownerId: null, status: "NEW" }, { ownerId: user.id }, { createdById: user.id }] }
       : { createdById: user.id };
+
+  let bsPeople: { id: string; name: string }[] = [];
+  if (user.role !== "BRAND_SOLUTIONS" && (canPostBrief(user.role) || isSuperAdmin(user.id))) {
+    bsPeople = await prisma.user.findMany({ where: { role: "BRAND_SOLUTIONS" }, select: { id: true, name: true }, orderBy: { name: "asc" } });
+  }
 
   let briefs: BriefRow[] = [];
   try {
@@ -51,9 +60,24 @@ export default async function BriefsPage({ searchParams }: { searchParams: Promi
   const shown = view === "closed" ? briefs.filter((b) => !open.includes(b)) : view === "all" ? briefs : open;
   const fulfilled = briefs.filter((b) => b.status === "FULFILLED" && b.fulfilledAt);
   const avgFulfil = fulfilled.length ? fulfilled.reduce((s, b) => s + workingHoursBetween(new Date(b.receivedAt), new Date(b.fulfilledAt!)), 0) / fulfilled.length : null;
+  const qs = (v: string, sc: string) => {
+    const p = new URLSearchParams();
+    if (v !== "open") p.set("view", v);
+    if (sc === "team") p.set("scope", "team");
+    const t = p.toString();
+    return t ? `/briefs?${t}` : "/briefs";
+  };
+  const scopeTab = (key: string, label: string) => (
+    <Link
+      href={qs(view ?? "open", key)}
+      className={`rounded-lg px-4 py-2 text-sm font-bold ${scope === key ? "bg-slate-900 text-white dark:bg-indigo-600" : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"}`}
+    >
+      {label}
+    </Link>
+  );
   const tab = (key: string, label: string) => (
     <Link
-      href={key === "open" ? "/briefs" : `/briefs?view=${key}`}
+      href={qs(key, scope)}
       className={`rounded-lg px-3 py-1.5 text-xs font-bold ${(view ?? "open") === key ? "bg-slate-900 text-white dark:bg-indigo-600" : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"}`}
     >
       {label}
@@ -94,18 +118,35 @@ export default async function BriefsPage({ searchParams }: { searchParams: Promi
             <div><label className={labelClass}>Regions</label><input name="regions" className={inputClass} /></div>
             <div><label className={labelClass}>Timeline start</label><input name="timelineStart" type="date" className={inputClass} /></div>
             <div><label className={labelClass}>Timeline end</label><input name="timelineEnd" type="date" className={inputClass} /></div>
+            {user.role !== "BRAND_SOLUTIONS" && (
+              <div className="lg:col-span-2">
+                <label className={labelClass}>Give to (Brand Solutions){user.role === "BUSINESS_DEVELOPMENT" ? " *" : ""}</label>
+                <select name="assigneeId" required={user.role === "BUSINESS_DEVELOPMENT"} defaultValue="" className={inputClass}>
+                  <option value="" disabled={user.role === "BUSINESS_DEVELOPMENT"}>{user.role === "BUSINESS_DEVELOPMENT" ? "Choose who works this brief…" : "Leave open for anyone"}</option>
+                  {bsPeople.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Posted as {user.name}. Only you and this person see the clarification chat.</p>
+              </div>
+            )}
             <div className="sm:col-span-2"><label className={labelClass}>Notes</label><input name="notes" className={inputClass} /></div>
             <div className="flex items-end sm:col-span-2 lg:col-span-4"><button className={primaryBtn}>Post brief</button></div>
           </form>
         </details>
       )}
 
-      <SandboxCard title="Briefs" aside={<div className="flex gap-1">{tab("open", "Open")}{tab("closed", "Closed")}{tab("all", "All")}</div>}>
+      {teamTabs && (
+        <div className="flex gap-1 rounded-xl border border-slate-200/80 bg-white p-1 shadow-card w-fit dark:border-slate-800 dark:bg-slate-900">
+          {scopeTab("mine", "My briefs")}
+          {scopeTab("team", "Team briefs")}
+        </div>
+      )}
+
+      <SandboxCard title={teamTabs ? (scope === "team" ? "Team briefs" : "My briefs") : "Briefs"} aside={<div className="flex gap-1">{tab("open", "Open")}{tab("closed", "Closed")}{tab("all", "All")}</div>}>
         <table className="w-full table-fixed text-sm">
           <thead className={theadClass}>
             <tr>
               <th className={`w-[30%] ${thClass}`}>Brief</th>
-              <th className={`w-[20%] ${thClass}`}>Status · owner</th>
+              <th className={`w-[20%] ${thClass}`}>Status · BD → BS</th>
               <th className={`w-[20%] ${thClass}`}>Scope</th>
               <th className={`w-[18%] ${thClass}`}>Clock</th>
               <th className={`w-[12%] ${thClass}`}></th>
@@ -120,11 +161,13 @@ export default async function BriefsPage({ searchParams }: { searchParams: Promi
                 <tr key={b.id} className="align-top">
                   <td className="px-5 py-3">
                     <Link href={`/briefs/${b.id}`} className="block truncate font-semibold text-slate-900 hover:text-indigo-600 dark:text-white dark:hover:text-indigo-400">{b.title}</Link>
-                    <p className="truncate text-xs text-slate-500 dark:text-slate-400">{b.brand} · posted by {b.createdByName}</p>
+                    <p className="truncate text-xs text-slate-500 dark:text-slate-400">{b.brand} · posted by {b.createdById === user.id ? "you" : b.createdByName}</p>
                   </td>
                   <td className="px-5 py-3">
-                    <Pill tone={STATUS_TONE[b.status]}>{STATUS_TEXT[b.status] ?? b.status}</Pill>
-                    <p className="mt-1 truncate text-xs text-slate-500 dark:text-slate-400">{b.ownerName ? `BS ${b.ownerName}` : "Not picked up"}</p>
+                    <Pill tone={STATUS_TONE[b.status]}>{b.status === "NEW" && b.ownerName ? "Assigned, not started" : STATUS_TEXT[b.status] ?? b.status}</Pill>
+                    <p className="mt-1 truncate text-xs text-slate-500 dark:text-slate-400">
+                      <span className="font-semibold text-slate-700 dark:text-slate-300">{b.createdByName}</span> → {b.ownerName ? <span className="font-semibold text-slate-700 dark:text-slate-300">{b.ownerName}</span> : "anyone in BS"}
+                    </p>
                   </td>
                   <td className="px-5 py-3 text-xs text-slate-600 dark:text-slate-300">
                     <p>{b.budget != null ? formatCompactINR(b.budget) : "Budget —"}{b.expectedCpv != null ? ` · CPV ₹${b.expectedCpv}` : ""}</p>

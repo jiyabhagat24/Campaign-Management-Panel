@@ -176,7 +176,7 @@ export async function runSlaNotificationSweep() {
   // requires a logged-in session (requireUser) — this sweep runs from a
   // cron route with no session at all.
   const preOnboardCreators = await prisma.creator.findMany({
-    where: { status: { notIn: ["ONBOARDED", "REJECTED", "CLIENT_REJECTED"] } },
+    where: { status: { notIn: ["ONBOARDED", "DROPPED", "REJECTED", "CLIENT_REJECTED"] } },
     include: {
       campaign: { select: { id: true, name: true } },
       chaseLogs: { orderBy: { createdAt: "desc" }, take: 1 },

@@ -86,7 +86,9 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
     isClientView || onboardingEntityIds.length === 0
       ? []
       : await prisma.activityLog.findMany({
-          where: { campaignId: campaign.id, entityId: { in: onboardingEntityIds } },
+          // CLIENT_NOTE_UPDATED (Notes column) is left out so writing a note
+          // doesn't count as a Last Action or clear dormancy flags.
+          where: { campaignId: campaign.id, entityId: { in: onboardingEntityIds }, action: { not: "CLIENT_NOTE_UPDATED" } },
           orderBy: { createdAt: "desc" },
           take: 300,
         });
@@ -103,6 +105,68 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
   const creators = isClientView
     ? serializeCreatorsForClient(campaign.creators)
     : filterCreatorsForShortlistScope(user, campaign.creators, campaignInternUserIds);
+
+  // Client "Request changes" feedback on a script / content lives only in the
+  // audit trail (ActivityLog.meta.feedback). Pull the latest one per
+  // deliverable so the Script Status / Content Status cells can show it.
+  const allDeliverableIds = campaign.creators.flatMap((c) => c.deliverables.map((d) => d.id));
+  const feedbackLogs =
+    allDeliverableIds.length === 0
+      ? []
+      : await prisma.activityLog.findMany({
+          where: {
+            campaignId: campaign.id,
+            entityId: { in: allDeliverableIds },
+            action: { in: ["SCRIPT_CHANGES_REQUESTED", "CONTENT_CHANGES_REQUESTED"] },
+          },
+          orderBy: { createdAt: "desc" },
+          select: { entityId: true, action: true, meta: true },
+        });
+  const scriptFeedbackById = new Map<string, string>();
+  const contentFeedbackById = new Map<string, string>();
+  for (const log of feedbackLogs) {
+    const target = log.action === "SCRIPT_CHANGES_REQUESTED" ? scriptFeedbackById : contentFeedbackById;
+    if (target.has(log.entityId)) continue;
+    let text: unknown = null;
+    try {
+      text = log.meta ? JSON.parse(log.meta)?.feedback ?? null : null;
+    } catch {
+      text = null;
+    }
+    target.set(log.entityId, typeof text === "string" ? text.trim() : "");
+  }
+  // Notes column (team -> client): latest CLIENT_NOTE_UPDATED per creator.
+  const creatorIds = campaign.creators.map((c) => c.id);
+  const noteLogs =
+    creatorIds.length === 0
+      ? []
+      : await prisma.activityLog.findMany({
+          where: { campaignId: campaign.id, entityId: { in: creatorIds }, action: "CLIENT_NOTE_UPDATED" },
+          orderBy: { createdAt: "desc" },
+          select: { entityId: true, meta: true },
+        });
+  const clientNoteById = new Map<string, string | null>();
+  for (const log of noteLogs) {
+    if (clientNoteById.has(log.entityId)) continue;
+    let text: unknown = null;
+    try {
+      text = log.meta ? JSON.parse(log.meta)?.note ?? null : null;
+    } catch {
+      text = null;
+    }
+    clientNoteById.set(log.entityId, typeof text === "string" && text.trim() ? text.trim() : null);
+  }
+  const creatorsWithFeedback = (creators as any[]).map((c) => ({
+    ...c,
+    clientNote: clientNoteById.get(c.id) ?? null,
+    deliverables: Array.isArray(c.deliverables)
+      ? c.deliverables.map((d: any) => ({
+          ...d,
+          scriptFeedback: scriptFeedbackById.get(d.id) || null,
+          contentFeedback: contentFeedbackById.get(d.id) || null,
+        }))
+      : c.deliverables,
+  }));
 
   const atRisk = isGoLiveAtRisk(campaign.goLiveDeadline);
   const breached = isGoLiveBreached(campaign.goLiveDeadline);
@@ -220,7 +284,7 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
         campaignName={campaign.name}
         campaignBrand={campaign.brand}
         campaignStartDate={campaign.startDate}
-        creators={creators as any}
+        creators={creatorsWithFeedback as any}
         role={user.role}
         currentUserId={user.id}
         canSeeCost={canSeeCost}

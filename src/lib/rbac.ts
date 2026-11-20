@@ -67,6 +67,12 @@ export function canSetCommercials(role: Role) {
   return role === "CAMPAIGN_MANAGER";
 }
 
+// Who can assign/reassign a creator's POC (Shortlist and Onboarding tables):
+// the Campaign Manager and the IR Manager.
+export function canAssignCreatorPOC(role: Role) {
+  return role === "CAMPAIGN_MANAGER" || role === "IR_MANAGER";
+}
+
 // Who can see the /pricing-queue page (and its Sidebar link) — a read-only
 // worklist of rows waiting to be priced, not the pricing action itself.
 // Deliberately separate from canSetCommercials: IR Manager needs visibility
@@ -208,6 +214,9 @@ const CLIENT_HIDDEN_FIELDS = [
   // notes, which are TBM-internal operational notes.
   "payoutAdvance",
   "payoutRemark",
+  // Creator phone/email from the Shortlist: TBM-internal, never client-facing.
+  "contactPhone",
+  "contactEmail",
 ] as const;
 
 export function serializeCreatorForClient<T extends { internalCost: number | null }>(

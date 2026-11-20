@@ -68,7 +68,7 @@ export async function createBrief(input: {
   title: string; brand: string; objective?: string | null; category?: string | null; productUrl?: string | null;
   budget?: number | null; creatorQty?: number | null; deliverableQty?: number | null; platformPlan?: string | null;
   languages?: string | null; regions?: string | null; expectedCpv?: number | null; timelineStart?: Date | null;
-  timelineEnd?: Date | null; notes?: string | null;
+  timelineEnd?: Date | null; notes?: string | null; assigneeId?: string | null;
 }): Promise<Result> {
   const user = await requireUser();
   if (!canPostBrief(user.role) && !isSuperAdmin(user.id)) return { error: "Only Business Development or Brand Solutions can post a brief." };
@@ -79,9 +79,23 @@ export async function createBrief(input: {
   }
   if (input.timelineStart && input.timelineEnd && input.timelineEnd < input.timelineStart) return { error: "Timeline end is before its start." };
 
+  // Business Development names the Brand Solutions person the brief is for.
+  // The brief stays NEW (assigned, not started) until that person starts it.
+  const { assigneeId, ...fields } = input;
+  let assignee: { id: string; name: string } | null = null;
+  if (user.role !== "BRAND_SOLUTIONS") {
+    if (assigneeId) {
+      assignee = await prisma.user.findFirst({ where: { id: assigneeId, role: "BRAND_SOLUTIONS" }, select: { id: true, name: true } });
+      if (!assignee) return { error: "Pick a Brand Solutions person to give this brief to." };
+    } else if (user.role === "BUSINESS_DEVELOPMENT") {
+      return { error: "Pick the Brand Solutions person you're giving this brief to." };
+    }
+  }
+
   const brief = await db.brief.create({
     data: {
-      ...input,
+      ...fields,
+      ...(assignee ? { ownerId: assignee.id, ownerName: assignee.name } : {}),
       title: input.title.trim(),
       brand: input.brand.trim(),
       createdById: user.id,
@@ -90,8 +104,10 @@ export async function createBrief(input: {
       ...(user.role === "BRAND_SOLUTIONS" ? { ownerId: user.id, ownerName: user.name, status: "IN_PROGRESS", startedAt: new Date() } : {}),
     },
   });
-  await logStatus(brief.id, user, "-", brief.status);
-  if (user.role !== "BRAND_SOLUTIONS") {
+  await logStatus(brief.id, user, "-", brief.status, assignee ? `assigned to ${assignee.name}` : null);
+  if (assignee) {
+    await notifyUsers([assignee.id], `Brief assigned to you: ${brief.brand}`, `${user.name} gave you "${brief.title}". Open it in Briefs & strategy to start or ask a question.`, brief.id, "Review brief");
+  } else if (user.role !== "BRAND_SOLUTIONS") {
     const bs = await prisma.user.findMany({ where: { role: "BRAND_SOLUTIONS" }, select: { id: true } });
     await notifyUsers(bs.map((u) => u.id), `New brief: ${brief.brand}`, `${user.name} posted "${brief.title}". Pick it up in Briefs & strategy.`, brief.id, "Review brief");
   }
@@ -136,8 +152,10 @@ export async function postBriefMessage(briefId: string, body: string, kind: "QUE
     await logStatus(briefId, user, b.status, "CLARIFICATION");
   }
   if (kind === "ANSWER" && b.status === "CLARIFICATION") {
-    await db.brief.update({ where: { id: briefId }, data: { status: "IN_PROGRESS" } });
-    await logStatus(briefId, user, b.status, "IN_PROGRESS");
+    // An assignee who asked before pressing Start goes back to New, not In progress.
+    const nextStatus = (b as any).startedAt ? "IN_PROGRESS" : "NEW";
+    await db.brief.update({ where: { id: briefId }, data: { status: nextStatus } });
+    await logStatus(briefId, user, b.status, nextStatus);
   }
   const other = isOwner ? b.createdById : b.ownerId;
   if (other && other !== user.id) {
@@ -216,6 +234,7 @@ export async function createBriefForm(fd: FormData) {
     timelineStart: date(fd.get("timelineStart")),
     timelineEnd: date(fd.get("timelineEnd")),
     notes: str(fd.get("notes")),
+    assigneeId: str(fd.get("assigneeId")),
   });
   back(r.id ? `/briefs/${r.id}` : "/briefs", r);
 }

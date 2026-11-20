@@ -3,7 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Role } from "@/lib/constants";
-import { canSetCommercials, canApproveCommercialEdit, canOperateShortlist, canManageClients, isSuperAdmin } from "@/lib/rbac";
+import { canSetCommercials, canApproveCommercialEdit, canOperateShortlist, canManageClients, canAssignCreatorPOC, isSuperAdmin } from "@/lib/rbac";
 import { FEE_TYPE_LABELS, type FeeType, PLATFORM_SHORT_LABELS, PAYOUT_PAYMENT_STATUS_LABELS, type PayoutPaymentStatus, type Platform } from "@/lib/constants";
 import {
   PLATFORM_LABELS,
@@ -30,6 +30,7 @@ import {
   updateScriptApprovalDeadline,
   updateContentStatus,
   clientRespondToScript,
+  setCreatorClientNote,
   clientRespondToContent,
   updateVideoDraftDeadline,
   deleteDeliverable,
@@ -47,6 +48,7 @@ import {
   deleteShortlistDeliverable,
   setCreatorClientDecision,
   assignCreatorPOC,
+  updateCreatorContact,
   updateCreatorDeadline,
   requestFinalCostEdit,
   approveFinalCostEditRequest,
@@ -55,6 +57,10 @@ import {
   triggerPause,
   confirmPause,
   resumeFromPause,
+  putCreatorOnHold,
+  resumeCreatorFromHold,
+  dropCreator,
+  restoreDroppedCreator,
   saveCampaignReportCommentary,
   publishCampaignReport,
   unpublishCampaignReport,
@@ -99,6 +105,9 @@ export type Deliverable = {
   scriptDocUrl: string | null;
   scriptApprovedAt?: string | Date | null;
   scriptApprovalDeadline?: string | Date | null;
+  // Latest client "Request changes" note, attached server-side from the audit trail.
+  scriptFeedback?: string | null;
+  contentFeedback?: string | null;
   contentStatus: string | null;
   videoDraftDeadline?: string | Date | null;
   reviewLink?: string | null;
@@ -187,6 +196,8 @@ export type Creator = {
   clientIntent: string | null;
   clientCounterCost: number | null;
   clientRemark: string | null;
+  // Team-written note shown to the client (Notes column, onboarding sheet).
+  clientNote?: string | null;
   finalQuotedCost: number | null;
   clientFinalIntent: string | null;
   // Step 13 dual-approval — a pending request set by requestFinalCostEdit,
@@ -209,6 +220,11 @@ export type Creator = {
   goLiveDeadline: string | Date | null;
   pocUserId: string | null;
   poc: { id: string; name: string } | null;
+  // Shortlist contact details. Internal only: stripped from client payloads
+  // server-side (CLIENT_HIDDEN_FIELDS), and the columns aren't rendered for
+  // a client view either.
+  contactPhone?: string | null;
+  contactEmail?: string | null;
   // Whose move it is next — "CLIENT" while TBM waits on a client intent
   // decision, "TBM" while the client waits on TBM's team (see ballOwner
   // writes in actions.ts: set to CLIENT when a Quoted Cost is published,
@@ -217,6 +233,7 @@ export type Creator = {
   ballOwner?: string | null;
   pauseRequestedAt?: string | Date | null;
   pauseConfirmedAt?: string | Date | null;
+  pauseReason?: string | null;
   // Targeting metadata, editable inline from the Shortlist/Onboarding
   // tables — combobox of common values that also takes free text (see
   // TagDropdownCell below).
@@ -380,11 +397,15 @@ export default function CreatorKanban({
     (c) =>
       creatorKanbanColumn(c.status) === "SHORTLIST" &&
       c.status !== "REJECTED" &&
+      c.status !== "DROPPED" &&
       (role !== "BRAND_SOLUTIONS" || superAdmin || c.quotedCostPublished)
   );
   // BLOCKED (paused-in-execution, Gate G6) stays on the Onboarding tab
   // alongside ONBOARDED — see creatorKanbanColumn in constants.ts.
   const onboarding = creatorList.filter((c) => c.status === "ONBOARDED" || c.status === "BLOCKED");
+  // Dropped mid-campaign by a Campaign Manager — kept out of the live
+  // Onboarding list/report/payouts, shown in their own list under it.
+  const dropped = creatorList.filter((c) => c.status === "DROPPED");
   // creatorList above is local state seeded from the server props, so a
   // router.refresh() (e.g. the Report's "Refresh stats" button) doesn't
   // reach it. Overlay just the YouTube/tracking numbers from the latest
@@ -530,6 +551,16 @@ export default function CreatorKanban({
                       <th className="sticky top-0 z-30 w-[140px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Language</th>
                       <th className="sticky top-0 z-30 w-[140px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Location</th>
                       <th className="sticky top-0 z-30 w-[140px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Category</th>
+                      {/* POC + contact details: internal team only, never
+                          rendered for a client login (and stripped from the
+                          client's data server-side). */}
+                      {!isClientView && (
+                        <>
+                          <th className="sticky top-0 z-30 w-[160px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">POC</th>
+                          <th className="sticky top-0 z-30 w-[170px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Phone</th>
+                          <th className="sticky top-0 z-30 w-[220px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Email</th>
+                        </>
+                      )}
                       {canSeeCost && <th className="sticky top-0 z-30 w-[170px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Internal Cost</th>}
                       {/* Quoted Cost is the price quoted to the client, so
                           clients do see this column — only IR Intern is
@@ -565,11 +596,12 @@ export default function CreatorKanban({
                         role={role}
                         superAdmin={superAdmin}
                         onRemove={handleCreatorRemoved}
+                        internalUsers={internalUsers}
                       />
                     ))}
                     {shortlist.length === 0 && (
                       <tr>
-                        <td colSpan={canSeeCost ? 19 : 18} className="px-5 py-12 text-center text-slate-400 dark:text-slate-500">
+                        <td colSpan={(canSeeCost ? 19 : 18) + (isClientView ? 0 : 3)} className="px-5 py-12 text-center text-slate-400 dark:text-slate-500">
                           <Users className="mx-auto h-8 w-8 text-slate-300 dark:text-slate-600 mb-2" />
                           <p className="text-sm font-medium">No influencers shortlisted yet.</p>
                         </td>
@@ -613,6 +645,7 @@ export default function CreatorKanban({
                     <th className="sticky top-0 z-30 w-[260px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Deadline for Script Approval</th>
                     <th className="sticky top-0 z-30 w-[270px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Video Status</th>
                     <th className="sticky top-0 z-30 w-[150px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Video Link</th>
+                    <th className="sticky top-0 z-30 w-[220px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Notes</th>
                     <th className="sticky top-0 z-30 w-[170px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Live Link</th>
                     <th className="sticky top-0 z-30 w-[250px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Deadline for Video Draft</th>
                     <th className="sticky top-0 z-30 w-[170px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Deadline</th>
@@ -651,6 +684,9 @@ export default function CreatorKanban({
               </table>
             </div>
             </div>
+            {dropped.length > 0 && (
+              <DroppedCreatorsList creators={dropped} isClientView={isClientView} canManage={!isClientView && (role === "CAMPAIGN_MANAGER" || superAdmin)} />
+            )}
           </div>
         )}
 
@@ -1565,6 +1601,7 @@ function ShortlistCreatorRow({
   role,
   superAdmin = false,
   onRemove,
+  internalUsers = [],
 }: {
   creator: Creator;
   canSeeCost: boolean;
@@ -1572,6 +1609,7 @@ function ShortlistCreatorRow({
   role: Role;
   superAdmin?: boolean;
   onRemove?: (id: string) => void;
+  internalUsers?: { id: string; name: string; role: string }[];
 }) {
   const [showInsights, setShowInsights] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -1962,6 +2000,49 @@ function ShortlistCreatorRow({
         onSave={(v) => withRefresh(updateCreatorShortlist(creator.id, { category: v }))}
         multiple
       />
+      {/* POC + creator phone/email — internal team only. A client login
+          never gets these cells, and the values are stripped from its data
+          server-side. POC is assigned by the Campaign Manager or IR Manager;
+          contact details are editable by any internal role. */}
+      {!isClientView && (
+        <>
+          <td className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
+            {canAssignCreatorPOC(role) || superAdmin ? (
+              <select
+                key={creator.pocUserId ?? "none"}
+                defaultValue={creator.pocUserId ?? ""}
+                onChange={(e) => withRefresh(assignCreatorPOC(creator.id, e.target.value || null))}
+                className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-medium dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+              >
+                <option value="">Unassigned</option>
+                {internalUsers.map((u) => (
+                  <option key={u.id} value={u.id}>{u.name}</option>
+                ))}
+              </select>
+            ) : (
+              <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">{creator.poc?.name ?? "—"}</span>
+            )}
+          </td>
+          <td className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
+            <ContactCell
+              value={creator.contactPhone ?? null}
+              type="tel"
+              placeholder="Phone number"
+              href={creator.contactPhone ? `tel:${creator.contactPhone.replace(/\s+/g, "")}` : null}
+              onSave={(v) => withRefresh(updateCreatorContact(creator.id, { phone: v }))}
+            />
+          </td>
+          <td className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
+            <ContactCell
+              value={creator.contactEmail ?? null}
+              type="email"
+              placeholder="Email address"
+              href={creator.contactEmail ? `mailto:${creator.contactEmail}` : null}
+              onSave={(v) => withRefresh(updateCreatorContact(creator.id, { email: v }))}
+            />
+          </td>
+        </>
+      )}
       {canSeeCost && (
         <EditableNumberCell
           value={creator.internalCost ?? null}
@@ -2257,6 +2338,56 @@ function ActivityHistoryPopup({ logs, onClose }: { logs: ActivityLogEntry[]; onC
   );
 }
 
+function DroppedCreatorsList({ creators, isClientView, canManage }: { creators: Creator[]; isClientView: boolean; canManage: boolean }) {
+  const router = useRouter();
+  const [busyId, setBusyId] = useState<string | null>(null);
+  async function handleRestore(c: Creator) {
+    if (!window.confirm(`Bring ${c.name} back into this campaign?`)) return;
+    setBusyId(c.id);
+    try {
+      await restoreDroppedCreator(c.id);
+      router.refresh();
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "Couldn't restore this creator.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+  return (
+    <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-card dark:border-slate-800 dark:bg-slate-900">
+      <div className="border-b border-slate-200 bg-slate-50 px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
+        Dropped creators ({creators.length})
+      </div>
+      <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+        {creators.map((c) => (
+          <li key={c.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 text-sm">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-slate-800 dark:text-slate-200">{c.name}</span>
+                <span className="text-xs text-slate-500 dark:text-slate-400">{c.channelHandle}</span>
+                <span className="rounded-md bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">Dropped</span>
+              </div>
+              {!isClientView && c.rejectionReason && (
+                <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Reason: {c.rejectionReason}</p>
+              )}
+            </div>
+            {canManage && (
+              <button
+                type="button"
+                onClick={() => handleRestore(c)}
+                disabled={busyId === c.id}
+                className="text-xs font-semibold text-indigo-600 hover:underline disabled:opacity-50 dark:text-indigo-400"
+              >
+                {busyId === c.id ? "Restoring…" : "Restore"}
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function OnboardingCreatorRow({
   creator,
   isClientView,
@@ -2364,6 +2495,32 @@ function OnboardingCreatorRow({
     } finally {
       setPauseBusy(false);
     }
+  }
+
+  // Campaign Manager's own mid-campaign controls (no POC step needed).
+  async function runCmAction(fn: () => Promise<unknown>, fallback: string) {
+    setPauseBusy(true);
+    try {
+      await fn();
+      router.refresh();
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : fallback);
+    } finally {
+      setPauseBusy(false);
+    }
+  }
+  function handlePutOnHold() {
+    const reason = window.prompt(`Why is ${creator.name} going on hold?`);
+    if (!reason || !reason.trim()) return;
+    runCmAction(() => putCreatorOnHold(creator.id, reason.trim()), "Couldn't put this creator on hold.");
+  }
+  function handleResumeFromHold() {
+    runCmAction(() => resumeCreatorFromHold(creator.id), "Couldn't resume this creator.");
+  }
+  function handleDrop() {
+    const reason = window.prompt(`Why is ${creator.name} being dropped from this campaign?`);
+    if (!reason || !reason.trim()) return;
+    runCmAction(() => dropCreator(creator.id, reason.trim()), "Couldn't drop this creator.");
   }
   const [editingDeadline, setEditingDeadline] = useState(false);
   const [deadlineDraft, setDeadlineDraft] = useState("");
@@ -2624,6 +2781,46 @@ function OnboardingCreatorRow({
               <span>Resume (product delivered)</span>
             </button>
           )}
+          {creator.status === "BLOCKED" && (
+            <span className="inline-flex w-fit items-center gap-1 rounded-md bg-orange-50 px-1.5 py-0.5 text-[10px] font-semibold text-orange-700 dark:bg-orange-950/60 dark:text-orange-300">
+              On hold{!isClientView && creator.pauseReason ? `: ${creator.pauseReason}` : ""}
+            </span>
+          )}
+          {!isClientView && (role === "CAMPAIGN_MANAGER" || superAdmin) && (
+            <div className="flex flex-wrap gap-x-2 gap-y-0.5">
+              {creator.status === "ONBOARDED" && !creator.pauseRequestedAt && (
+                <button
+                  type="button"
+                  onClick={handlePutOnHold}
+                  disabled={pauseBusy}
+                  title="Put this creator on hold (stops their clock)"
+                  className="inline-flex w-fit items-center gap-1 text-[10px] font-semibold text-slate-400 hover:text-orange-600 disabled:opacity-50 dark:text-slate-500 dark:hover:text-orange-400"
+                >
+                  <span>Put on hold</span>
+                </button>
+              )}
+              {creator.status === "BLOCKED" && (
+                <button
+                  type="button"
+                  onClick={handleResumeFromHold}
+                  disabled={pauseBusy}
+                  title="Take this creator off hold and back into execution"
+                  className="inline-flex w-fit items-center gap-1 text-[10px] font-semibold text-emerald-600 hover:text-emerald-700 disabled:opacity-50 dark:text-emerald-400"
+                >
+                  <span>Resume from hold</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={handleDrop}
+                disabled={pauseBusy}
+                title="Drop this creator from the campaign"
+                className="inline-flex w-fit items-center gap-1 text-[10px] font-semibold text-slate-400 hover:text-rose-600 disabled:opacity-50 dark:text-slate-500 dark:hover:text-rose-400"
+              >
+                <span>Drop creator</span>
+              </button>
+            </div>
+          )}
         </div>
       </td>
       <td className="sticky left-[430px] z-10 w-[260px] min-w-[260px] max-w-[260px] border-b border-slate-100 bg-white px-5 py-4 group-hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:group-hover:bg-slate-800">
@@ -2852,10 +3049,10 @@ function OnboardingCreatorRow({
         )}
       </td>
 
-      {/* POC — Campaign Manager exclusively assigns/reassigns this (everyone
-          else, including IR Manager/Executive, gets a read-only name). */}
+      {/* POC — Campaign Manager or IR Manager assigns/reassigns this
+          (everyone else gets a read-only name). */}
       <td className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
-        {isClientView || !(role === "CAMPAIGN_MANAGER" || superAdmin) ? (
+        {isClientView || !(canAssignCreatorPOC(role) || superAdmin) ? (
           <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">{creator.poc?.name ?? "—"}</span>
         ) : (
           <select
@@ -2923,7 +3120,8 @@ function OnboardingCreatorRow({
         ) : (
           <div className="flex flex-col gap-1">
             {creator.deliverables.map((d) => (
-              <div key={d.id} className="flex items-center gap-1">
+              <div key={d.id} className="flex flex-col gap-0.5">
+              <div className="flex items-center gap-1">
                 {creator.deliverables.length > 1 && (
                   <span className="w-7 shrink-0 text-[10px] font-bold uppercase text-slate-400 dark:text-slate-500">{platformShortLabel(d.platform)}</span>
                 )}
@@ -2968,6 +3166,12 @@ function OnboardingCreatorRow({
                     <option value="APPROVED">Script approved</option>
                   </select>
                 )}
+              </div>
+              {d.scriptStatus === "FEEDBACK" && d.scriptFeedback && (
+                <p className="max-w-[220px] whitespace-pre-wrap break-words text-[10px] text-amber-700 dark:text-amber-400" title={d.scriptFeedback}>
+                  Client feedback: {d.scriptFeedback}
+                </p>
+              )}
               </div>
             ))}
           </div>
@@ -3084,7 +3288,8 @@ function OnboardingCreatorRow({
         ) : (
           <div className="flex flex-col gap-1">
             {creator.deliverables.map((d) => (
-              <div key={d.id} className="flex items-center gap-1">
+              <div key={d.id} className="flex flex-col gap-0.5">
+              <div className="flex items-center gap-1">
                 {creator.deliverables.length > 1 && (
                   <span className="w-7 shrink-0 text-[10px] font-bold uppercase text-slate-400 dark:text-slate-500">{platformShortLabel(d.platform)}</span>
                 )}
@@ -3134,6 +3339,12 @@ function OnboardingCreatorRow({
                     <option value="APPROVED">Approved</option>
                   </select>
                 )}
+              </div>
+              {d.contentStatus === "CHANGES_REQUESTED" && d.contentFeedback && (
+                <p className="max-w-[220px] whitespace-pre-wrap break-words text-[10px] text-amber-700 dark:text-amber-400" title={d.contentFeedback}>
+                  Client feedback: {d.contentFeedback}
+                </p>
+              )}
               </div>
             ))}
           </div>
@@ -3210,6 +3421,16 @@ function OnboardingCreatorRow({
             )}
           </div>
         )}
+      </td>
+
+      {/* Notes — the team writes a note for the client; the client sees it
+          read-only. Saved via setCreatorClientNote. */}
+      <td className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
+        <RemarkCell
+          value={creator.clientNote ?? null}
+          editable={!isClientView}
+          onSave={(v) => withRefresh(setCreatorClientNote(creator.id, v))}
+        />
       </td>
 
       {/* Live Link — per deliverable, its own column beside Video Link.
@@ -3548,6 +3769,66 @@ function linkifyText(text: string): React.ReactNode[] {
 // any URL is clickable; edit mode (client only — see setCreatorClientDecision
 // permission gate) is a plain text input, same save-on-blur pattern as every
 // other inline-editable cell in this file.
+// Inline-editable phone/email cell for the Shortlist (internal only). Same
+// click-pencil-to-edit pattern as RemarkCell; the saved value is a tel:/mailto:
+// link so the team can call or email the creator straight from the row.
+function ContactCell({
+  value,
+  type,
+  placeholder,
+  href,
+  onSave,
+}: {
+  value: string | null;
+  type: "tel" | "email";
+  placeholder: string;
+  href: string | null;
+  onSave: (value: string | null) => void | Promise<any>;
+}) {
+  const [editing, setEditing] = useState(false);
+
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        type={type}
+        defaultValue={value ?? ""}
+        placeholder={placeholder}
+        onBlur={(e) => {
+          const next = e.target.value.trim() || null;
+          if (next !== value) onSave(next);
+          setEditing(false);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+          if (e.key === "Escape") setEditing(false);
+        }}
+        className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+      />
+    );
+  }
+
+  return (
+    <div className="flex items-start gap-1.5">
+      {value && href ? (
+        <a href={href} className="block max-w-[180px] break-all text-xs font-medium text-indigo-600 hover:underline dark:text-indigo-400">
+          {value}
+        </a>
+      ) : (
+        <span className="text-xs text-slate-400 dark:text-slate-500">—</span>
+      )}
+      <button
+        type="button"
+        onClick={() => setEditing(true)}
+        className="shrink-0 text-slate-300 hover:text-indigo-600 dark:text-slate-600 dark:hover:text-indigo-400"
+        title={type === "tel" ? "Edit phone number" : "Edit email"}
+      >
+        <Pencil className="h-3 w-3" />
+      </button>
+    </div>
+  );
+}
+
 function RemarkCell({
   value,
   editable,

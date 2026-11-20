@@ -8,7 +8,7 @@ import bcrypt from "bcryptjs";
 import { requireUser } from "@/lib/auth";
 import { logActivity } from "@/lib/activity";
 import { notify } from "@/lib/notify";
-import { canApproveCommercialEdit, canSetCommercials, canSeeInternalCost, canManageTeam, canManageClients, canCreateCampaign, canDeleteCampaign, canOperateShortlist, isCreatorPOC, isClient, isSuperAdmin, campaignVisibilityWhere } from "@/lib/rbac";
+import { canApproveCommercialEdit, canSetCommercials, canSeeInternalCost, canManageTeam, canManageClients, canCreateCampaign, canDeleteCampaign, canOperateShortlist, isCreatorPOC, isClient, isSuperAdmin, campaignVisibilityWhere, canViewCampaign, canAssignCreatorPOC } from "@/lib/rbac";
 import {
   DEFAULT_SLA,
   type Stage,
@@ -1712,7 +1712,7 @@ export async function refreshCreatorSocialStats(creatorId: string) {
 // no auth check here; the cron route itself is the gate (CRON_SECRET).
 export async function refreshAllCreatorsSocialStats() {
   const creators = await prisma.creator.findMany({
-    where: { status: { notIn: ["REJECTED", "CLIENT_REJECTED"] } },
+    where: { status: { notIn: ["REJECTED", "CLIENT_REJECTED", "DROPPED"] } },
   });
 
   const campaignIdsToRevalidate = new Set<string>();
@@ -2115,6 +2115,198 @@ export async function resumeFromPause(creatorId: string) {
   revalidatePath(`/campaigns/${creator.campaignId}`);
 }
 
+// ---------- Campaign Manager: drop / hold an onboarded creator ----------
+// Mid-campaign (after onboarding) a Campaign Manager can take a creator out
+// of execution on their own call, always with a reason:
+//   * Put on hold: same BLOCKED state as the two-person pause above (so the
+//     SLA clock, Onboarding tab and every existing BLOCKED filter treat it
+//     identically), but the CM is both the requester and the confirmer.
+//   * Resume from hold: CM-side counterpart of resumeFromPause (the POC can
+//     still use that one too).
+//   * Drop: status DROPPED. The row leaves the live Onboarding list, report
+//     and payouts and moves to a "Dropped" list under it; the reason lives
+//     in rejectionReason (no schema change). Restore puts it back to
+//     ONBOARDED if it was a mistake.
+
+function requireCampaignManager(user: { id: string; role: string }, action: string) {
+  if (user.role !== "CAMPAIGN_MANAGER" && !isSuperAdmin(user.id)) {
+    throw new Error(`Only the Campaign Manager can ${action}.`);
+  }
+}
+
+async function notifyCreatorStatusChange(
+  creator: { campaignId: string; pocUserId: string | null },
+  actorId: string,
+  title: string,
+  body: string,
+  opts: { finance?: boolean; clientBody?: string | null } = {}
+) {
+  if (creator.pocUserId && creator.pocUserId !== actorId) {
+    await notify({ userId: creator.pocUserId, channel: "INSTANT", title, body });
+  }
+  await notifyCampaignRole(creator.campaignId, "BRAND_SOLUTIONS", title, body, actorId);
+  await notifyCampaignRole(creator.campaignId, "IR_MANAGER", title, body, actorId);
+  if (opts.finance) await notifyCampaignRole(creator.campaignId, "FINANCE", title, body, actorId);
+  if (opts.clientBody) {
+    const access = await prisma.campaignClientAccess.findFirst({ where: { campaignId: creator.campaignId } });
+    if (access) await notify({ clientId: access.clientId, channel: "INSTANT", title, body: opts.clientBody });
+  }
+}
+
+export async function putCreatorOnHold(creatorId: string, reason: string) {
+  const user = await requireUser();
+  requireCampaignManager(user, "put a creator on hold");
+  if (!reason.trim()) throw new Error("A reason is required to put a creator on hold.");
+
+  const creator = await prisma.creator.findUniqueOrThrow({ where: { id: creatorId } });
+  if (creator.status !== "ONBOARDED") throw new Error("Only an onboarded creator can be put on hold.");
+
+  const now = new Date();
+  await prisma.creator.update({
+    where: { id: creatorId },
+    data: {
+      status: "BLOCKED",
+      ballOwner: "BLOCKED",
+      pauseRequestedAt: now,
+      pauseRequestedByUserId: user.id,
+      pauseReason: reason.trim(),
+      pauseConfirmedAt: now,
+      pauseConfirmedByUserId: user.id,
+    },
+  });
+
+  await logActivity({
+    campaignId: creator.campaignId,
+    actorId: user.id,
+    actorName: user.name,
+    action: "CREATOR_PUT_ON_HOLD",
+    entityType: "Creator",
+    entityId: creatorId,
+    meta: { reason: reason.trim() },
+  });
+
+  const title = `${creator.name} put on hold`;
+  const body = `${user.name} put ${creator.name} on hold: ${reason.trim()}`;
+  await notifyCreatorStatusChange(creator, user.id, title, body, { clientBody: body });
+
+  revalidatePath(`/campaigns/${creator.campaignId}`);
+}
+
+export async function resumeCreatorFromHold(creatorId: string) {
+  const user = await requireUser();
+  requireCampaignManager(user, "resume a creator from hold");
+
+  const creator = await prisma.creator.findUniqueOrThrow({ where: { id: creatorId } });
+  if (creator.status !== "BLOCKED") throw new Error("This creator isn't on hold.");
+
+  const since = creator.pauseConfirmedAt ?? creator.pauseRequestedAt;
+  const blockedDays = since ? Math.max(0, Math.round((Date.now() - since.getTime()) / (24 * 60 * 60 * 1000))) : 0;
+
+  await prisma.creator.update({
+    where: { id: creatorId },
+    data: {
+      status: "ONBOARDED",
+      ballOwner: "CREATOR",
+      pausedDays: creator.pausedDays + blockedDays,
+      pauseRequestedAt: null,
+      pauseRequestedByUserId: null,
+      pauseReason: null,
+      pauseConfirmedAt: null,
+      pauseConfirmedByUserId: null,
+    },
+  });
+
+  await logActivity({
+    campaignId: creator.campaignId,
+    actorId: user.id,
+    actorName: user.name,
+    action: "CREATOR_RESUMED_FROM_HOLD",
+    entityType: "Creator",
+    entityId: creatorId,
+    meta: { blockedDays },
+  });
+
+  const title = `${creator.name} resumed`;
+  const body = `${user.name} took ${creator.name} off hold — back in execution.`;
+  await notifyCreatorStatusChange(creator, user.id, title, body, { clientBody: body });
+
+  revalidatePath(`/campaigns/${creator.campaignId}`);
+}
+
+export async function dropCreator(creatorId: string, reason: string) {
+  const user = await requireUser();
+  requireCampaignManager(user, "drop a creator");
+  if (!reason.trim()) throw new Error("A reason is required to drop a creator.");
+
+  const creator = await prisma.creator.findUniqueOrThrow({ where: { id: creatorId } });
+  if (creator.status !== "ONBOARDED" && creator.status !== "BLOCKED") {
+    throw new Error("Only an onboarded or on-hold creator can be dropped.");
+  }
+
+  await prisma.creator.update({
+    where: { id: creatorId },
+    data: {
+      status: "DROPPED",
+      ballOwner: "TBM",
+      rejectionReason: reason.trim(),
+      pauseRequestedAt: null,
+      pauseRequestedByUserId: null,
+      pauseReason: null,
+      pauseConfirmedAt: null,
+      pauseConfirmedByUserId: null,
+    },
+  });
+
+  await logActivity({
+    campaignId: creator.campaignId,
+    actorId: user.id,
+    actorName: user.name,
+    action: "CREATOR_DROPPED",
+    entityType: "Creator",
+    entityId: creatorId,
+    meta: { reason: reason.trim(), previousStatus: creator.status },
+  });
+
+  // Finance is told too (payout may need stopping). The client hears that
+  // the creator is out, but not the internal reason.
+  const title = `${creator.name} dropped from campaign`;
+  const body = `${user.name} dropped ${creator.name}: ${reason.trim()}`;
+  await notifyCreatorStatusChange(creator, user.id, title, body, {
+    finance: true,
+    clientBody: `${creator.name} has been dropped from this campaign. Your TBM team will share next steps.`,
+  });
+
+  revalidatePath(`/campaigns/${creator.campaignId}`);
+}
+
+export async function restoreDroppedCreator(creatorId: string) {
+  const user = await requireUser();
+  requireCampaignManager(user, "restore a dropped creator");
+
+  const creator = await prisma.creator.findUniqueOrThrow({ where: { id: creatorId } });
+  if (creator.status !== "DROPPED") throw new Error("This creator isn't dropped.");
+
+  await prisma.creator.update({
+    where: { id: creatorId },
+    data: { status: "ONBOARDED", ballOwner: "CREATOR", rejectionReason: null },
+  });
+
+  await logActivity({
+    campaignId: creator.campaignId,
+    actorId: user.id,
+    actorName: user.name,
+    action: "CREATOR_RESTORED",
+    entityType: "Creator",
+    entityId: creatorId,
+  });
+
+  const title = `${creator.name} restored`;
+  const body = `${user.name} brought ${creator.name} back into the campaign.`;
+  await notifyCreatorStatusChange(creator, user.id, title, body, { finance: true, clientBody: body });
+
+  revalidatePath(`/campaigns/${creator.campaignId}`);
+}
+
 // POC = the IR Executive who owns every reminder/flag on this creator once
 // onboarded. Internal-only; clients never assign this.
 // POC assignment is Campaign-Manager-exclusive (same "one role owns this
@@ -2123,7 +2315,7 @@ export async function resumeFromPause(creatorId: string) {
 // assignment and on every later reassignment.
 export async function assignCreatorPOC(creatorId: string, userId: string | null) {
   const user = await requireUser();
-  if (!canSetCommercials(user.role) && !isSuperAdmin(user.id)) throw new Error("Only a Campaign Manager can assign the POC.");
+  if (!canAssignCreatorPOC(user.role) && !isSuperAdmin(user.id)) throw new Error("Only a Campaign Manager or IR Manager can assign the POC.");
 
   const existing = await prisma.creator.findUnique({
     where: { id: creatorId },
@@ -2163,6 +2355,54 @@ export async function assignCreatorPOC(creatorId: string, userId: string | null)
   }
 
   revalidatePath(`/campaigns/${creator.campaignId}`);
+}
+
+// Creator phone/email on the Shortlist. Internal team only: a client login
+// can never write these, and they are stripped from every client-facing
+// payload by serializeCreatorForClient (CLIENT_HIDDEN_FIELDS in rbac.ts).
+export async function updateCreatorContact(creatorId: string, data: { phone?: string | null; email?: string | null }) {
+  const user = await requireUser();
+  if (isClient(user.role)) return { error: "Only the team can edit creator contact details." };
+  const creator = await prisma.creator.findUnique({
+    where: { id: creatorId },
+    select: {
+      id: true,
+      campaignId: true,
+      campaign: { select: { teamMembers: { select: { userId: true } }, clientAccess: { select: { clientId: true } } } },
+    },
+  });
+  if (!creator) return { error: "Creator not found" };
+  if (!isSuperAdmin(user.id) && !canViewCampaign(user, creator.campaign)) {
+    return { error: "You do not have access to this campaign." };
+  }
+
+  const patch: { contactPhone?: string | null; contactEmail?: string | null } = {};
+  if (data.phone !== undefined) {
+    const phone = (data.phone ?? "").trim().slice(0, 40);
+    if (phone && !/^[0-9+()\-\s.]{5,40}$/.test(phone)) return { error: "Enter a valid phone number (digits, spaces, + and - only)." };
+    patch.contactPhone = phone || null;
+  }
+  if (data.email !== undefined) {
+    const email = (data.email ?? "").trim().slice(0, 200);
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: "Enter a valid email address." };
+    patch.contactEmail = email || null;
+  }
+  if (Object.keys(patch).length === 0) return { ok: true };
+
+  await prisma.creator.update({ where: { id: creatorId }, data: patch });
+  // Log which field changed, not the value itself, so the contact details
+  // don't spread into the activity feed.
+  await logActivity({
+    campaignId: creator.campaignId,
+    ...actorFields(user),
+    actorName: user.name,
+    action: "CREATOR_CONTACT_UPDATED",
+    entityType: "Creator",
+    entityId: creator.id,
+    meta: { fields: Object.keys(patch) },
+  });
+  revalidatePath(`/campaigns/${creator.campaignId}`);
+  return { ok: true };
 }
 
 // Go-live deadline is editable post-onboard only with a logged reason —
@@ -2737,6 +2977,38 @@ async function assertClientCampaignAccess(userId: string, campaignId: string) {
   if (!access) throw new Error("You do not have access to this campaign.");
 }
 
+// Notes column on the onboarding sheet: a note the internal team writes FOR
+// the client (shown read-only on the client's view). Stored as an audit-trail
+// entry (latest CLIENT_NOTE_UPDATED per creator wins) rather than a new
+// column, so it needs no database migration.
+export async function setCreatorClientNote(creatorId: string, note: string | null) {
+  const user = await requireUser();
+  if (isClient(user.role)) throw new Error("Only the team can write notes for the client.");
+  const creator = await prisma.creator.findUnique({
+    where: { id: creatorId },
+    select: {
+      id: true,
+      campaignId: true,
+      campaign: { select: { teamMembers: { select: { userId: true } }, clientAccess: { select: { clientId: true } } } },
+    },
+  });
+  if (!creator) throw new Error("Creator not found");
+  if (!isSuperAdmin(user.id) && !canViewCampaign(user, creator.campaign)) {
+    throw new Error("You do not have access to this campaign.");
+  }
+  const text = (note ?? "").trim().slice(0, 2000);
+  await logActivity({
+    campaignId: creator.campaignId,
+    ...actorFields(user),
+    actorName: user.name,
+    action: "CLIENT_NOTE_UPDATED",
+    entityType: "Creator",
+    entityId: creator.id,
+    meta: { note: text || null },
+  });
+  revalidatePath(`/campaigns/${creator.campaignId}`);
+}
+
 export async function clientRespondToScript(deliverableId: string, decision: "APPROVE" | "CHANGES_REQUESTED", feedback?: string) {
   const user = await requireUser();
   if (!isClient(user.role) && !isSuperAdmin(user.id)) throw new Error("Only a client login can respond to a script here.");
@@ -2778,7 +3050,7 @@ export async function clientRespondToScript(deliverableId: string, decision: "AP
 
   await logActivity({
     campaignId: deliverable.creator.campaignId,
-    actorId: user.id,
+    ...actorFields(user),
     actorName: user.name,
     action: isApproving ? "SCRIPT_APPROVED" : "SCRIPT_CHANGES_REQUESTED",
     entityType: "Deliverable",
@@ -2836,7 +3108,7 @@ export async function clientRespondToContent(deliverableId: string, decision: "A
 
   await logActivity({
     campaignId: deliverable.creator.campaignId,
-    actorId: user.id,
+    ...actorFields(user),
     actorName: user.name,
     action: isApproving ? "CONTENT_APPROVED" : "CONTENT_CHANGES_REQUESTED",
     entityType: "Deliverable",
@@ -4128,7 +4400,7 @@ export async function getStaleChaseCandidates() {
   // This previously queried every creator in the system regardless of who
   // was looking.
   const creators = await prisma.creator.findMany({
-    where: { status: { notIn: ["ONBOARDED", "REJECTED", "CLIENT_REJECTED"] }, campaign: campaignVisibilityWhere(user) },
+    where: { status: { notIn: ["ONBOARDED", "DROPPED", "REJECTED", "CLIENT_REJECTED"] }, campaign: campaignVisibilityWhere(user) },
     include: {
       campaign: { select: { id: true, name: true } },
       chaseLogs: { orderBy: { createdAt: "desc" }, take: 1 },

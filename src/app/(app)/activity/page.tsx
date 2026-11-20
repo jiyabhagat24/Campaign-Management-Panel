@@ -41,6 +41,15 @@ export default async function ActivityPage({ searchParams }: { searchParams: Pro
       })
     : [];
 
+  // Campaign activity grouped per campaign, most recently active first;
+  // events inside each campaign stay newest first.
+  const activityGroups: { campaign: (typeof activity)[number]["campaign"]; events: typeof activity }[] = [];
+  for (const a of activity) {
+    let g = activityGroups.find((x) => x.campaign.id === a.campaign.id);
+    if (!g) activityGroups.push((g = { campaign: a.campaign, events: [] }));
+    g.events.push(a);
+  }
+
   const tab = (key: string | undefined, label: string, count: number) => (
     <Link
       href={key ? `/activity?show=${key}` : "/activity"}
@@ -95,18 +104,33 @@ export default async function ActivityPage({ searchParams }: { searchParams: Pro
         </div>
         {canSeeActivityTrail(user.role) && (
           <div className="lg:col-span-2">
-            <SandboxCard title="Campaign activity" footer="Latest 60 changes on campaigns you're assigned to.">
-              <ul className="divide-y divide-slate-100 dark:divide-slate-800">
-                {activity.length === 0 && <li className="px-5 py-8 text-center text-sm text-slate-500 dark:text-slate-400">No activity yet.</li>}
-                {activity.map((a) => (
-                  <li key={a.id} className="px-5 py-2.5">
-                    <p className="text-sm text-slate-800 dark:text-slate-200"><span className="font-semibold">{a.actorName}</span> · {human(a.action)}</p>
-                    <p className="truncate text-[11px] text-slate-500 dark:text-slate-400">
-                      <Link href={`/campaigns/${a.campaign.id}`} className="hover:underline">{a.campaign.brand} · {a.campaign.name}</Link> · {fmtDateTime(a.createdAt)}
-                    </p>
-                  </li>
+            <SandboxCard title="Campaign activity" footer="Latest 60 changes on campaigns you're assigned to, grouped by campaign.">
+              {activityGroups.length === 0 && <p className="px-5 py-8 text-center text-sm text-slate-500 dark:text-slate-400">No activity yet.</p>}
+              <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                {activityGroups.map((g, i) => (
+                  <details key={g.campaign.id} open={i === 0} className="group">
+                    <summary className="flex cursor-pointer list-none items-center gap-2 px-5 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 [&::-webkit-details-marker]:hidden">
+                      <span className="text-[10px] text-slate-400 transition-transform group-open:rotate-90">&#9654;</span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">{g.campaign.brand} · {g.campaign.name}</p>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400">Last change {fmtDateTime(g.events[0].createdAt)}</p>
+                      </div>
+                      <span className="shrink-0 text-[11px] font-semibold text-slate-500 dark:text-slate-400">{g.events.length} {g.events.length === 1 ? "event" : "events"}</span>
+                    </summary>
+                    <ul className="divide-y divide-slate-100 border-t border-slate-100 bg-slate-50/50 dark:divide-slate-800 dark:border-slate-800 dark:bg-slate-900/30">
+                      {g.events.map((a) => (
+                        <li key={a.id} className="py-2 pl-10 pr-5">
+                          <p className="text-sm text-slate-800 dark:text-slate-200"><span className="font-semibold">{a.actorName}</span> · {human(a.action)}</p>
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400">{fmtDateTime(a.createdAt)}</p>
+                        </li>
+                      ))}
+                    </ul>
+                    <div className="py-2 pl-10 pr-5 text-[11px]">
+                      <Link href={`/campaigns/${g.campaign.id}`} className="font-semibold text-indigo-600 hover:underline dark:text-indigo-400">Open campaign</Link>
+                    </div>
+                  </details>
                 ))}
-              </ul>
+              </div>
             </SandboxCard>
           </div>
         )}
