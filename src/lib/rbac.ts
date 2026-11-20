@@ -12,6 +12,18 @@ export function isSuperAdmin(userId: string | null | undefined): boolean {
   return Boolean(userId && SUPERADMIN_USER_IDS.has(userId));
 }
 
+// TEMPORARY (2026-11-20): while Campaign Managers enter all their existing
+// campaigns, they get the same campaign-level bypass as the superadmin
+// account: every shortlist, pricing, client-side (approve/reject/negotiate,
+// script/content approval), onboarding and execution action, plus campaign
+// details, team and client invoices. Not deleting campaigns or escalations.
+// Flip this to false to switch it off again.
+export const CM_FULL_CAMPAIGN_ACCESS = true;
+
+export function hasCampaignOverride(user: { id: string | null | undefined; role: Role | string | null | undefined }): boolean {
+  return isSuperAdmin(user.id) || (CM_FULL_CAMPAIGN_ACCESS && user.role === "CAMPAIGN_MANAGER");
+}
+
 export function isClient(role: Role) {
   return role === "CLIENT";
 }

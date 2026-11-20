@@ -3,7 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Role } from "@/lib/constants";
-import { canSetCommercials, canApproveCommercialEdit, canOperateShortlist, canManageClients, canAssignCreatorPOC, isSuperAdmin } from "@/lib/rbac";
+import { canSetCommercials, canApproveCommercialEdit, canOperateShortlist, canManageClients, canAssignCreatorPOC, isSuperAdmin, hasCampaignOverride } from "@/lib/rbac";
 import { FEE_TYPE_LABELS, type FeeType, PLATFORM_SHORT_LABELS, PAYOUT_PAYMENT_STATUS_LABELS, type PayoutPaymentStatus, type Platform } from "@/lib/constants";
 import {
   PLATFORM_LABELS,
@@ -323,7 +323,7 @@ export default function CreatorKanban({
 
   // Build/testing account with every UI gate bypassed too, not just the
   // server actions — see isSuperAdmin in rbac.ts.
-  const superAdmin = isSuperAdmin(currentUserId);
+  const superAdmin = hasCampaignOverride({ id: currentUserId, role });
 
   // Step 24 — Report tab commentary + publish gate.
   const reportRouter = useRouter();
@@ -2085,7 +2085,7 @@ function ShortlistCreatorRow({
         </td>
       )}
       <td className="whitespace-nowrap border-b border-slate-100 px-5 py-4 dark:border-slate-800">
-        {isClientView ? (
+        {isClientView || superAdmin ? (
           <select
             defaultValue={creator.clientIntent ?? ""}
             onChange={(e) => withRefresh(setCreatorClientDecision(creator.id, { clientIntent: e.target.value || null }))}
@@ -2107,7 +2107,7 @@ function ShortlistCreatorRow({
         )}
       </td>
       <td className="whitespace-nowrap border-b border-slate-100 px-5 py-4 dark:border-slate-800">
-        {isClientView ? (
+        {isClientView || superAdmin ? (
           <input
             type="number"
             min={0}
@@ -2131,7 +2131,7 @@ function ShortlistCreatorRow({
       <td className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
         <RemarkCell
           value={creator.clientRemark}
-          editable={isClientView}
+          editable={isClientView || superAdmin}
           onSave={(v) => withRefresh(setCreatorClientDecision(creator.id, { clientRemark: v }))}
         />
       </td>
@@ -2143,7 +2143,7 @@ function ShortlistCreatorRow({
         textClassName="font-bold text-slate-900 dark:text-white"
       />
       <td className="whitespace-nowrap border-b border-slate-100 px-5 py-4 dark:border-slate-800">
-        {isClientView ? (
+        {isClientView || superAdmin ? (
           <select
             defaultValue={creator.clientFinalIntent ?? ""}
             onChange={(e) => withRefresh(setCreatorClientDecision(creator.id, { clientFinalIntent: e.target.value || null }))}

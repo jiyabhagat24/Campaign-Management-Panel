@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { currentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { canCreateCampaign, canSeeInternalCost, canSetCommercials, canViewCampaign, isClient, serializeCreatorsForClient, filterCreatorsForShortlistScope, isSuperAdmin } from "@/lib/rbac";
+import { canCreateCampaign, canSeeInternalCost, canSetCommercials, canViewCampaign, isClient, serializeCreatorsForClient, filterCreatorsForShortlistScope, isSuperAdmin, hasCampaignOverride } from "@/lib/rbac";
 import CampaignHeaderEditor from "@/components/campaign/CampaignHeaderEditor";
 import TeamRow from "@/components/campaign/TeamRow";
 import ClientRow from "@/components/campaign/ClientRow";
@@ -226,7 +226,7 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
             shortlistingDeadline: campaign.shortlistingDeadline ? campaign.shortlistingDeadline.toISOString() : null,
             endDate: campaign.endDate ? campaign.endDate.toISOString() : null,
           }}
-          canEdit={canCreateCampaign(user.role) || isSuperAdmin(user.id)}
+          canEdit={canCreateCampaign(user.role) || hasCampaignOverride(user)}
           breached={breached}
           atRisk={atRisk}
         />
@@ -238,7 +238,7 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
             campaignId={campaign.id}
             teamMembers={campaign.teamMembers}
             internalUsers={internalUsers}
-            canEdit={user.role === "IR_MANAGER" || user.role === "BRAND_SOLUTIONS" || isSuperAdmin(user.id)}
+            canEdit={user.role === "IR_MANAGER" || user.role === "BRAND_SOLUTIONS" || hasCampaignOverride(user)}
           />
         </div>
 
@@ -263,7 +263,7 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
             <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Finance</p>
             <FinanceRow
               campaignId={campaign.id}
-              canEdit={canSetCommercials(user.role) || isSuperAdmin(user.id)}
+              canEdit={canSetCommercials(user.role) || hasCampaignOverride(user)}
               initial={{
                 financeAgencyFeePercent: campaign.financeAgencyFeePercent,
                 financeClientInvoiceStatus: campaign.financeClientInvoiceStatus,
