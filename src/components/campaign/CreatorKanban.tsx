@@ -196,8 +196,9 @@ export type Creator = {
   clientIntent: string | null;
   clientCounterCost: number | null;
   clientRemark: string | null;
-  // Team-written note shown to the client (Notes column, onboarding sheet).
-  clientNote?: string | null;
+  // Team-written notes shown to the client (Script Notes / Video Notes columns).
+  scriptNote?: string | null;
+  videoNote?: string | null;
   finalQuotedCost: number | null;
   clientFinalIntent: string | null;
   // Step 13 dual-approval — a pending request set by requestFinalCostEdit,
@@ -642,10 +643,11 @@ export default function CreatorKanban({
                     <th className="sticky top-0 z-30 w-[190px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Date of Delivery</th>
                     <th className="sticky top-0 z-30 w-[280px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Script Status</th>
                     <th className="sticky top-0 z-30 w-[150px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Script Link</th>
+                    <th className="sticky top-0 z-30 w-[220px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Script Notes</th>
                     <th className="sticky top-0 z-30 w-[260px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Deadline for Script Approval</th>
                     <th className="sticky top-0 z-30 w-[270px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Video Status</th>
                     <th className="sticky top-0 z-30 w-[150px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Video Link</th>
-                    <th className="sticky top-0 z-30 w-[220px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Notes</th>
+                    <th className="sticky top-0 z-30 w-[220px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Video Notes</th>
                     <th className="sticky top-0 z-30 w-[170px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Live Link</th>
                     <th className="sticky top-0 z-30 w-[250px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Deadline for Video Draft</th>
                     <th className="sticky top-0 z-30 w-[170px] whitespace-nowrap border-b border-slate-200 bg-slate-50 px-5 py-3.5 dark:border-slate-700 dark:bg-slate-800">Deadline</th>
@@ -3261,6 +3263,16 @@ function OnboardingCreatorRow({
         )}
       </td>
 
+      {/* Script Notes — the team writes a script note for the client; the client sees it
+          read-only. Saved via setCreatorClientNote. */}
+      <td className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
+        <RemarkCell
+          value={creator.scriptNote ?? null}
+          editable={!isClientView}
+          onSave={(v) => withRefresh(setCreatorClientNote(creator.id, "SCRIPT", v))}
+        />
+      </td>
+
       {/* Deadline for Script Approval — creator level, one date regardless
           of how many deliverables this creator has. Own setter so editing
           it never re-triggers the approval snapshot/timestamp. */}
@@ -3423,13 +3435,13 @@ function OnboardingCreatorRow({
         )}
       </td>
 
-      {/* Notes — the team writes a note for the client; the client sees it
+      {/* Video Notes — the team writes a video note for the client; the client sees it
           read-only. Saved via setCreatorClientNote. */}
       <td className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
         <RemarkCell
-          value={creator.clientNote ?? null}
+          value={creator.videoNote ?? null}
           editable={!isClientView}
-          onSave={(v) => withRefresh(setCreatorClientNote(creator.id, v))}
+          onSave={(v) => withRefresh(setCreatorClientNote(creator.id, "VIDEO", v))}
         />
       </td>
 

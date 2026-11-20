@@ -2977,13 +2977,15 @@ async function assertClientCampaignAccess(userId: string, campaignId: string) {
   if (!access) throw new Error("You do not have access to this campaign.");
 }
 
-// Notes column on the onboarding sheet: a note the internal team writes FOR
-// the client (shown read-only on the client's view). Stored as an audit-trail
-// entry (latest CLIENT_NOTE_UPDATED per creator wins) rather than a new
-// column, so it needs no database migration.
-export async function setCreatorClientNote(creatorId: string, note: string | null) {
+// Script Notes / Video Notes columns on the onboarding sheet: notes the
+// internal team writes FOR the client (shown read-only on the client's view).
+// Stored as audit-trail entries (latest CLIENT_SCRIPT_NOTE_UPDATED /
+// CLIENT_VIDEO_NOTE_UPDATED per creator wins) rather than new columns, so
+// they need no database migration.
+export async function setCreatorClientNote(creatorId: string, kind: "SCRIPT" | "VIDEO", note: string | null) {
   const user = await requireUser();
   if (isClient(user.role)) throw new Error("Only the team can write notes for the client.");
+  if (kind !== "SCRIPT" && kind !== "VIDEO") throw new Error("Unknown note type.");
   const creator = await prisma.creator.findUnique({
     where: { id: creatorId },
     select: {
@@ -3001,7 +3003,7 @@ export async function setCreatorClientNote(creatorId: string, note: string | nul
     campaignId: creator.campaignId,
     ...actorFields(user),
     actorName: user.name,
-    action: "CLIENT_NOTE_UPDATED",
+    action: kind === "SCRIPT" ? "CLIENT_SCRIPT_NOTE_UPDATED" : "CLIENT_VIDEO_NOTE_UPDATED",
     entityType: "Creator",
     entityId: creator.id,
     meta: { note: text || null },

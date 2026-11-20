@@ -86,9 +86,13 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
     isClientView || onboardingEntityIds.length === 0
       ? []
       : await prisma.activityLog.findMany({
-          // CLIENT_NOTE_UPDATED (Notes column) is left out so writing a note
-          // doesn't count as a Last Action or clear dormancy flags.
-          where: { campaignId: campaign.id, entityId: { in: onboardingEntityIds }, action: { not: "CLIENT_NOTE_UPDATED" } },
+          // Script/Video Notes entries are left out so writing a note doesn't
+          // count as a Last Action or clear dormancy flags.
+          where: {
+            campaignId: campaign.id,
+            entityId: { in: onboardingEntityIds },
+            action: { notIn: ["CLIENT_SCRIPT_NOTE_UPDATED", "CLIENT_VIDEO_NOTE_UPDATED"] },
+          },
           orderBy: { createdAt: "desc" },
           take: 300,
         });
@@ -135,30 +139,38 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
     }
     target.set(log.entityId, typeof text === "string" ? text.trim() : "");
   }
-  // Notes column (team -> client): latest CLIENT_NOTE_UPDATED per creator.
+  // Script Notes / Video Notes columns (team -> client): latest note of each
+  // kind per creator.
   const creatorIds = campaign.creators.map((c) => c.id);
   const noteLogs =
     creatorIds.length === 0
       ? []
       : await prisma.activityLog.findMany({
-          where: { campaignId: campaign.id, entityId: { in: creatorIds }, action: "CLIENT_NOTE_UPDATED" },
+          where: {
+            campaignId: campaign.id,
+            entityId: { in: creatorIds },
+            action: { in: ["CLIENT_SCRIPT_NOTE_UPDATED", "CLIENT_VIDEO_NOTE_UPDATED"] },
+          },
           orderBy: { createdAt: "desc" },
-          select: { entityId: true, meta: true },
+          select: { entityId: true, action: true, meta: true },
         });
-  const clientNoteById = new Map<string, string | null>();
+  const scriptNoteById = new Map<string, string | null>();
+  const videoNoteById = new Map<string, string | null>();
   for (const log of noteLogs) {
-    if (clientNoteById.has(log.entityId)) continue;
+    const target = log.action === "CLIENT_SCRIPT_NOTE_UPDATED" ? scriptNoteById : videoNoteById;
+    if (target.has(log.entityId)) continue;
     let text: unknown = null;
     try {
       text = log.meta ? JSON.parse(log.meta)?.note ?? null : null;
     } catch {
       text = null;
     }
-    clientNoteById.set(log.entityId, typeof text === "string" && text.trim() ? text.trim() : null);
+    target.set(log.entityId, typeof text === "string" && text.trim() ? text.trim() : null);
   }
   const creatorsWithFeedback = (creators as any[]).map((c) => ({
     ...c,
-    clientNote: clientNoteById.get(c.id) ?? null,
+    scriptNote: scriptNoteById.get(c.id) ?? null,
+    videoNote: videoNoteById.get(c.id) ?? null,
     deliverables: Array.isArray(c.deliverables)
       ? c.deliverables.map((d: any) => ({
           ...d,
