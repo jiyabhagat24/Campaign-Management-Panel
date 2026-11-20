@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { currentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { campaignVisibilityWhere, canCreateCampaign, canViewBriefs, canWorkBrief, isSuperAdmin } from "@/lib/rbac";
+import { campaignVisibilityWhere, canStartNewCampaign, canViewBriefs, canWorkBrief, isSuperAdmin } from "@/lib/rbac";
 import { formatCompactINR } from "@/lib/format";
 import { PageHeadline, SandboxCard } from "@/components/finance/SandboxUi";
 import { DbNotice, ErrorBanner, Pill, fmtDate, fmtDateTime, inputClass, labelClass, primaryBtn, secondaryBtn } from "@/components/gaps/Ui";
@@ -147,7 +147,7 @@ export default async function BriefDetailPage({ params, searchParams }: { params
                 <>
                   <div>
                     <p className={labelClass}>Create the campaign</p>
-                    {canCreateCampaign(user.role) && <Link href="/campaigns/new" className={secondaryBtn}>Open New Campaign form ↗</Link>}
+                    {canStartNewCampaign(user.role) && <Link href="/campaigns/new" className={secondaryBtn}>Open New Campaign form ↗</Link>}
                     <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Then link it here. Linking marks the brief fulfilled and asks the IR Manager to assign the team.</p>
                   </div>
                   <form action={linkBriefCampaignForm} className="space-y-2">

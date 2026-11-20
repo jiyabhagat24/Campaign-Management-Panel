@@ -163,6 +163,16 @@ export function canCreateCampaign(role: Role) {
   return role === "BRAND_SOLUTIONS";
 }
 
+// TEMPORARY (2026-11-20): Campaign Managers may also create new campaigns
+// for now. Flip this to false to switch it off again. It only opens up
+// creating a campaign (New Campaign button, /campaigns/new and the
+// createCampaign action); editing the brief/header stays canCreateCampaign.
+export const CM_CAN_CREATE_CAMPAIGNS = true;
+
+export function canStartNewCampaign(role: Role) {
+  return canCreateCampaign(role) || (CM_CAN_CREATE_CAMPAIGNS && role === "CAMPAIGN_MANAGER");
+}
+
 // Hard-deleting a campaign is far more destructive than creating one — it
 // cascades to every creator, deliverable, and activity log under it, with
 // no "Cancelled" undo — so it's opened up to CXO as well as Brand

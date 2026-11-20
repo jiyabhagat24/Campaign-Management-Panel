@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { currentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { campaignVisibilityWhere, canCreateCampaign, canDeleteCampaign, isClient, isSuperAdmin } from "@/lib/rbac";
+import { campaignVisibilityWhere, canStartNewCampaign, canDeleteCampaign, isClient, isSuperAdmin } from "@/lib/rbac";
 import { campaignColumnLabel } from "@/lib/kanban";
 import CampaignStatusSelect from "@/components/campaign/CampaignStatusSelect";
 import DeleteCampaignButton from "@/components/campaign/DeleteCampaignButton";
@@ -27,7 +27,7 @@ export default async function CampaignsPage() {
         title="Campaigns."
         subtitle="Every campaign you can see, one row each. Open a row to manage creators, deliverables and reporting."
         aside={
-          (canCreateCampaign(user.role) || isSuperAdmin(user.id)) && (
+          (canStartNewCampaign(user.role) || isSuperAdmin(user.id)) && (
             <Link href="/campaigns/new" className={primaryActionClass}>
               <Plus className="h-4 w-4" />
               <span>New campaign</span>

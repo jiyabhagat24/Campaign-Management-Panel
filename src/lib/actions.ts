@@ -8,7 +8,7 @@ import bcrypt from "bcryptjs";
 import { requireUser } from "@/lib/auth";
 import { logActivity } from "@/lib/activity";
 import { notify } from "@/lib/notify";
-import { canApproveCommercialEdit, canSetCommercials, canSeeInternalCost, canManageTeam, canManageClients, canCreateCampaign, canDeleteCampaign, canOperateShortlist, isCreatorPOC, isClient, isSuperAdmin, campaignVisibilityWhere, canViewCampaign, canAssignCreatorPOC } from "@/lib/rbac";
+import { canApproveCommercialEdit, canSetCommercials, canSeeInternalCost, canManageTeam, canManageClients, canCreateCampaign, canStartNewCampaign, canDeleteCampaign, canOperateShortlist, isCreatorPOC, isClient, isSuperAdmin, campaignVisibilityWhere, canViewCampaign, canAssignCreatorPOC } from "@/lib/rbac";
 import {
   DEFAULT_SLA,
   type Stage,
@@ -180,7 +180,7 @@ function toPlatformBriefCreateInput(p: ParsedPlatformBrief) {
 
 export async function createCampaign(formData: FormData) {
   const user = await requireUser();
-  if (!canCreateCampaign(user.role) && !isSuperAdmin(user.id)) throw new Error("Only an admin can create a campaign.");
+  if (!canStartNewCampaign(user.role) && !isSuperAdmin(user.id)) throw new Error("Only an admin can create a campaign.");
 
   const name = String(formData.get("name") ?? "").trim();
   const brand = String(formData.get("brand") ?? "").trim();

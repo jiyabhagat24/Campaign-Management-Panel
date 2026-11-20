@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { currentUser } from "@/lib/auth";
-import { canCreateCampaign, isSuperAdmin } from "@/lib/rbac";
+import { canStartNewCampaign, isSuperAdmin } from "@/lib/rbac";
 import { createCampaign } from "@/lib/actions";
 import BackLink from "@/components/BackLink";
 import { PlatformBriefsFormField } from "@/components/campaign/PlatformBriefsEditor";
@@ -22,7 +22,7 @@ export default async function NewCampaignPage() {
   // Matches canCreateCampaign's gate on the createCampaign server action —
   // this just stops a CM/IR-team user from reaching the form directly by
   // URL instead of only hiding the button.
-  if (!canCreateCampaign(user.role) && !isSuperAdmin(user.id)) redirect("/campaigns");
+  if (!canStartNewCampaign(user.role) && !isSuperAdmin(user.id)) redirect("/campaigns");
 
   // `min` on the two deadline inputs below blocks picking a past date/time
   // in the native picker — actions.ts re-checks this server-side too, since

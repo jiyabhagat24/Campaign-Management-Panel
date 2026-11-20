@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { PageHeadline, primaryActionClass } from "@/components/finance/SandboxUi";
 import { currentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { canSeeInternalCost, campaignVisibilityWhere, isClient, canCreateCampaign, isSuperAdmin } from "@/lib/rbac";
+import { canSeeInternalCost, campaignVisibilityWhere, isClient, canStartNewCampaign, isSuperAdmin } from "@/lib/rbac";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import PortfolioDashboardClient, {
@@ -655,7 +655,7 @@ export default async function DashboardPage() {
         title={<>Welcome back, {user.name}.</>}
         subtitle={`${todayStr} · All campaigns, every client, one screen.`}
         aside={
-          (canCreateCampaign(user.role) || isSuperAdmin(user.id)) && (
+          (canStartNewCampaign(user.role) || isSuperAdmin(user.id)) && (
             <Link href="/campaigns/new" className={primaryActionClass}>
               <Plus className="h-4 w-4" />
               <span>New campaign</span>
