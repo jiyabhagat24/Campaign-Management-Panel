@@ -120,6 +120,7 @@ function CategoryField({ value, onChange }: { value: string; onChange: (v: strin
       <MultiSelectBox
         options={CONTENT_CATEGORIES}
         value={value}
+        allowOther
         onChange={onChange}
         placeholder="Select categories…"
         className="w-full truncate rounded-lg border border-slate-300 bg-white px-3 py-2 text-left text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"

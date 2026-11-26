@@ -37,21 +37,43 @@ export default function MultiSelectBox({
   // string is trimmed when split back into picks).
   const [draft, setDraft] = useState(customText);
   const otherOn = !!allowOther && (otherTicked || customText !== "");
+  // Latest uncommitted text, read by the click-outside handler below.
+  const pendingOther = useRef<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
     function onClickOutside(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        if (pendingOther.current !== null) commitOther(pendingOther.current);
+        setOpen(false);
+      }
     }
     document.addEventListener("mousedown", onClickOutside);
     return () => document.removeEventListener("mousedown", onClickOutside);
-  }, [open]);
+    // value/draft in deps so the handler commits against the latest picks.
+  }, [open, value, draft, otherTicked]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function toggle(opt: string) {
-    const next = selected.includes(opt) ? selected.filter((o) => o !== opt) : [...selected, opt];
-    onChange(next.join(", "));
+    if (!allowOther) {
+      const next = selected.includes(opt) ? selected.filter((o) => o !== opt) : [...selected, opt];
+      onChange(next.join(", "));
+      return;
+    }
+    // Keep the typed "Others" text (even if not committed yet) alongside.
+    const nextListed = listed.includes(opt) ? listed.filter((o) => o !== opt) : [...listed, opt];
+    const custom = otherOn ? draft.replace(/,/g, " ").trim() : "";
+    pendingOther.current = null;
+    onChange([...nextListed, ...(custom ? [custom] : [])].join(", "));
   }
 
+  function commitOther(text: string) {
+    pendingOther.current = null;
+    if (text.trim() !== customText) setOther(text);
+  }
+
+  // Called when the typed text is committed (blur / Enter / untick), not on
+  // every keystroke, so callers that save straight to the server (creator
+  // table cell) don't save once per letter.
   function setOther(text: string) {
     setDraft(text);
     const clean = text.replace(/,/g, " ");
@@ -61,6 +83,7 @@ export default function MultiSelectBox({
   function toggleOther() {
     if (otherOn) {
       setOtherTicked(false);
+      pendingOther.current = null;
       setOther("");
     } else {
       setOtherTicked(true);
@@ -103,10 +126,17 @@ export default function MultiSelectBox({
                 <input
                   autoFocus
                   value={draft}
-                  onChange={(e) => setOther(e.target.value)}
+                  onChange={(e) => {
+                    setDraft(e.target.value);
+                    pendingOther.current = e.target.value;
+                  }}
+                  onBlur={() => {
+                    if (pendingOther.current !== null) commitOther(pendingOther.current);
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault();
+                      if (pendingOther.current !== null) commitOther(pendingOther.current);
                       setOpen(false);
                     }
                   }}

@@ -3714,6 +3714,7 @@ function TagDropdownCell({
           options={options}
           value={current}
           onChange={save}
+          allowOther
           placeholder={placeholder}
           className="w-28 truncate rounded-lg border border-slate-200 px-2 py-1 text-left text-xs font-medium focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
         />
