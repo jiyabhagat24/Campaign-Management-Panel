@@ -429,6 +429,7 @@ export default function CampaignHeaderEditor({
         <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Product Category</label>
         <MultiSelectBox
           options={PRODUCT_CATEGORIES}
+          allowOther
           value={productCategory}
           onChange={setProductCategory}
           placeholder="Select categories…"

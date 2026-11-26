@@ -37,6 +37,7 @@ export function ProductCategoryField({ name, initial }: { name: string; initial?
       <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">Product Category</label>
       <MultiSelectBox
         options={PRODUCT_CATEGORIES}
+          allowOther
         value={value}
         onChange={setValue}
         placeholder="Select categories…"
