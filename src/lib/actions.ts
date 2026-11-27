@@ -314,6 +314,11 @@ export async function createCampaign(formData: FormData) {
   // every campaign automatically, but they still need to know a fresh one
   // just landed so they can staff the team (assignTeamMember).
   const irManagers = await prisma.user.findMany({ where: { role: "IR_MANAGER" }, select: { id: true } });
+  // IR Managers sit on every campaign's team, not just see it.
+  await prisma.campaignTeamMember.createMany({
+    data: irManagers.map((m) => ({ campaignId: campaign.id, userId: m.id, roleOnCampaign: "IR_MANAGER" })),
+    skipDuplicates: true,
+  });
   await Promise.all(
     irManagers.map((m) =>
       notify({

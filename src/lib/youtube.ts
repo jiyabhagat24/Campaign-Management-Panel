@@ -132,22 +132,25 @@ async function resolveChannel(rawInput: string): Promise<{ channelId: string; up
   } else if (handleMatch) {
     json = await apiGet("/channels", { part: "snippet,statistics,contentDetails", forHandle: handleMatch[1] });
   } else if (legacyMatch) {
-    const [, , legacyName] = legacyMatch;
+    const [, legacyName] = legacyMatch; // one capture group: (?:c|user) doesn't capture
     // Resolution order for /c/ and /user/ legacy URLs:
-    //   1. forUsername — the old-style lookup that directly maps legacy
-    //      usernames and most /c/ custom URLs. Most reliable for channels
-    //      that existed before the @handle era.
-    //   2. forHandle:@name — catches channels whose @handle matches their
-    //      custom URL slug but whose legacy username doesn't.
+    //   1. forHandle:@name — most /c/ slugs became the channel's @handle.
+    //   2. forUsername — old-style lookup, but YouTube now returns one
+    //      unrelated channel for many unknown slugs, so its result only
+    //      counts when the channel's customUrl or title matches the slug.
     //   3. search — last resort only; can return the wrong channel when the
     //      slug is a common word or a name claimed by multiple channels.
-    const forUsernameJson = await apiGet("/channels", { part: "snippet,statistics,contentDetails", forUsername: legacyName });
-    if (forUsernameJson.items?.length) {
-      json = forUsernameJson;
+    const slug = legacyName.toLowerCase();
+    const forHandleJson = await apiGet("/channels", { part: "snippet,statistics,contentDetails", forHandle: `@${legacyName}` });
+    if (forHandleJson.items?.length) {
+      json = forHandleJson;
     } else {
-      const forHandleJson = await apiGet("/channels", { part: "snippet,statistics,contentDetails", forHandle: `@${legacyName}` });
-      if (forHandleJson.items?.length) {
-        json = forHandleJson;
+      const forUsernameJson = await apiGet("/channels", { part: "snippet,statistics,contentDetails", forUsername: legacyName });
+      const s = forUsernameJson.items?.[0]?.snippet;
+      const matchesSlug =
+        !!s && (String(s.customUrl ?? "").replace(/^@/, "").toLowerCase() === slug || String(s.title ?? "").replace(/\s/g, "").toLowerCase() === slug);
+      if (matchesSlug) {
+        json = forUsernameJson;
       } else {
         const searchJson = await apiGet("/search", { part: "snippet", type: "channel", q: legacyName, maxResults: "1" });
         const channelId = searchJson.items?.[0]?.snippet?.channelId ?? searchJson.items?.[0]?.id?.channelId;

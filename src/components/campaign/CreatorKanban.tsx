@@ -1724,7 +1724,9 @@ function ShortlistCreatorRow({
     const result = await refreshCreatorSocialStats(creator.id);
     setRefreshing(false);
     if (!result.changed) {
-      setRefreshMsg(result.igError || result.ytError ? (result.igError ?? result.ytError ?? "No fresher data found.") : "Already up to date.");
+      // YouTube creators: the real YouTube error beats the IG-cache miss on their channel name.
+      const err = creator.youtubeUrl ? (result.ytError ?? result.igError) : (result.igError ?? result.ytError);
+      setRefreshMsg(err ?? "Already up to date.");
       return;
     }
     const summary = result.changes
@@ -2546,7 +2548,9 @@ function OnboardingCreatorRow({
     const result = await refreshCreatorSocialStats(creator.id);
     setRefreshing(false);
     if (!result.changed) {
-      setRefreshMsg(result.igError || result.ytError ? (result.igError ?? result.ytError ?? "No fresher data found.") : "Already up to date.");
+      // YouTube creators: the real YouTube error beats the IG-cache miss on their channel name.
+      const err = creator.youtubeUrl ? (result.ytError ?? result.igError) : (result.igError ?? result.ytError);
+      setRefreshMsg(err ?? "Already up to date.");
       return;
     }
     const summary = result.changes
