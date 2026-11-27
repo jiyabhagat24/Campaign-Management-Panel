@@ -11,7 +11,7 @@
 // tokens in globals.css (light + dark) instead of each chart hand-rolling
 // its own colors.
 import { useMemo, useState } from "react";
-import { Bar, CartesianGrid, ComposedChart, Line, LineChart, ReferenceLine, XAxis, YAxis } from "recharts";
+import { Bar, CartesianGrid, ComposedChart, Line, LineChart, Rectangle, ReferenceLine, XAxis, YAxis } from "recharts";
 import { ChartConfig, ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 
 // One row per ONBOARDED creator with a real onboarding ("closure") date —
@@ -206,6 +206,7 @@ function ClientRevenueStackChart({ rows }: { rows: RevenueDataRow[] }) {
         const v = m.get(mk) ?? 0;
         row[mk] = v;
         total += v;
+        if (v > 0) row.__top = mk; // topmost non-zero segment gets the rounded corners
       }
       row.__total = total;
       return row;
@@ -232,14 +233,14 @@ function ClientRevenueStackChart({ rows }: { rows: RevenueDataRow[] }) {
           cursor={{ fill: "var(--muted)", opacity: 0.4 }}
           content={<ChartTooltipContent formatter={moneyTooltipRow} />}
         />
-        {monthKeys.map((mk, i) => (
+        {monthKeys.map((mk) => (
           <Bar
             key={mk}
             dataKey={mk}
             stackId="revenue"
             fill={`var(--color-${mk})`}
             maxBarSize={90}
-            radius={i === monthKeys.length - 1 ? [6, 6, 0, 0] : undefined}
+            shape={(props: any) => <Rectangle {...props} radius={props.payload?.__top === mk ? [6, 6, 0, 0] : 0} />}
           />
         ))}
       </ComposedChart>

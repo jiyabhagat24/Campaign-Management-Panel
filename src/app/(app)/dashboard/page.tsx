@@ -228,6 +228,12 @@ export default async function DashboardPage() {
       // same mistake the Finance Table row below used to make. Matches
       // the ONBOARDED-only filter the campaign report CSV already uses.
       internalValue: showFinance ? onboardedCreators.reduce((s, cr) => s + (cr.internalCost ?? 0), 0) : 0,
+      // Margin % tile only: cost of creators that have a client price (unpriced
+      // ones add 0 to quotedValue, so their cost would drag the margin down).
+      pricedInternalValue: showFinance
+        ? onboardedCreators.filter((cr) => cr.finalQuotedCost != null || cr.quotedCost != null).reduce((s, cr) => s + (cr.internalCost ?? 0), 0)
+        : 0,
+      unpricedCreatorsCount: onboardedCreators.filter((cr) => cr.finalQuotedCost == null && cr.quotedCost == null).length,
       quotedValue,
       openFlags,
       // Not yet invoiced at all: quoted value minus whatever's already been
