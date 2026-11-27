@@ -82,7 +82,7 @@ export default async function DashboardPage() {
     prisma.campaign.findMany({
       where: visibleCampaign,
       include: campaignInclude,
-      orderBy: { updatedAt: "desc" },
+      orderBy: { createdAt: "desc" },
     }),
     // Section B's per-invoice ledger (the campaign's own Finance and
     // Invoicing tab / Client Cash), the system of record for what's been
@@ -101,6 +101,9 @@ export default async function DashboardPage() {
       _max: { createdAt: true },
     }),
   ]);
+  // Open campaigns on top, closed/cancelled below; newest first within each (sort is stable).
+  const isClosed = (s: string) => s === "CLOSED" || s === "CANCELLED";
+  campaigns.sort((a, b) => Number(isClosed(a.status)) - Number(isClosed(b.status)));
   const lastActionByEntity = new Map<string, number>();
   for (const row of lastActionRows) {
     if (row._max.createdAt) lastActionByEntity.set(`${row.campaignId}:${row.entityId}`, row._max.createdAt.getTime());

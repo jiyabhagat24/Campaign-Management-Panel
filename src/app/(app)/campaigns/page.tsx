@@ -18,8 +18,11 @@ export default async function CampaignsPage() {
   const campaigns = await prisma.campaign.findMany({
     where: campaignVisibilityWhere(user),
     include: { creators: { select: { status: true, deliverables: { select: { liveLink: true } } } } },
-    orderBy: { updatedAt: "desc" },
+    orderBy: { createdAt: "desc" },
   });
+  // Open campaigns on top, closed/cancelled below; newest first within each (sort is stable).
+  const isClosed = (s: string) => s === "CLOSED" || s === "CANCELLED";
+  campaigns.sort((a, b) => Number(isClosed(a.status)) - Number(isClosed(b.status)));
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-6 lg:p-8">
