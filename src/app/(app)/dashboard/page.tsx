@@ -232,9 +232,7 @@ export default async function DashboardPage() {
       // ones add 0 to quotedValue, so their cost would drag the margin down).
       pricedInternalValue: showFinance
         ? onboardedCreators.filter((cr) => cr.finalQuotedCost != null || cr.quotedCost != null).reduce((s, cr) => s + (cr.internalCost ?? 0), 0)
-        : 0,
-      unpricedCreatorsCount: onboardedCreators.filter((cr) => cr.finalQuotedCost == null && cr.quotedCost == null).length,
-      quotedValue,
+        : 0,      quotedValue,
       openFlags,
       // Not yet invoiced at all: quoted value minus whatever's already been
       // invoiced (clamped at 0 so an over-invoiced campaign, e.g. extra

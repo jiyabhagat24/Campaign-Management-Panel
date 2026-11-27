@@ -33,7 +33,6 @@ export type DashboardCampaignRow = {
   deliverablesTotal: number;
   internalValue: number;
   pricedInternalValue: number;
-  unpricedCreatorsCount: number;
   openFlags: number;
   financeYetToBeInvoiced: number | null;
   financeYetToBeReceived: number | null;
@@ -170,7 +169,6 @@ export default function PortfolioDashboardClient({
   const totalInternalCampaignValue = financeVisible.reduce((s, c) => s + c.internalValue, 0);
   // Margin skips onboarded creators with no client price (neither revenue nor cost).
   const pricedInternalValue = financeVisible.reduce((s, c) => s + c.pricedInternalValue, 0);
-  const unpricedCreators = financeVisible.reduce((s, c) => s + c.unpricedCreatorsCount, 0);
   const marginPercent =
     totalActiveCampaignValue > 0
       ? ((totalActiveCampaignValue - pricedInternalValue) / totalActiveCampaignValue) * 100
@@ -359,10 +357,7 @@ export default function PortfolioDashboardClient({
             <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-rose-500" />
             <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Margin %</p>
             <p className="mt-3 text-3xl font-extrabold text-slate-900 dark:text-white">{marginPercent.toFixed(1)}%</p>
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 font-medium">
-              Active campaign blended margin
-              {unpricedCreators > 0 && ` · excl. ${unpricedCreators} creator${unpricedCreators === 1 ? "" : "s"} without a client price`}
-            </p>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 font-medium">Active campaign blended margin</p>
           </div>
         )}
 
