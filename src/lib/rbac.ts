@@ -18,7 +18,7 @@ export function isSuperAdmin(userId: string | null | undefined): boolean {
 // script/content approval), onboarding and execution action, plus campaign
 // details, team and client invoices. Not deleting campaigns or escalations.
 // Flip this to false to switch it off again.
-export const CM_FULL_CAMPAIGN_ACCESS = true;
+export const CM_FULL_CAMPAIGN_ACCESS = false; // switched off 2026-11-27: back to original CM access
 
 export function hasCampaignOverride(user: { id: string | null | undefined; role: Role | string | null | undefined }): boolean {
   return isSuperAdmin(user.id) || (CM_FULL_CAMPAIGN_ACCESS && user.role === "CAMPAIGN_MANAGER");
@@ -179,7 +179,7 @@ export function canCreateCampaign(role: Role) {
 // for now. Flip this to false to switch it off again. It only opens up
 // creating a campaign (New Campaign button, /campaigns/new and the
 // createCampaign action); editing the brief/header stays canCreateCampaign.
-export const CM_CAN_CREATE_CAMPAIGNS = true;
+export const CM_CAN_CREATE_CAMPAIGNS = false; // switched off 2026-11-27: back to original CM access
 
 export function canStartNewCampaign(role: Role) {
   return canCreateCampaign(role) || (CM_CAN_CREATE_CAMPAIGNS && role === "CAMPAIGN_MANAGER");
